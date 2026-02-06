@@ -1,4 +1,4 @@
-# Partio
+<img src="assets/logo-dark-text.png" alt="Partio" width="192" height="192">
 
 Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lists, tables, images, etc.) with a chunking and embedding configuration, and returns chunked text with computed embeddings.
 
