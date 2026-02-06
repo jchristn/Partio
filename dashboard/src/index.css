@@ -1,0 +1,169 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --sidebar-bg: #1a1a2e;
+  --sidebar-text: #e0e0e0;
+  --sidebar-active: #0f3460;
+  --sidebar-hover: #16213e;
+  --topbar-bg: #ffffff;
+  --topbar-border: #e0e0e0;
+  --content-bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --primary: #0f3460;
+  --primary-light: #1a5276;
+  --danger: #e74c3c;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --text: #333333;
+  --text-light: #666666;
+  --border: #ddd;
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--content-bg);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+button.primary {
+  background: var(--primary);
+  color: white;
+}
+button.primary:hover {
+  background: var(--primary-light);
+}
+
+button.danger {
+  background: var(--danger);
+  color: white;
+}
+button.danger:hover {
+  background: #c0392b;
+}
+
+button.secondary {
+  background: #e0e0e0;
+  color: var(--text);
+}
+button.secondary:hover {
+  background: #d0d0d0;
+}
+
+input, select, textarea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 14px;
+  width: 100%;
+  font-family: inherit;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(15, 52, 96, 0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+table th {
+  background: #f8f8f8;
+  text-align: left;
+  padding: 12px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-light);
+  border-bottom: 2px solid var(--border);
+}
+
+table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+}
+
+table tr:hover {
+  background: #fafafa;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-light);
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-row h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.active {
+  background: #e8f5e9;
+  color: var(--success);
+}
+
+.status-badge.inactive {
+  background: #fbe9e7;
+  color: var(--danger);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-light);
+}
+
+.btn-group {
+  display: flex;
+  gap: 8px;
+}

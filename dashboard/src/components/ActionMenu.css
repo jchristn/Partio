@@ -1,0 +1,39 @@
+.action-menu {
+  position: relative;
+}
+
+.action-menu-trigger {
+  background: none;
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--text-light);
+  padding: 4px 8px;
+  letter-spacing: 2px;
+}
+
+.action-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+  min-width: 120px;
+}
+
+.action-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: none;
+  border-radius: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.action-menu-item:hover {
+  background: #f5f5f5;
+}

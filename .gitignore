@@ -1,0 +1,37 @@
+## .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+## Logs and data
+logs/
+request-history/
+partio.json
+
+## Node
+node_modules/
+dist/
+.cache/
+
+## Python
+__pycache__/
+*.pyc
+.env
+venv/
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## IDE
+.idea/
+*.swp
+*.swo
+*~

@@ -1,0 +1,1470 @@
+{
+	"info": {
+		"_postman_id": "partio-api-collection",
+		"name": "Partio API",
+		"description": "Complete API collection for Partio — a multi-tenant RESTful platform for semantic cell chunking and embedding.\n\nVariables:\n- `baseUrl`: Server base URL (default: http://localhost:8400)\n- `bearerToken`: Admin API key or credential bearer token\n- `tenantId`: Target tenant ID\n- `userId`: Target user ID\n- `credentialId`: Target credential ID\n- `endpointId`: Target embedding endpoint ID\n- `requestId`: Target request history entry ID\n- `embeddingModel`: Embedding model name (default: all-minilm)\n- `chunkStrategy`: Chunking strategy (default: FixedTokenCount)\n- `fixedTokenCount`: Token count per chunk (default: 256)\n- `maxResults`: Enumeration page size (default: 100)\n- `continuationToken`: Pagination continuation token",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{bearerToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8400",
+			"type": "string"
+		},
+		{
+			"key": "bearerToken",
+			"value": "partioadmin",
+			"type": "string"
+		},
+		{
+			"key": "tenantId",
+			"value": "default",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "default",
+			"type": "string"
+		},
+		{
+			"key": "credentialId",
+			"value": "default",
+			"type": "string"
+		},
+		{
+			"key": "endpointId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "requestId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "embeddingModel",
+			"value": "all-minilm",
+			"type": "string"
+		},
+		{
+			"key": "chunkStrategy",
+			"value": "FixedTokenCount",
+			"type": "string"
+		},
+		{
+			"key": "fixedTokenCount",
+			"value": "256",
+			"type": "string"
+		},
+		{
+			"key": "overlapCount",
+			"value": "0",
+			"type": "string"
+		},
+		{
+			"key": "contextPrefix",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "maxResults",
+			"value": "100",
+			"type": "string"
+		},
+		{
+			"key": "continuationToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenantName",
+			"value": "My Tenant",
+			"type": "string"
+		},
+		{
+			"key": "userEmail",
+			"value": "user@example.com",
+			"type": "string"
+		},
+		{
+			"key": "userPassword",
+			"value": "password",
+			"type": "string"
+		},
+		{
+			"key": "userFirstName",
+			"value": "John",
+			"type": "string"
+		},
+		{
+			"key": "userLastName",
+			"value": "Doe",
+			"type": "string"
+		},
+		{
+			"key": "credentialName",
+			"value": "My API Key",
+			"type": "string"
+		},
+		{
+			"key": "embeddingEndpointUrl",
+			"value": "http://localhost:11434",
+			"type": "string"
+		},
+		{
+			"key": "apiFormat",
+			"value": "Ollama",
+			"type": "string"
+		},
+		{
+			"key": "apiKey",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health",
+			"description": "Health check endpoints. No authentication required.",
+			"item": [
+				{
+					"name": "HEAD / (Health Check)",
+					"request": {
+						"method": "HEAD",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": ["{{baseUrl}}"],
+							"path": [""]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Simple health check. Returns 200 OK with no body."
+					}
+				},
+				{
+					"name": "GET / (Health Status)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": ["{{baseUrl}}"],
+							"path": [""]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Returns health status and version."
+					}
+				},
+				{
+					"name": "GET /v1.0/health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "health"]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Returns health status JSON with version information."
+					}
+				}
+			]
+		},
+		{
+			"name": "Process (Chunk & Embed)",
+			"description": "Core chunking and embedding endpoints. Requires bearer token authentication.",
+			"item": [
+				{
+					"name": "Process Single Cell",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has chunks', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.TotalChunks).to.be.above(0);",
+									"    pm.expect(jsonData.Chunks).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"Partio is a multi-tenant RESTful platform that accepts semantic cells with a chunking and embedding configuration, and returns chunked text with computed embeddings. It supports multiple chunking strategies including fixed token count, sentence-based, and paragraph-based approaches.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}},\n        \"OverlapCount\": {{overlapCount}},\n        \"OverlapStrategy\": \"SlidingWindow\",\n        \"ContextPrefix\": \"{{contextPrefix}}\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    },\n    \"Labels\": [\"test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process"]
+						},
+						"description": "Process a single semantic cell. Chunks the input text and computes embeddings using the specified model."
+					}
+				},
+				{
+					"name": "Process Single Cell (Sentence-Based)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"First sentence here. Second sentence here. Third sentence goes here. And a fourth one too.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"SentenceBased\",\n        \"FixedTokenCount\": {{fixedTokenCount}},\n        \"OverlapCount\": {{overlapCount}},\n        \"OverlapStrategy\": \"SentenceBoundaryAware\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process"]
+						},
+						"description": "Process text using sentence-based chunking strategy."
+					}
+				},
+				{
+					"name": "Process Single Cell (Paragraph-Based)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"First paragraph content here.\\n\\nSecond paragraph content here.\\n\\nThird paragraph content here.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"ParagraphBased\",\n        \"FixedTokenCount\": {{fixedTokenCount}},\n        \"OverlapCount\": {{overlapCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process"]
+						},
+						"description": "Process text using paragraph-based chunking strategy."
+					}
+				},
+				{
+					"name": "Process Single Cell (List - WholeList)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"UnorderedList\",\n    \"UnorderedList\": [\"First item\", \"Second item\", \"Third item\"],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"WholeList\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process"]
+						},
+						"description": "Process an unordered list as a single chunk using WholeList strategy."
+					}
+				},
+				{
+					"name": "Process Single Cell (List - ListEntry)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"OrderedList\",\n    \"OrderedList\": [\"First item\", \"Second item\", \"Third item\"],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"ListEntry\",\n        \"ContextPrefix\": \"{{contextPrefix}}\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process"]
+						},
+						"description": "Process an ordered list where each item becomes its own chunk."
+					}
+				},
+				{
+					"name": "Process Single Cell (L2 Normalization)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"Sample text for embedding with L2 normalization enabled.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": true\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process"]
+						},
+						"description": "Process text with L2 normalization enabled on embeddings."
+					}
+				},
+				{
+					"name": "Process Batch",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response is an array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.be.an('array');",
+									"    pm.expect(jsonData.length).to.equal(2);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n    {\n        \"Type\": \"Text\",\n        \"Text\": \"First document to process.\",\n        \"ChunkingConfiguration\": {\n            \"Strategy\": \"{{chunkStrategy}}\",\n            \"FixedTokenCount\": {{fixedTokenCount}}\n        },\n        \"EmbeddingConfiguration\": {\n            \"Model\": \"{{embeddingModel}}\",\n            \"L2Normalization\": false\n        },\n        \"Labels\": [\"batch\", \"doc-1\"]\n    },\n    {\n        \"Type\": \"Text\",\n        \"Text\": \"Second document to process.\",\n        \"ChunkingConfiguration\": {\n            \"Strategy\": \"{{chunkStrategy}}\",\n            \"FixedTokenCount\": {{fixedTokenCount}}\n        },\n        \"EmbeddingConfiguration\": {\n            \"Model\": \"{{embeddingModel}}\",\n            \"L2Normalization\": false\n        },\n        \"Labels\": [\"batch\", \"doc-2\"]\n    }\n]"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process/batch",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process", "batch"]
+						},
+						"description": "Process multiple semantic cells in a single request."
+					}
+				}
+			]
+		},
+		{
+			"name": "Tenants",
+			"description": "Tenant management endpoints. Requires admin authentication.",
+			"item": [
+				{
+					"name": "Create Tenant",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('tenantId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Name\": \"{{tenantName}}\",\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"env\": \"test\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants"]
+						},
+						"description": "Create a new tenant. Also auto-creates a default user, credential, and embedding endpoints. The response tenant ID is automatically saved to the `tenantId` variable."
+					}
+				},
+				{
+					"name": "Read Tenant",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Tenant ID matches', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Id).to.equal(pm.collectionVariables.get('tenantId'));",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "{{tenantId}}"]
+						},
+						"description": "Read a tenant by ID."
+					}
+				},
+				{
+					"name": "Update Tenant",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Id\": \"{{tenantId}}\",\n    \"Name\": \"{{tenantName}} (Updated)\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"env\": \"test\",\n        \"updated\": \"true\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "{{tenantId}}"]
+						},
+						"description": "Update an existing tenant."
+					}
+				},
+				{
+					"name": "Check Tenant Exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "HEAD",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "{{tenantId}}"]
+						},
+						"description": "Check if a tenant exists. Returns 200 if found, 404 if not."
+					}
+				},
+				{
+					"name": "Enumerate Tenants",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has data array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Data).to.be.an('array');",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.ContinuationToken) {",
+									"    pm.collectionVariables.set('continuationToken', jsonData.ContinuationToken);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"MaxResults\": {{maxResults}},\n    \"ContinuationToken\": null,\n    \"Order\": \"CreatedDescending\",\n    \"NameFilter\": null,\n    \"LabelFilter\": null,\n    \"TagKeyFilter\": null,\n    \"TagValueFilter\": null,\n    \"ActiveFilter\": null\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/enumerate",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "enumerate"]
+						},
+						"description": "List tenants with pagination and filtering. Use ContinuationToken from the response for the next page."
+					}
+				},
+				{
+					"name": "Enumerate Tenants (Next Page)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"MaxResults\": {{maxResults}},\n    \"ContinuationToken\": \"{{continuationToken}}\",\n    \"Order\": \"CreatedDescending\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/enumerate",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "enumerate"]
+						},
+						"description": "Fetch the next page of tenants using the continuation token."
+					}
+				},
+				{
+					"name": "Delete Tenant",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 204', function () {",
+									"    pm.response.to.have.status(204);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "{{tenantId}}"]
+						},
+						"description": "Delete a tenant. Cascade deletes associated users, credentials, and endpoints."
+					}
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"description": "User management endpoints. Requires admin authentication.",
+			"item": [
+				{
+					"name": "Create User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200 or 201', function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('userId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Email\": \"{{userEmail}}\",\n    \"Password\": \"{{userPassword}}\",\n    \"FirstName\": \"{{userFirstName}}\",\n    \"LastName\": \"{{userLastName}}\",\n    \"IsAdmin\": false,\n    \"Active\": true,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "users"]
+						},
+						"description": "Create a new user. The response user ID is automatically saved to the `userId` variable."
+					}
+				},
+				{
+					"name": "Read User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Password is redacted', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.PasswordSha256).to.equal('********');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "users", "{{userId}}"]
+						},
+						"description": "Read a user by ID. Password is always redacted in the response."
+					}
+				},
+				{
+					"name": "Update User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Id\": \"{{userId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Email\": \"{{userEmail}}\",\n    \"FirstName\": \"{{userFirstName}}\",\n    \"LastName\": \"{{userLastName}}\",\n    \"IsAdmin\": false,\n    \"Active\": true,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"updated\": \"true\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "users", "{{userId}}"]
+						},
+						"description": "Update an existing user."
+					}
+				},
+				{
+					"name": "Check User Exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "HEAD",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "users", "{{userId}}"]
+						},
+						"description": "Check if a user exists. Returns 200 if found, 404 if not."
+					}
+				},
+				{
+					"name": "Enumerate Users",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has data array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Data).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"MaxResults\": {{maxResults}},\n    \"ContinuationToken\": null,\n    \"Order\": \"CreatedDescending\",\n    \"NameFilter\": null,\n    \"ActiveFilter\": null\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/users/enumerate",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "users", "enumerate"]
+						},
+						"description": "List users with pagination and filtering."
+					}
+				},
+				{
+					"name": "Delete User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 204', function () {",
+									"    pm.response.to.have.status(204);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "users", "{{userId}}"]
+						},
+						"description": "Delete a user."
+					}
+				}
+			]
+		},
+		{
+			"name": "Credentials",
+			"description": "Credential/bearer token management endpoints. Requires admin authentication.",
+			"item": [
+				{
+					"name": "Create Credential",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('credentialId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"UserId\": \"{{userId}}\",\n    \"Name\": \"{{credentialName}}\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/credentials",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "credentials"]
+						},
+						"description": "Create a new credential. A bearer token is auto-generated. The response credential ID is automatically saved to the `credentialId` variable."
+					}
+				},
+				{
+					"name": "Read Credential",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Has bearer token', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.BearerToken).to.be.a('string');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "credentials", "{{credentialId}}"]
+						},
+						"description": "Read a credential by ID. Includes the bearer token."
+					}
+				},
+				{
+					"name": "Update Credential",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Id\": \"{{credentialId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"UserId\": \"{{userId}}\",\n    \"Name\": \"{{credentialName}} (Updated)\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"updated\": \"true\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "credentials", "{{credentialId}}"]
+						},
+						"description": "Update an existing credential."
+					}
+				},
+				{
+					"name": "Check Credential Exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "HEAD",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "credentials", "{{credentialId}}"]
+						},
+						"description": "Check if a credential exists. Returns 200 if found, 404 if not."
+					}
+				},
+				{
+					"name": "Enumerate Credentials",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has data array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Data).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"MaxResults\": {{maxResults}},\n    \"ContinuationToken\": null,\n    \"Order\": \"CreatedDescending\",\n    \"ActiveFilter\": null\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/credentials/enumerate",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "credentials", "enumerate"]
+						},
+						"description": "List credentials with pagination and filtering."
+					}
+				},
+				{
+					"name": "Delete Credential",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 204', function () {",
+									"    pm.response.to.have.status(204);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "credentials", "{{credentialId}}"]
+						},
+						"description": "Delete a credential."
+					}
+				}
+			]
+		},
+		{
+			"name": "Embedding Endpoints",
+			"description": "Embedding endpoint configuration management. Requires admin authentication.",
+			"item": [
+				{
+					"name": "Create Embedding Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints"]
+						},
+						"description": "Create a new embedding endpoint. The response endpoint ID is automatically saved to the `endpointId` variable."
+					}
+				},
+				{
+					"name": "Read Embedding Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}"]
+						},
+						"description": "Read an embedding endpoint by ID."
+					}
+				},
+				{
+					"name": "Update Embedding Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Id\": \"{{endpointId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"updated\": \"true\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}"]
+						},
+						"description": "Update an existing embedding endpoint."
+					}
+				},
+				{
+					"name": "Check Endpoint Exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "HEAD",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}"]
+						},
+						"description": "Check if an embedding endpoint exists. Returns 200 if found, 404 if not."
+					}
+				},
+				{
+					"name": "Enumerate Embedding Endpoints",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has data array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Data).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"MaxResults\": {{maxResults}},\n    \"ContinuationToken\": null,\n    \"Order\": \"CreatedDescending\",\n    \"ActiveFilter\": null\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/enumerate",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "enumerate"]
+						},
+						"description": "List embedding endpoints with pagination and filtering."
+					}
+				},
+				{
+					"name": "Delete Embedding Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 204', function () {",
+									"    pm.response.to.have.status(204);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}"]
+						},
+						"description": "Delete an embedding endpoint."
+					}
+				}
+			]
+		},
+		{
+			"name": "Request History",
+			"description": "Request history viewing and management. Requires admin authentication.",
+			"item": [
+				{
+					"name": "Read Request History Entry",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/requests/{{requestId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "requests", "{{requestId}}"]
+						},
+						"description": "Read a request history entry by ID."
+					}
+				},
+				{
+					"name": "Read Request History Detail",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/requests/{{requestId}}/detail",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "requests", "{{requestId}}", "detail"]
+						},
+						"description": "Read the full request/response body detail from filesystem storage."
+					}
+				},
+				{
+					"name": "Enumerate Request History",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has data array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Data).to.be.an('array');",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.Data && jsonData.Data.length > 0) {",
+									"    pm.collectionVariables.set('requestId', jsonData.Data[0].Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"MaxResults\": {{maxResults}},\n    \"ContinuationToken\": null,\n    \"Order\": \"CreatedDescending\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/requests/enumerate",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "requests", "enumerate"]
+						},
+						"description": "List request history entries with pagination. The first result's ID is automatically saved to the `requestId` variable."
+					}
+				},
+				{
+					"name": "Delete Request History Entry",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 204', function () {",
+									"    pm.response.to.have.status(204);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/requests/{{requestId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "requests", "{{requestId}}"]
+						},
+						"description": "Delete a request history entry."
+					}
+				}
+			]
+		},
+		{
+			"name": "Error Cases",
+			"description": "Requests expected to return error responses, useful for testing error handling.",
+			"item": [
+				{
+					"name": "Unauthenticated Request (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 401', function () {",
+									"    pm.response.to.have.status(401);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "{{tenantId}}"]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Request without authentication. Expected: 401 Unauthorized."
+					}
+				},
+				{
+					"name": "Invalid Bearer Token (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 401', function () {",
+									"    pm.response.to.have.status(401);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer invalid-token-that-does-not-exist"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "{{tenantId}}"]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Request with an invalid bearer token. Expected: 401 Unauthorized."
+					}
+				},
+				{
+					"name": "Non-Existent Resource (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 404', function () {",
+									"    pm.response.to.have.status(404);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/tenants/ten_nonexistent_id_that_will_never_exist_12345",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "tenants", "ten_nonexistent_id_that_will_never_exist_12345"]
+						},
+						"description": "Request for a resource that does not exist. Expected: 404 Not Found."
+					}
+				},
+				{
+					"name": "Empty Request Body (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "process"]
+						},
+						"description": "Process request with empty body. Expected: 400 Bad Request."
+					}
+				}
+			]
+		}
+	]
+}

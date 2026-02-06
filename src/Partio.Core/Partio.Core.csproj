@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SwiftStack" Version="*" />
+    <PackageReference Include="SyslogLogging" Version="*" />
+    <PackageReference Include="PrettyId" Version="*" />
+    <PackageReference Include="SerializationHelper" Version="*" />
+    <PackageReference Include="SharpToken" Version="*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
+    <PackageReference Include="Npgsql" Version="*" />
+    <PackageReference Include="MySql.Data" Version="*" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="*" />
+  </ItemGroup>
+
+</Project>

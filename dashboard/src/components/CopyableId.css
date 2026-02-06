@@ -1,0 +1,32 @@
+.copyable-id {
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--primary);
+  position: relative;
+}
+
+.copyable-id:hover {
+  text-decoration: underline;
+}
+
+.copyable-id-text {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.copied-badge {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  background: var(--success);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}

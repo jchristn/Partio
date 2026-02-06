@@ -1,0 +1,28 @@
+services:
+  partio-server:
+    image: jchristn77/partio:latest
+    container_name: partio-server
+    ports:
+      - "8400:8400"
+    volumes:
+      - ./partio.json:/app/partio.json:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./request-history:/app/request-history
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8400/"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+
+  partio-dashboard:
+    image: jchristn77/partio-ui:latest
+    container_name: partio-dashboard
+    ports:
+      - "8401:8401"
+    depends_on:
+      partio-server:
+        condition: service_healthy
+    restart: unless-stopped

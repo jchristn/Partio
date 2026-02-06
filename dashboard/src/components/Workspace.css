@@ -1,0 +1,16 @@
+.workspace {
+  display: flex;
+  min-height: 100vh;
+}
+
+.workspace-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}

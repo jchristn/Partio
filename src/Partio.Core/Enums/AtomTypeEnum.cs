@@ -1,0 +1,27 @@
+namespace Partio.Core.Enums
+{
+    /// <summary>
+    /// Type of semantic atom, mirrors DocumentAtom types.
+    /// </summary>
+    public enum AtomTypeEnum
+    {
+        /// <summary>Plain text content.</summary>
+        Text,
+        /// <summary>List content.</summary>
+        List,
+        /// <summary>Binary content.</summary>
+        Binary,
+        /// <summary>Table content.</summary>
+        Table,
+        /// <summary>Unknown content type.</summary>
+        Unknown,
+        /// <summary>Image content.</summary>
+        Image,
+        /// <summary>Hyperlink content.</summary>
+        Hyperlink,
+        /// <summary>Code content.</summary>
+        Code,
+        /// <summary>Metadata content.</summary>
+        Meta
+    }
+}

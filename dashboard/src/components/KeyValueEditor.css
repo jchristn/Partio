@@ -1,0 +1,21 @@
+.kv-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kv-row input {
+  flex: 1;
+}
+
+.kv-remove {
+  padding: 6px 10px;
+  width: auto;
+  flex-shrink: 0;
+}
