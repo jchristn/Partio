@@ -139,6 +139,13 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-secondary);
 }
 
+.form-group label.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
 .header-row {
   display: flex;
   justify-content: space-between;

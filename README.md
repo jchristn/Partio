@@ -9,7 +9,64 @@
   <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--dashboard-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Dashboard">
 </p>
 
-Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lists, tables, images, code, and more) with a chunking and embedding configuration, and returns chunked text with computed embeddings. Partio virtualizes and scales your chunking and embeddings generation workflow so you can focus on building your application, not managing infrastructure.
+Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lists, tables, images, code, and more) with a chunking and embedding configuration, and returns chunked text with computed embeddings. Partio lets you define endpoints (provider + model + chunking policy) and call them consistently across tenants and applications, so you can focus on building your product instead of managing chunking and embedding infrastructure.
+
+### Quick Example
+
+Send a semantic cell with a chunking config:
+
+```bash
+curl -X POST http://localhost:8400/v1.0/endpoints/ep_abc123/process \
+  -H "Authorization: Bearer partioadmin" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Type": "Text",
+    "Text": "Partio centralizes your chunking and embedding workflow. It accepts semantic cells and returns chunks with embeddings.",
+    "ChunkingConfiguration": {
+      "Strategy": "SentenceBased"
+    }
+  }'
+```
+
+Get back chunks with computed embeddings:
+
+```json
+{
+  "Text": "Partio centralizes your chunking and embedding workflow. It accepts semantic cells and returns chunks with embeddings.",
+  "Chunks": [
+    {
+      "Text": "Partio centralizes your chunking and embedding workflow.",
+      "Labels": [],
+      "Tags": {},
+      "Embeddings": [0.0123, -0.0456, 0.0789, "... (384 floats for all-minilm)"]
+    },
+    {
+      "Text": "It accepts semantic cells and returns chunks with embeddings.",
+      "Labels": [],
+      "Tags": {},
+      "Embeddings": [0.0321, -0.0654, 0.0987, "... (384 floats for all-minilm)"]
+    }
+  ]
+}
+```
+
+### What Is a Semantic Cell?
+
+A semantic cell is a typed unit of content from a parsed document. Rather than sending raw text, you send structured content that Partio can chunk intelligently based on its type:
+
+```json
+{
+  "Type": "Text | List | Table | Code | Image | Hyperlink | Meta | Binary",
+  "Text": "string (for Text, Code, Hyperlink, Meta, Image, Binary)",
+  "OrderedList": ["item 1", "item 2"],
+  "UnorderedList": ["item a", "item b"],
+  "Table": [["id", "name"], ["1", "Alice"], ["2", "Bob"]],
+  "Labels": ["source:readme", "section:intro"],
+  "Tags": { "page": "3", "heading": "Introduction" }
+}
+```
+
+Each type unlocks different chunking strategies. Text can be split by tokens, sentences, or paragraphs. Lists can be chunked whole or per-entry. Tables can be chunked by row, row groups, key-value pairs, or as a whole. Labels and tags are echoed back on each chunk for downstream traceability.
 
 ## Who Is This For?
 
@@ -17,6 +74,15 @@ Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lis
 - **DevOps Teams** looking to centralize and scale embedding generation behind a single API, with support for multiple models and providers
 - **Platform Engineers** who need multi-tenant isolation, audit logging, and database portability for chunking and embeddings workloads
 - **Developers** prototyping semantic search, knowledge bases, or AI-powered features who want to get started quickly without wiring up chunking and embedding logic by hand
+
+## Why Partio vs. Rolling Your Own?
+
+- **Semantic-cell-aware chunking**: Partio understands the structure of your content (text, lists, tables, code) and applies type-appropriate chunking strategies, not just naive token splitting
+- **Policy-managed endpoints**: Define endpoints with a specific provider, model, and chunking policy, then call them uniformly across tenants and applications
+- **Traceability and audit**: Every request is logged with full history, and labels/tags flow through from input to each output chunk for end-to-end traceability
+- **Database portability**: Switch between SQLite, PostgreSQL, MySQL, and SQL Server with a config change, no code modifications
+- **Multi-tenant isolation**: Tenants, users, credentials, and endpoints are fully isolated, with scoped bearer token authentication
+- **SDKs and dashboard included**: Ship with C#, Python, and JavaScript SDKs plus a React admin dashboard, so you're not just getting an API
 
 ## Features
 
@@ -92,14 +158,15 @@ dotnet run --project Partio.Server
 
 On first startup, Partio creates a `partio.json` settings file and initializes the database with these defaults:
 
-| Resource | ID | Details |
-|----------|----|---------|
-| Tenant | `default` | Default Tenant |
-| User | `default` | admin@partio / password (admin) |
-| Credential | `default` | Bearer token `default` |
-| Admin API Key | &mdash; | `partioadmin` |
-
-> **Warning**: Change these credentials before production use.
+> [!CAUTION]
+> **Local development only.** Change all default credentials before any production or shared deployment.
+>
+> | Resource | ID | Details |
+> |----------|----|---------|
+> | Tenant | `default` | Default Tenant |
+> | User | `default` | admin@partio / password (admin) |
+> | Credential | `default` | Bearer token `default` |
+> | Admin API Key | &mdash; | `partioadmin` |
 
 ## API Overview
 
@@ -319,6 +386,15 @@ build-server.bat [tag]
 # Dashboard
 build-dashboard.bat [tag]
 ```
+
+## Production Notes
+
+- **Rotate credentials**: Change the default admin API key (`partioadmin`) and default user password immediately. Use the admin API to create tenant-scoped credentials with limited access.
+- **Multi-tenant isolation**: Tenants are isolated at the database row level. Each tenant has its own users, credentials, and endpoints. Cross-tenant access is prevented by scoped bearer tokens.
+- **Request history and retention**: Request/response bodies are persisted to the filesystem. Configure `RetentionDays` and `CleanupIntervalMinutes` in `partio.json` to control disk usage. Set `RequestHistory.Enabled` to `false` to disable entirely.
+- **Horizontal scaling**: Partio is stateless beyond the database. Run multiple instances behind a load balancer pointing to the same database for horizontal scale. Request history files should use shared storage (e.g. NFS, EFS) if enabled across instances.
+- **Rate limiting**: Not currently built in. Place Partio behind a reverse proxy (Nginx, Envoy, API gateway) to enforce rate limits and quotas.
+- **Reproducibility**: Chunk output is deterministic for a given input, chunking strategy, and configuration. Embedding output depends on the upstream model and provider.
 
 ## Troubleshooting
 
