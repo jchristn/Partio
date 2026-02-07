@@ -55,6 +55,10 @@ Process a single semantic cell using the specified embedding endpoint. Requires 
 - `id` — Embedding endpoint ID (e.g. `ep_xxxx`). The endpoint must belong to the caller's tenant (non-admin) and be active.
 
 **Request Body**: `SemanticCellRequest`
+
+The `Type` field determines which content field is used. Supported types: `Text`, `List`, `Table`, `Code`, `Hyperlink`, `Meta`, `Image`, `Binary`, `Unknown`.
+
+#### Text
 ```json
 {
     "Type": "Text",
@@ -71,6 +75,113 @@ Process a single semantic cell using the specified embedding endpoint. Requires 
     },
     "Labels": ["label1"],
     "Tags": { "key": "value" }
+}
+```
+
+#### Unordered List
+```json
+{
+    "Type": "List",
+    "UnorderedList": ["First item", "Second item", "Third item"],
+    "ChunkingConfiguration": {
+        "Strategy": "WholeList"
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+#### Ordered List
+```json
+{
+    "Type": "List",
+    "OrderedList": ["Step one", "Step two", "Step three"],
+    "ChunkingConfiguration": {
+        "Strategy": "ListEntry"
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+#### Table
+```json
+{
+    "Type": "Table",
+    "Table": [
+        ["Name", "Age", "City"],
+        ["Alice", "30", "New York"],
+        ["Bob", "25", "London"]
+    ],
+    "ChunkingConfiguration": {
+        "Strategy": "FixedTokenCount",
+        "FixedTokenCount": 512
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+#### Code
+```json
+{
+    "Type": "Code",
+    "Text": "function hello() {\n  return 'world';\n}",
+    "ChunkingConfiguration": {
+        "Strategy": "FixedTokenCount",
+        "FixedTokenCount": 256
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+#### Hyperlink
+```json
+{
+    "Type": "Hyperlink",
+    "Text": "https://example.com - Example website description",
+    "ChunkingConfiguration": {
+        "Strategy": "FixedTokenCount",
+        "FixedTokenCount": 256
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+#### Image (with text description)
+```json
+{
+    "Type": "Image",
+    "Text": "A photograph of a sunset over the ocean with orange and purple hues.",
+    "ChunkingConfiguration": {
+        "Strategy": "FixedTokenCount",
+        "FixedTokenCount": 256
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+#### Meta
+```json
+{
+    "Type": "Meta",
+    "Text": "Author: John Doe | Created: 2026-01-15 | Version: 2.1",
+    "ChunkingConfiguration": {
+        "Strategy": "FixedTokenCount",
+        "FixedTokenCount": 256
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
 }
 ```
 

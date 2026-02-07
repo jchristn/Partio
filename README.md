@@ -1,68 +1,119 @@
-<img src="assets/logo-dark-text.png" alt="Partio" width="192" height="192">
+<p align="center">
+  <img src="assets/logo-dark-text.png" alt="Partio" width="192" height="192">
+</p>
 
-Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lists, tables, images, etc.) with a chunking and embedding configuration, and returns chunked text with computed embeddings.
+<p align="center">
+  <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square" alt=".NET 10.0">
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License">
+  <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--server-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Server">
+  <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--dashboard-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Dashboard">
+</p>
 
-## Quick Start
+Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lists, tables, images, code, and more) with a chunking and embedding configuration, and returns chunked text with computed embeddings. Partio virtualizes and scales your chunking and embeddings generation workflow so you can focus on building your application, not managing infrastructure.
 
-### Docker Compose
+## Who Is This For?
+
+- **AI/ML Engineers** building RAG pipelines who need a dedicated chunking and embeddings service that decouples document processing from the rest of the stack
+- **DevOps Teams** looking to centralize and scale embedding generation behind a single API, with support for multiple models and providers
+- **Platform Engineers** who need multi-tenant isolation, audit logging, and database portability for chunking and embeddings workloads
+- **Developers** prototyping semantic search, knowledge bases, or AI-powered features who want to get started quickly without wiring up chunking and embedding logic by hand
+
+## Features
+
+- **Multiple chunking strategies** including fixed token count, sentence-based, paragraph-based, whole list, and list entry, with configurable overlap via sliding window
+- **Pluggable embedding providers** supporting both Ollama and OpenAI-compatible APIs, selectable per endpoint
+- **Multi-tenant architecture** with tenant, user, credential, and endpoint isolation
+- **Four database backends** out of the box: SQLite (default, zero config), PostgreSQL, MySQL, and SQL Server
+- **Request history and audit logging** with automatic cleanup, filesystem body persistence, and configurable retention
+- **Bearer token authentication** with global admin API keys and tenant-scoped credentials
+- **Batch processing** for submitting multiple semantic cells in a single request
+- **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history
+- **SDKs** for C#, Python, and JavaScript
+- **Docker images** with multi-architecture support (amd64/arm64)
+- **Pagination and filtering** with cursor-based continuation tokens, sorting, and label/tag/name/active filters on all list endpoints
+
+## Getting Started
+
+### Docker Compose (Recommended)
+
+The fastest way to run Partio with all components.
 
 ```bash
-cd docker
+git clone https://github.com/jchristn/partio.git
+cd partio/docker
 docker compose up -d
 ```
 
-The server will be available at `http://localhost:8400` and the dashboard at `http://localhost:8401`.
+| Component | URL | Docker Image |
+|-----------|-----|--------------|
+| Server | http://localhost:8400 | `jchristn77/partio-server` |
+| Dashboard | http://localhost:8401 | `jchristn77/partio-dashboard` |
 
 Default admin API key: `partioadmin`
 
-### Native (requires .NET 10 SDK)
+### Docker (Server Only)
 
 ```bash
-cd src
+docker run -d -p 8400:8400 jchristn77/partio-server
+```
+
+### From Source
+
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+
+```bash
+git clone https://github.com/jchristn/partio.git
+cd partio/src
 dotnet build
 dotnet run --project Partio.Server
 ```
 
-On first run, Partio creates a `partio.json` settings file and initializes the database with default records:
+### First Run Defaults
 
-- **Tenant**: Default Tenant (id: `default`)
-- **User**: admin@partio / password (id: `default`)
-- **Credential**: Bearer token `default`
-- **Admin API Key**: `partioadmin`
+On first startup, Partio creates a `partio.json` settings file and initializes the database with these defaults:
+
+| Resource | ID | Details |
+|----------|----|---------|
+| Tenant | `default` | Default Tenant |
+| User | `default` | admin@partio / password (admin) |
+| Credential | `default` | Bearer token `default` |
+| Admin API Key | &mdash; | `partioadmin` |
 
 > **Warning**: Change these credentials before production use.
 
-## Configuration
-
-Partio is configured via `partio.json`.
-
-Key settings:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `Rest.Hostname` | `localhost` | Bind hostname |
-| `Rest.Port` | `8400` | Listen port |
-| `Database.Type` | `Sqlite` | Database backend (Sqlite, Postgresql, Mysql, SqlServer) |
-| `Database.Filename` | `./partio.db` | SQLite database path |
-| `AdminApiKeys` | `["partioadmin"]` | Admin bearer tokens |
-
 ## API Overview
 
-All API endpoints use JSON and require a `Authorization: Bearer {token}` header (except health checks).
+All endpoints use JSON and require an `Authorization: Bearer {token}` header unless otherwise noted. See [REST_API.md](REST_API.md) for the full API reference. A [Postman collection](Partio.postman_collection.json) is also included in the repository.
 
-| Category | Endpoints |
-|----------|-----------|
-| Health | `HEAD /`, `GET /`, `GET /v1.0/health` |
-| Process | `POST /v1.0/endpoints/{id}/process`, `POST /v1.0/endpoints/{id}/process/batch` |
-| Tenants | CRUD at `/v1.0/tenants` |
-| Users | CRUD at `/v1.0/users` |
-| Credentials | CRUD at `/v1.0/credentials` |
-| Endpoints | CRUD at `/v1.0/endpoints` |
-| History | `/v1.0/requests` |
+### Health and Identity
 
-See [REST_API.md](REST_API.md) for full API documentation.
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| `HEAD` | `/` | No | Health check |
+| `GET` | `/` | No | Health status |
+| `GET` | `/v1.0/health` | No | Health (JSON) |
+| `GET` | `/v1.0/whoami` | Yes | Caller identity |
 
-### Example: Process Text
+### Processing
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `POST` | `/v1.0/endpoints/{id}/process` | Process a single semantic cell |
+| `POST` | `/v1.0/endpoints/{id}/process/batch` | Process multiple semantic cells |
+
+### Administration (CRUD + Enumerate)
+
+Each admin resource supports `PUT` (create), `GET` (read), `PUT /{id}` (update), `DELETE /{id}`, `HEAD /{id}` (exists), and `POST /enumerate` (list).
+
+| Resource | Route Prefix | ID Prefix |
+|----------|-------------|-----------|
+| Tenants | `/v1.0/tenants` | `ten_` |
+| Users | `/v1.0/users` | `usr_` |
+| Credentials | `/v1.0/credentials` | `cred_` |
+| Endpoints | `/v1.0/endpoints` | `ep_` |
+| Request History | `/v1.0/requests` | `req_` |
+
+### Example: Process a Text Cell
 
 ```bash
 curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process \
@@ -70,7 +121,7 @@ curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process \
   -H "Content-Type: application/json" \
   -d '{
     "Type": "Text",
-    "Text": "This is some text to chunk and embed.",
+    "Text": "Partio virtualizes your chunking and embedding workflow.",
     "ChunkingConfiguration": {
       "Strategy": "FixedTokenCount",
       "FixedTokenCount": 256
@@ -80,6 +131,78 @@ curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process \
     }
   }'
 ```
+
+### Example: Batch Processing
+
+```bash
+curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process/batch \
+  -H "Authorization: Bearer partioadmin" \
+  -H "Content-Type: application/json" \
+  -d '[
+    { "Type": "Text", "Text": "First document to embed." },
+    { "Type": "Text", "Text": "Second document to embed." }
+  ]'
+```
+
+## Chunking Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `FixedTokenCount` | Split content into chunks of a fixed token count (uses cl100k_base encoding). Configurable overlap via `OverlapCount` or `OverlapPercentage`. |
+| `SentenceBased` | Split at sentence boundaries. |
+| `ParagraphBased` | Split at paragraph boundaries. |
+| `WholeList` | Treat an entire list as a single chunk. |
+| `ListEntry` | Each list entry becomes its own chunk. |
+
+Supported content types: Text, Code, Hyperlink, Meta, Lists (ordered/unordered), Tables, Binary, and Image.
+
+## Configuration
+
+Partio is configured via `partio.json`, created automatically on first run.
+
+```json
+{
+  "Rest": {
+    "Hostname": "0.0.0.0",
+    "Port": 8400,
+    "Ssl": false
+  },
+  "Database": {
+    "Type": "Sqlite",
+    "Filename": "./partio.db"
+  },
+  "Logging": {
+    "ConsoleLogging": true,
+    "FileLogging": true,
+    "LogDirectory": "./logs/",
+    "LogFilename": "partio.log",
+    "MinimumSeverity": 0
+  },
+  "RequestHistory": {
+    "Enabled": true,
+    "Directory": "./request-history/",
+    "RetentionDays": 7,
+    "CleanupIntervalMinutes": 60
+  },
+  "AdminApiKeys": ["partioadmin"],
+  "DefaultEmbeddingEndpoints": [
+    {
+      "Model": "all-minilm",
+      "Endpoint": "http://localhost:11434",
+      "ApiFormat": "Ollama"
+    }
+  ]
+}
+```
+
+### Database Options
+
+| Type | Config Value | Notes |
+|------|-------------|-------|
+| SQLite | `Sqlite` | Default. Zero configuration, file-based. |
+| PostgreSQL | `Postgresql` | Set `Hostname`, `Port`, `DatabaseName`, `Username`, `Password`. |
+| MySQL | `Mysql` | Set `Hostname`, `Port`, `DatabaseName`, `Username`, `Password`. |
+| SQL Server | `SqlServer` | Set `Hostname`, `Port`, `DatabaseName`, `Username`, `Password`. |
 
 ## SDKs
 
@@ -127,22 +250,25 @@ const result = await client.process('ep_YOUR_ENDPOINT_ID', {
 ## Architecture
 
 ```
-Partio.Core          - Models, settings, database, chunking, embedding clients
-Partio.Server        - SwiftStack REST server, authentication, request history
+Partio.Core          - Models, settings, database, chunking engine, embedding clients
+Partio.Server        - REST API server, authentication, request history
 dashboard/           - React/Vite admin dashboard
 sdk/csharp/          - C# SDK and test harness
 sdk/python/          - Python SDK and test harness
 sdk/js/              - JavaScript SDK and test harness
+docker/              - Docker Compose setup and default configuration
 ```
 
-## Database Support
+## Docker Images
 
-- **SQLite** (default) - Zero configuration, file-based
-- **PostgreSQL** - Via Npgsql
-- **MySQL** - Via MySql.Data
-- **SQL Server** - Via Microsoft.Data.SqlClient
+| Image | Description | Default Port |
+|-------|-------------|-------------|
+| `jchristn77/partio-server` | Partio REST API server | 8400 |
+| `jchristn77/partio-dashboard` | React admin dashboard (Nginx) | 8401 |
 
-## Building Docker Images
+Both images support `linux/amd64` and `linux/arm64`.
+
+### Building Locally
 
 ```bash
 # Server
@@ -152,6 +278,73 @@ build-server.bat [tag]
 build-dashboard.bat [tag]
 ```
 
+## Troubleshooting
+
+### Server won't start or port is in use
+
+Verify that port 8400 (server) and 8401 (dashboard) are not in use by another process. You can change the port in `partio.json` under `Rest.Port`.
+
+### 401 Unauthorized on every request
+
+Ensure you are passing the `Authorization: Bearer {token}` header. The default admin API key is `partioadmin`. If using a credential token, verify the credential, its associated user, and the tenant are all marked as active.
+
+### Embedding requests fail or return errors
+
+- Confirm the embedding endpoint URL is reachable from the Partio server. When running in Docker, `localhost` inside the container is not the host machine; use `host.docker.internal` or the container network address instead.
+- Verify the model name matches what your embedding provider expects (e.g. `all-minilm` for Ollama).
+- Check that `ApiFormat` is set correctly (`Ollama` or `OpenAI`).
+
+### Dashboard cannot connect to the server
+
+The dashboard connects to the server URL you enter on the login screen. If both are running in Docker, use `http://localhost:8400` from the browser (the dashboard runs client-side). If the server is on a different host, use that host's address.
+
+### Database connection issues (PostgreSQL, MySQL, SQL Server)
+
+Verify `Hostname`, `Port`, `DatabaseName`, `Username`, and `Password` in `partio.json` under `Database`. Ensure the target database server is running and accessible from the Partio server's network.
+
+### Chunks are too large or too small
+
+Adjust `FixedTokenCount` in your `ChunkingConfiguration`. The server caps chunk size to the model's context window automatically. Use `OverlapCount` or `OverlapPercentage` with `OverlapStrategy: "SlidingWindow"` for overlapping chunks.
+
+### Request history filling up disk
+
+Request history bodies are stored on the filesystem under the configured `RequestHistory.Directory`. Reduce `RetentionDays` or `CleanupIntervalMinutes` in `partio.json`, or set `RequestHistory.Enabled` to `false` to disable logging entirely.
+
+### Enable debug logging
+
+Set the following in `partio.json` and restart the server:
+
+```json
+{
+  "Logging": { "MinimumSeverity": 0 },
+  "Debug": {
+    "Authentication": true,
+    "Exceptions": true,
+    "Requests": true,
+    "DatabaseQueries": true
+  }
+}
+```
+
+Logs are written to `./logs/` by default.
+
+## Issues and Feedback
+
+Have a question, found a bug, or want to request a feature?
+
+- **Bug reports and feature requests**: [Open an issue](https://github.com/jchristn/partio/issues)
+- **Questions and discussions**: [Start a discussion](https://github.com/jchristn/partio/discussions)
+
+When filing an issue, please include:
+1. The Partio version (`v0.1.0`, or the Docker image tag)
+2. Steps to reproduce the problem
+3. The request/response (redact any credentials)
+4. Relevant log output from `./logs/`
+
+## Version History
+
+Refer to [CHANGELOG.md](CHANGELOG.md) for the full version history.
+
 ## License
 
-MIT License. See [LICENSE.md](LICENSE.md).
+[MIT](LICENSE.md) &copy; 2026 Joel Christner

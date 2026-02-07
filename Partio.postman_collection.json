@@ -322,6 +322,116 @@
 					}
 				},
 				{
+					"name": "Process Single Cell (Table)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [\n        [\"Name\", \"Age\", \"City\"],\n        [\"Alice\", \"30\", \"New York\"],\n        [\"Bob\", \"25\", \"London\"],\n        [\"Charlie\", \"35\", \"Tokyo\"]\n    ],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    },\n    \"Labels\": [\"test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a table where each row is a list of cell values. The table is chunked as structured tabular data."
+					}
+				},
+				{
+					"name": "Process Single Cell (Code)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Code\",\n    \"Text\": \"function fibonacci(n) {\\n  if (n <= 1) return n;\\n  return fibonacci(n - 1) + fibonacci(n - 2);\\n}\\n\\nfor (let i = 0; i < 10; i++) {\\n  console.log(fibonacci(i));\\n}\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a code snippet. Uses the Text field with Type set to Code for code-aware chunking."
+					}
+				},
+				{
+					"name": "Process Single Cell (Hyperlink)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Hyperlink\",\n    \"Text\": \"https://example.com - Example website with documentation and resources for developers.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a hyperlink atom. Uses the Text field with Type set to Hyperlink."
+					}
+				},
+				{
+					"name": "Process Single Cell (Image with Description)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Image\",\n    \"Text\": \"A photograph of a sunset over the ocean with orange and purple hues reflecting off calm waters.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process an image atom with a text description. When Text is provided for Image type, the text description is chunked and embedded."
+					}
+				},
+				{
+					"name": "Process Single Cell (Meta)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Meta\",\n    \"Text\": \"Author: John Doe | Created: 2026-01-15 | Version: 2.1 | Category: Technical Documentation\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a metadata atom. Uses the Text field with Type set to Meta for metadata content."
+					}
+				},
+				{
 					"name": "Process Single Cell (L2 Normalization)",
 					"request": {
 						"method": "POST",

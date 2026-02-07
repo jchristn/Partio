@@ -34,10 +34,7 @@ export default function ChunkEmbedView() {
   }, [serverUrl, bearerToken]);
 
   const [form, setForm] = useState({
-    Type: 'Text',
     Text: '',
-    UnorderedList: '',
-    OrderedList: '',
     Strategy: 'FixedTokenCount',
     FixedTokenCount: 256,
     OverlapCount: 0,
@@ -55,10 +52,8 @@ export default function ChunkEmbedView() {
     setResult(null);
 
     const request = {
-      Type: form.Type,
-      Text: form.Type === 'Text' ? form.Text : null,
-      UnorderedList: form.Type === 'List' && form.UnorderedList ? form.UnorderedList.split('\n').filter(Boolean) : null,
-      OrderedList: form.Type === 'List' && form.OrderedList ? form.OrderedList.split('\n').filter(Boolean) : null,
+      Type: 'Text',
+      Text: form.Text,
       ChunkingConfiguration: {
         Strategy: form.Strategy,
         FixedTokenCount: parseInt(form.FixedTokenCount) || 256,
@@ -90,26 +85,9 @@ export default function ChunkEmbedView() {
       <div className="chunk-embed-layout">
         <div className="chunk-embed-form card">
           <div className="form-group">
-            <label>Atom Type</label>
-            <select value={form.Type} onChange={e => update('Type', e.target.value)}>
-              <option value="Text">Text</option>
-              <option value="List">List</option>
-            </select>
+            <label>Text Content</label>
+            <textarea rows={8} value={form.Text} onChange={e => update('Text', e.target.value)} placeholder="Enter text to chunk and embed..." />
           </div>
-
-          {form.Type === 'Text' && (
-            <div className="form-group">
-              <label>Text Content</label>
-              <textarea rows={8} value={form.Text} onChange={e => update('Text', e.target.value)} placeholder="Enter text to chunk and embed..." />
-            </div>
-          )}
-
-          {form.Type === 'List' && (
-            <div className="form-group">
-              <label>List Items (one per line)</label>
-              <textarea rows={8} value={form.UnorderedList} onChange={e => update('UnorderedList', e.target.value)} placeholder="Item 1&#10;Item 2&#10;Item 3" />
-            </div>
-          )}
 
           <div className="form-group">
             <label>Chunking Strategy</label>
