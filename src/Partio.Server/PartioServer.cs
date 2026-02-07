@@ -631,8 +631,47 @@ namespace Partio.Server
             SemanticCellRequest? cellReq = req.GetData<SemanticCellRequest>();
             if (cellReq == null) throw new ArgumentException("Request body is required.");
 
-            SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
-            return response;
+            bool recordHistory = _Settings.RequestHistory.Enabled && endpoint.EnableRequestHistory && _RequestHistoryService != null;
+            RequestHistoryEntry? historyEntry = null;
+            Stopwatch? sw = null;
+
+            if (recordHistory)
+            {
+                AuthContext auth = (AuthContext)req.Metadata;
+                historyEntry = await _RequestHistoryService!.CreateEntryAsync(
+                    req.Http.Request.Method.ToString(),
+                    req.Http.Request.Url.RawWithQuery,
+                    req.Http.Request.Source.IpAddress,
+                    auth).ConfigureAwait(false);
+                sw = Stopwatch.StartNew();
+            }
+
+            try
+            {
+                SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
+
+                if (recordHistory && historyEntry != null && sw != null)
+                {
+                    sw.Stop();
+                    string requestJson = _Serializer.SerializeJson(cellReq, false);
+                    string responseJson = _Serializer.SerializeJson(response, false);
+                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson).ConfigureAwait(false);
+                }
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                if (recordHistory && historyEntry != null && sw != null)
+                {
+                    sw.Stop();
+                    string requestJson = _Serializer.SerializeJson(cellReq, false);
+                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                        historyEntry, 500, sw.ElapsedMilliseconds, requestJson, ex.Message).ConfigureAwait(false);
+                }
+                throw;
+            }
         }
 
         private static async Task<object> ProcessBatch(AppRequest req)
@@ -641,14 +680,52 @@ namespace Partio.Server
             List<SemanticCellRequest>? cellReqs = req.GetData<List<SemanticCellRequest>>();
             if (cellReqs == null || cellReqs.Count == 0) throw new ArgumentException("Request body must contain at least one cell.");
 
-            List<SemanticCellResponse> responses = new List<SemanticCellResponse>();
-            foreach (SemanticCellRequest cellReq in cellReqs)
+            bool recordHistory = _Settings.RequestHistory.Enabled && endpoint.EnableRequestHistory && _RequestHistoryService != null;
+            RequestHistoryEntry? historyEntry = null;
+            Stopwatch? sw = null;
+
+            if (recordHistory)
             {
-                SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
-                responses.Add(response);
+                AuthContext auth = (AuthContext)req.Metadata;
+                historyEntry = await _RequestHistoryService!.CreateEntryAsync(
+                    req.Http.Request.Method.ToString(),
+                    req.Http.Request.Url.RawWithQuery,
+                    req.Http.Request.Source.IpAddress,
+                    auth).ConfigureAwait(false);
+                sw = Stopwatch.StartNew();
             }
 
-            return responses;
+            try
+            {
+                List<SemanticCellResponse> responses = new List<SemanticCellResponse>();
+                foreach (SemanticCellRequest cellReq in cellReqs)
+                {
+                    SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
+                    responses.Add(response);
+                }
+
+                if (recordHistory && historyEntry != null && sw != null)
+                {
+                    sw.Stop();
+                    string requestJson = _Serializer.SerializeJson(cellReqs, false);
+                    string responseJson = _Serializer.SerializeJson(responses, false);
+                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson).ConfigureAwait(false);
+                }
+
+                return responses;
+            }
+            catch (Exception ex)
+            {
+                if (recordHistory && historyEntry != null && sw != null)
+                {
+                    sw.Stop();
+                    string requestJson = _Serializer.SerializeJson(cellReqs, false);
+                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                        historyEntry, 500, sw.ElapsedMilliseconds, requestJson, ex.Message).ConfigureAwait(false);
+                }
+                throw;
+            }
         }
 
         private static async Task<EmbeddingEndpoint> ResolveEndpointForProcessing(AppRequest req)
@@ -675,8 +752,44 @@ namespace Partio.Server
         /// </summary>
         private const double TokenScalingFactor = 0.75;
 
+        private static void ValidateStrategyForAtomType(SemanticCellRequest request)
+        {
+            ChunkStrategyEnum strategy = request.ChunkingConfiguration.Strategy;
+            AtomTypeEnum atomType = request.Type;
+
+            // Generic strategies are universally applicable
+            if (strategy == ChunkStrategyEnum.FixedTokenCount
+                || strategy == ChunkStrategyEnum.SentenceBased
+                || strategy == ChunkStrategyEnum.ParagraphBased)
+                return;
+
+            // List-only strategies
+            if (strategy == ChunkStrategyEnum.WholeList || strategy == ChunkStrategyEnum.ListEntry)
+            {
+                if (atomType != AtomTypeEnum.List)
+                    throw new ArgumentException(
+                        "Strategy '" + strategy + "' is only compatible with atom type 'List', but got '" + atomType + "'.");
+                return;
+            }
+
+            // Table-only strategies
+            if (strategy == ChunkStrategyEnum.Row
+                || strategy == ChunkStrategyEnum.RowWithHeaders
+                || strategy == ChunkStrategyEnum.RowGroupWithHeaders
+                || strategy == ChunkStrategyEnum.KeyValuePairs
+                || strategy == ChunkStrategyEnum.WholeTable)
+            {
+                if (atomType != AtomTypeEnum.Table)
+                    throw new ArgumentException(
+                        "Strategy '" + strategy + "' is only compatible with atom type 'Table', but got '" + atomType + "'.");
+                return;
+            }
+        }
+
         private static async Task<SemanticCellResponse> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint)
         {
+            ValidateStrategyForAtomType(request);
+
             string model = endpoint.Model;
 
             EmbeddingClientBase client = CreateEmbeddingClient(endpoint);

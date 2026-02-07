@@ -156,6 +156,95 @@ await runTest('Process Single Cell', async () => {
   if (!result.Chunks[0].Tags || Object.keys(result.Chunks[0].Tags).length === 0) throw new Error('No tags on chunk');
 });
 
+// Process Table strategies
+await runTest('Process Table (Row)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  const result = await client.process(activeEp.Id, {
+    Type: 'Table',
+    Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama']],
+    ChunkingConfiguration: { Strategy: 'Row' },
+    EmbeddingConfiguration: { L2Normalization: false }
+  });
+  if (!result || !result.Chunks || result.Chunks.length !== 2) throw new Error('Expected 2 chunks');
+});
+
+await runTest('Process Table (RowWithHeaders)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  const result = await client.process(activeEp.Id, {
+    Type: 'Table',
+    Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama']],
+    ChunkingConfiguration: { Strategy: 'RowWithHeaders' },
+    EmbeddingConfiguration: { L2Normalization: false }
+  });
+  if (!result || !result.Chunks || result.Chunks.length !== 2) throw new Error('Expected 2 chunks');
+});
+
+await runTest('Process Table (RowGroupWithHeaders)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  const result = await client.process(activeEp.Id, {
+    Type: 'Table',
+    Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama'], ['3', 'donald', 'trump']],
+    ChunkingConfiguration: { Strategy: 'RowGroupWithHeaders', RowGroupSize: 2 },
+    EmbeddingConfiguration: { L2Normalization: false }
+  });
+  if (!result || !result.Chunks || result.Chunks.length !== 2) throw new Error('Expected 2 chunks (groups of 2)');
+});
+
+await runTest('Process Table (KeyValuePairs)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  const result = await client.process(activeEp.Id, {
+    Type: 'Table',
+    Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush']],
+    ChunkingConfiguration: { Strategy: 'KeyValuePairs' },
+    EmbeddingConfiguration: { L2Normalization: false }
+  });
+  if (!result || !result.Chunks || result.Chunks.length !== 1) throw new Error('Expected 1 chunk');
+});
+
+await runTest('Process Table (WholeTable)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  const result = await client.process(activeEp.Id, {
+    Type: 'Table',
+    Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama']],
+    ChunkingConfiguration: { Strategy: 'WholeTable' },
+    EmbeddingConfiguration: { L2Normalization: false }
+  });
+  if (!result || !result.Chunks || result.Chunks.length !== 1) throw new Error('Expected 1 chunk');
+});
+
+await runTest('Table Strategy on Text (400)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  try {
+    await client.process(activeEp.Id, {
+      Type: 'Text',
+      Text: 'This is text, not a table.',
+      ChunkingConfiguration: { Strategy: 'Row' },
+      EmbeddingConfiguration: { L2Normalization: false }
+    });
+    throw new Error('Expected 400');
+  } catch (ex) {
+    if (!(ex instanceof PartioError) || ex.statusCode !== 400) throw ex;
+  }
+});
+
 // Error cases
 await runTest('Unauthenticated Request (401)', async () => {
   const badClient = new PartioClient(endpoint, 'invalid-token');

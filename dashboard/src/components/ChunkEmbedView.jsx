@@ -1,10 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { PartioApi } from '../utils/api';
 import { copyToClipboard } from '../utils/clipboard';
 import TagInput from './TagInput';
 import KeyValueEditor from './KeyValueEditor';
 import './ChunkEmbedView.css';
+
+const STRATEGY_COMPATIBILITY = {
+  FixedTokenCount: ['Text', 'Code', 'Hyperlink', 'Meta', 'List', 'Table'],
+  SentenceBased: ['Text', 'Code', 'Hyperlink', 'Meta', 'List', 'Table'],
+  ParagraphBased: ['Text', 'Code', 'Hyperlink', 'Meta', 'List', 'Table'],
+  WholeList: ['List'],
+  ListEntry: ['List'],
+  Row: ['Table'],
+  RowWithHeaders: ['Table'],
+  RowGroupWithHeaders: ['Table'],
+  KeyValuePairs: ['Table'],
+  WholeTable: ['Table']
+};
+
+const STRATEGY_LABELS = {
+  FixedTokenCount: 'Fixed Token Count',
+  SentenceBased: 'Sentence Based',
+  ParagraphBased: 'Paragraph Based',
+  WholeList: 'Whole List',
+  ListEntry: 'List Entry',
+  Row: 'Row',
+  RowWithHeaders: 'Row With Headers',
+  RowGroupWithHeaders: 'Row Group With Headers',
+  KeyValuePairs: 'Key-Value Pairs',
+  WholeTable: 'Whole Table'
+};
 
 export default function ChunkEmbedView() {
   const { serverUrl, bearerToken } = useApp();
@@ -34,7 +60,10 @@ export default function ChunkEmbedView() {
   }, [serverUrl, bearerToken]);
 
   const [form, setForm] = useState({
+    InputType: 'Text',
     Text: '',
+    TableInput: '',
+    ListInput: '',
     Strategy: 'FixedTokenCount',
     FixedTokenCount: 256,
     OverlapCount: 0,
@@ -43,30 +72,65 @@ export default function ChunkEmbedView() {
     EndpointId: '',
     L2Normalization: false,
     Labels: [],
-    Tags: {}
+    Tags: {},
+    RowGroupSize: 5
   });
+
+  const availableStrategies = useMemo(() => {
+    return Object.entries(STRATEGY_COMPATIBILITY)
+      .filter(([, types]) => types.includes(form.InputType))
+      .map(([key]) => key);
+  }, [form.InputType]);
+
+  useEffect(() => {
+    if (!availableStrategies.includes(form.Strategy)) {
+      update('Strategy', availableStrategies[0] || 'FixedTokenCount');
+    }
+  }, [availableStrategies]);
+
+  const parseTableInput = (input) => {
+    if (!input.trim()) return [];
+    return input.trim().split('\n').map(line =>
+      line.split(',').map(cell => cell.trim())
+    );
+  };
+
+  const parseListInput = (input) => {
+    if (!input.trim()) return [];
+    return input.trim().split('\n').filter(line => line.trim());
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
     setError(null);
     setResult(null);
 
-    const request = {
-      Type: 'Text',
-      Text: form.Text,
-      ChunkingConfiguration: {
-        Strategy: form.Strategy,
-        FixedTokenCount: parseInt(form.FixedTokenCount) || 256,
-        OverlapCount: parseInt(form.OverlapCount) || 0,
-        OverlapStrategy: form.OverlapStrategy,
-        ContextPrefix: form.ContextPrefix || null
-      },
+    const chunkingConfig = {
+      Strategy: form.Strategy,
+      FixedTokenCount: parseInt(form.FixedTokenCount) || 256,
+      OverlapCount: parseInt(form.OverlapCount) || 0,
+      OverlapStrategy: form.OverlapStrategy,
+      ContextPrefix: form.ContextPrefix || null,
+      RowGroupSize: parseInt(form.RowGroupSize) || 5
+    };
+
+    let request = {
+      Type: form.InputType,
+      ChunkingConfiguration: chunkingConfig,
       EmbeddingConfiguration: {
         L2Normalization: form.L2Normalization
       },
       Labels: form.Labels.length > 0 ? form.Labels : null,
       Tags: Object.keys(form.Tags).length > 0 ? form.Tags : null
     };
+
+    if (form.InputType === 'Table') {
+      request.Table = parseTableInput(form.TableInput);
+    } else if (form.InputType === 'List') {
+      request.UnorderedList = parseListInput(form.ListInput);
+    } else {
+      request.Text = form.Text;
+    }
 
     try {
       const res = await api.process(form.EndpointId, request);
@@ -85,20 +149,49 @@ export default function ChunkEmbedView() {
       <div className="chunk-embed-layout">
         <div className="chunk-embed-form card">
           <div className="form-group">
-            <label>Text Content</label>
-            <textarea rows={8} value={form.Text} onChange={e => update('Text', e.target.value)} placeholder="Enter text to chunk and embed..." />
+            <label>Input Type</label>
+            <select value={form.InputType} onChange={e => update('InputType', e.target.value)}>
+              <option value="Text">Text</option>
+              <option value="Code">Code</option>
+              <option value="Hyperlink">Hyperlink</option>
+              <option value="Meta">Meta</option>
+              <option value="List">List</option>
+              <option value="Table">Table</option>
+            </select>
           </div>
+
+          {form.InputType === 'Table' ? (
+            <div className="form-group">
+              <label>Table (CSV format, first row = headers)</label>
+              <textarea rows={8} value={form.TableInput} onChange={e => update('TableInput', e.target.value)} placeholder={"Name, Age, City\nAlice, 30, New York\nBob, 25, London"} />
+            </div>
+          ) : form.InputType === 'List' ? (
+            <div className="form-group">
+              <label>List Items (one per line)</label>
+              <textarea rows={8} value={form.ListInput} onChange={e => update('ListInput', e.target.value)} placeholder={"First item\nSecond item\nThird item"} />
+            </div>
+          ) : (
+            <div className="form-group">
+              <label>Text Content</label>
+              <textarea rows={8} value={form.Text} onChange={e => update('Text', e.target.value)} placeholder="Enter text to chunk and embed..." />
+            </div>
+          )}
 
           <div className="form-group">
             <label>Chunking Strategy</label>
             <select value={form.Strategy} onChange={e => update('Strategy', e.target.value)}>
-              <option value="FixedTokenCount">Fixed Token Count</option>
-              <option value="SentenceBased">Sentence Based</option>
-              <option value="ParagraphBased">Paragraph Based</option>
-              <option value="WholeList">Whole List</option>
-              <option value="ListEntry">List Entry</option>
+              {availableStrategies.map(key => (
+                <option key={key} value={key}>{STRATEGY_LABELS[key]}</option>
+              ))}
             </select>
           </div>
+
+          {form.Strategy === 'RowGroupWithHeaders' && (
+            <div className="form-group">
+              <label>Row Group Size</label>
+              <input type="number" min="1" value={form.RowGroupSize} onChange={e => update('RowGroupSize', e.target.value)} />
+            </div>
+          )}
 
           <div className="form-row">
             <div className="form-group"><label>Token Count</label><input type="number" value={form.FixedTokenCount} onChange={e => update('FixedTokenCount', e.target.value)} /></div>

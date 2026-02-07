@@ -34,6 +34,26 @@ Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lis
 
 ## Getting Started
 
+### Prerequisites
+
+Partio requires an embedding provider to generate embeddings. Out of the box, Partio is configured to use [Ollama](https://ollama.com/) with the `all-minilm` model. Before starting Partio:
+
+1. [Install Ollama](https://ollama.com/download) and start it (default: `http://localhost:11434`)
+2. Pull an embedding model: `ollama pull all-minilm`
+3. Update the `DefaultEmbeddingEndpoints` section in `partio.json` (or `docker/partio.json` for Docker) to point to your Ollama instance:
+
+```json
+"DefaultEmbeddingEndpoints": [
+  {
+    "Model": "all-minilm",
+    "Endpoint": "http://localhost:11434",
+    "ApiFormat": "Ollama"
+  }
+]
+```
+
+> **Note**: When running Partio in Docker, `localhost` inside the container does not reach the host machine. Use `host.docker.internal` instead (e.g. `http://host.docker.internal:11434`), or run Ollama in the same Docker network.
+
 ### Docker Compose (Recommended)
 
 The fastest way to run Partio with all components.
@@ -153,8 +173,30 @@ curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process/ba
 | `ParagraphBased` | Split at paragraph boundaries. |
 | `WholeList` | Treat an entire list as a single chunk. |
 | `ListEntry` | Each list entry becomes its own chunk. |
+| `Row` | Each table data row as space-separated values (no headers). |
+| `RowWithHeaders` | Each table data row as a markdown table with headers prepended. |
+| `RowGroupWithHeaders` | Groups of N table rows with headers (configurable via `RowGroupSize`, default 5). |
+| `KeyValuePairs` | Each table row as key-value pairs (e.g. `"id: 1, firstname: george, lastname: bush"`). |
+| `WholeTable` | Entire table as a single markdown table chunk. |
 
 Supported content types: Text, Code, Hyperlink, Meta, Lists (ordered/unordered), Tables, Binary, and Image.
+
+### Strategy Compatibility
+
+Not all strategies work with all content types. The generic strategies (`FixedTokenCount`, `SentenceBased`, `ParagraphBased`) work with any type. List strategies (`WholeList`, `ListEntry`) only work with `List`. Table strategies (`Row`, `RowWithHeaders`, `RowGroupWithHeaders`, `KeyValuePairs`, `WholeTable`) only work with `Table`. The API returns `400 Bad Request` if an incompatible strategy is used.
+
+| Strategy | Text | Code | Hyperlink | Meta | List | Table | Binary | Image | Unknown |
+|---|---|---|---|---|---|---|---|---|---|
+| FixedTokenCount | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| SentenceBased | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| ParagraphBased | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| WholeList | | | | | Y | | | | |
+| ListEntry | | | | | Y | | | | |
+| Row | | | | | | Y | | | |
+| RowWithHeaders | | | | | | Y | | | |
+| RowGroupWithHeaders | | | | | | Y | | | |
+| KeyValuePairs | | | | | | Y | | | |
+| WholeTable | | | | | | Y | | | |
 
 ## Configuration
 

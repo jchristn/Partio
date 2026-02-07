@@ -201,6 +201,140 @@ namespace Partio.Sdk.TestHarness
                     if (result.Chunks[0].Tags == null || result.Chunks[0].Tags.Count == 0) throw new Exception("No tags on chunk");
                 });
 
+                // Process Table strategies
+                await RunTest("Process Table (Row)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Table",
+                        Table = new List<List<string>>
+                        {
+                            new List<string> { "id", "firstname", "lastname" },
+                            new List<string> { "1", "george", "bush" },
+                            new List<string> { "2", "barack", "obama" }
+                        },
+                        ChunkingConfiguration = new ChunkingConfiguration { Strategy = "Row" }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 2) throw new Exception("Expected 2 chunks");
+                });
+
+                await RunTest("Process Table (RowWithHeaders)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Table",
+                        Table = new List<List<string>>
+                        {
+                            new List<string> { "id", "firstname", "lastname" },
+                            new List<string> { "1", "george", "bush" },
+                            new List<string> { "2", "barack", "obama" }
+                        },
+                        ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RowWithHeaders" }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 2) throw new Exception("Expected 2 chunks");
+                });
+
+                await RunTest("Process Table (RowGroupWithHeaders)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Table",
+                        Table = new List<List<string>>
+                        {
+                            new List<string> { "id", "firstname", "lastname" },
+                            new List<string> { "1", "george", "bush" },
+                            new List<string> { "2", "barack", "obama" },
+                            new List<string> { "3", "donald", "trump" }
+                        },
+                        ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RowGroupWithHeaders", RowGroupSize = 2 }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 2) throw new Exception("Expected 2 chunks (groups of 2)");
+                });
+
+                await RunTest("Process Table (KeyValuePairs)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Table",
+                        Table = new List<List<string>>
+                        {
+                            new List<string> { "id", "firstname", "lastname" },
+                            new List<string> { "1", "george", "bush" }
+                        },
+                        ChunkingConfiguration = new ChunkingConfiguration { Strategy = "KeyValuePairs" }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 1) throw new Exception("Expected 1 chunk");
+                });
+
+                await RunTest("Process Table (WholeTable)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Table",
+                        Table = new List<List<string>>
+                        {
+                            new List<string> { "id", "firstname", "lastname" },
+                            new List<string> { "1", "george", "bush" },
+                            new List<string> { "2", "barack", "obama" }
+                        },
+                        ChunkingConfiguration = new ChunkingConfiguration { Strategy = "WholeTable" }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 1) throw new Exception("Expected 1 chunk");
+                });
+
+                await RunTest("Table Strategy on Text (400)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    try
+                    {
+                        SemanticCellRequest req = new SemanticCellRequest
+                        {
+                            Type = "Text",
+                            Text = "This is text, not a table.",
+                            ChunkingConfiguration = new ChunkingConfiguration { Strategy = "Row" }
+                        };
+                        await admin.ProcessAsync(activeEp.Id, req);
+                        throw new Exception("Expected 400");
+                    }
+                    catch (PartioException ex) when (ex.StatusCode == 400)
+                    {
+                        // Expected
+                    }
+                });
+
                 // Error cases
                 await RunTest("Unauthenticated Request (401)", async () =>
                 {

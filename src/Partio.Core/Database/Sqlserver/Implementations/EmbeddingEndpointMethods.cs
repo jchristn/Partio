@@ -42,7 +42,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
             string tagsJson = serializer.SerializeJson(endpoint.Tags, false);
 
             string query =
-                "INSERT INTO embedding_endpoints (id, tenant_id, model, endpoint, api_format, api_key, active, labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
+                "INSERT INTO embedding_endpoints (id, tenant_id, model, endpoint, api_format, api_key, active, enable_request_history, labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
                 "'" + _Driver.Sanitize(endpoint.Id) + "', " +
                 "'" + _Driver.Sanitize(endpoint.TenantId) + "', " +
                 "'" + _Driver.Sanitize(endpoint.Model) + "', " +
@@ -50,6 +50,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
                 "'" + _Driver.Sanitize(endpoint.ApiFormat.ToString()) + "', " +
                 _Driver.FormatNullableString(endpoint.ApiKey) + ", " +
                 _Driver.FormatBoolean(endpoint.Active) + ", " +
+                _Driver.FormatBoolean(endpoint.EnableRequestHistory) + ", " +
                 "'" + _Driver.Sanitize(labelsJson) + "', " +
                 "'" + _Driver.Sanitize(tagsJson) + "', " +
                 "'" + _Driver.FormatDateTime(endpoint.CreatedUtc) + "', " +
@@ -120,6 +121,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
                 "api_format = '" + _Driver.Sanitize(endpoint.ApiFormat.ToString()) + "', " +
                 "api_key = " + _Driver.FormatNullableString(endpoint.ApiKey) + ", " +
                 "active = " + _Driver.FormatBoolean(endpoint.Active) + ", " +
+                "enable_request_history = " + _Driver.FormatBoolean(endpoint.EnableRequestHistory) + ", " +
                 "labels_json = '" + _Driver.Sanitize(labelsJson) + "', " +
                 "tags_json = '" + _Driver.Sanitize(tagsJson) + "', " +
                 "last_update_utc = '" + _Driver.FormatDateTime(endpoint.LastUpdateUtc) + "' " +

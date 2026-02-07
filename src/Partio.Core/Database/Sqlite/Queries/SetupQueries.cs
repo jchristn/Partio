@@ -70,6 +70,7 @@ namespace Partio.Core.Database.Sqlite.Queries
                 api_format VARCHAR(32) NOT NULL,
                 api_key VARCHAR(512) NULL,
                 active BOOLEAN NOT NULL DEFAULT 1,
+                enable_request_history BOOLEAN NOT NULL DEFAULT 0,
                 labels_json TEXT NULL,
                 tags_json TEXT NULL,
                 created_utc TEXT NOT NULL,

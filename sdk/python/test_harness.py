@@ -167,6 +167,140 @@ def main():
             assert result["Chunks"][0].get("Tags") and len(result["Chunks"][0]["Tags"]) > 0, "No tags on chunk"
         run_test("Process Single Cell", test_process_single_cell)
 
+        # Process Table - Row
+        def test_process_table_row():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            result = client.process(active_ep["Id"], {
+                "Type": "Table",
+                "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"]],
+                "ChunkingConfiguration": {"Strategy": "Row"},
+                "EmbeddingConfiguration": {"L2Normalization": False}
+            })
+            assert result is not None, "No response"
+            assert result.get("Chunks") and len(result["Chunks"]) == 2, "Expected 2 chunks"
+        run_test("Process Table (Row)", test_process_table_row)
+
+        # Process Table - RowWithHeaders
+        def test_process_table_row_with_headers():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            result = client.process(active_ep["Id"], {
+                "Type": "Table",
+                "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"]],
+                "ChunkingConfiguration": {"Strategy": "RowWithHeaders"},
+                "EmbeddingConfiguration": {"L2Normalization": False}
+            })
+            assert result is not None, "No response"
+            assert result.get("Chunks") and len(result["Chunks"]) == 2, "Expected 2 chunks"
+        run_test("Process Table (RowWithHeaders)", test_process_table_row_with_headers)
+
+        # Process Table - RowGroupWithHeaders
+        def test_process_table_row_group():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            result = client.process(active_ep["Id"], {
+                "Type": "Table",
+                "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"], ["3", "donald", "trump"]],
+                "ChunkingConfiguration": {"Strategy": "RowGroupWithHeaders", "RowGroupSize": 2},
+                "EmbeddingConfiguration": {"L2Normalization": False}
+            })
+            assert result is not None, "No response"
+            assert result.get("Chunks") and len(result["Chunks"]) == 2, "Expected 2 chunks (groups of 2)"
+        run_test("Process Table (RowGroupWithHeaders)", test_process_table_row_group)
+
+        # Process Table - KeyValuePairs
+        def test_process_table_kv():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            result = client.process(active_ep["Id"], {
+                "Type": "Table",
+                "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"]],
+                "ChunkingConfiguration": {"Strategy": "KeyValuePairs"},
+                "EmbeddingConfiguration": {"L2Normalization": False}
+            })
+            assert result is not None, "No response"
+            assert result.get("Chunks") and len(result["Chunks"]) == 1, "Expected 1 chunk"
+        run_test("Process Table (KeyValuePairs)", test_process_table_kv)
+
+        # Process Table - WholeTable
+        def test_process_table_whole():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            result = client.process(active_ep["Id"], {
+                "Type": "Table",
+                "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"]],
+                "ChunkingConfiguration": {"Strategy": "WholeTable"},
+                "EmbeddingConfiguration": {"L2Normalization": False}
+            })
+            assert result is not None, "No response"
+            assert result.get("Chunks") and len(result["Chunks"]) == 1, "Expected 1 chunk"
+        run_test("Process Table (WholeTable)", test_process_table_whole)
+
+        # Negative test: table strategy on text atom
+        def test_table_strategy_on_text():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            try:
+                client.process(active_ep["Id"], {
+                    "Type": "Text",
+                    "Text": "This is text, not a table.",
+                    "ChunkingConfiguration": {"Strategy": "Row"},
+                    "EmbeddingConfiguration": {"L2Normalization": False}
+                })
+                raise AssertionError("Expected 400")
+            except PartioError as e:
+                assert e.status_code == 400
+        run_test("Table Strategy on Text (400)", test_table_strategy_on_text)
+
         # Error cases
         def test_unauthenticated():
             with PartioClient(endpoint, "invalid-token") as bad_client:

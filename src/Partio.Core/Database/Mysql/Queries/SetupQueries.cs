@@ -70,6 +70,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 api_format VARCHAR(32) NOT NULL,
                 api_key VARCHAR(512) NULL,
                 active TINYINT(1) NOT NULL DEFAULT 1,
+                enable_request_history TINYINT(1) NOT NULL DEFAULT 0,
                 labels_json TEXT NULL,
                 tags_json TEXT NULL,
                 created_utc TEXT NOT NULL,

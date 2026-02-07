@@ -12,6 +12,7 @@ namespace Partio.Core.Models
         private int _OverlapCount = 0;
         private double? _OverlapPercentage = null;
         private OverlapStrategyEnum _OverlapStrategy = OverlapStrategyEnum.SlidingWindow;
+        private int _RowGroupSize = 5;
         private string? _ContextPrefix = null;
 
         /// <summary>
@@ -70,6 +71,18 @@ namespace Partio.Core.Models
         {
             get => _OverlapStrategy;
             set => _OverlapStrategy = value;
+        }
+
+        /// <summary>
+        /// Number of rows per group (for RowGroupWithHeaders strategy).
+        /// </summary>
+        /// <remarks>Default: 5. Minimum: 1.</remarks>
+        public int RowGroupSize
+        {
+            get => _RowGroupSize;
+            set => _RowGroupSize = (value >= 1)
+                ? value
+                : throw new ArgumentOutOfRangeException(nameof(RowGroupSize), "RowGroupSize must be at least 1.");
         }
 
         /// <summary>

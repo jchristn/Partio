@@ -130,8 +130,27 @@ namespace Partio.Core.Chunking
         {
             if (request.Table == null || request.Table.Count == 0) return new List<string>();
 
-            string serialized = SerializeTable(request.Table);
-            return ChunkText(serialized, config);
+            switch (config.Strategy)
+            {
+                case ChunkStrategyEnum.Row:
+                    return TableChunker.ChunkByRow(request.Table);
+
+                case ChunkStrategyEnum.RowWithHeaders:
+                    return TableChunker.ChunkByRowWithHeaders(request.Table);
+
+                case ChunkStrategyEnum.RowGroupWithHeaders:
+                    return TableChunker.ChunkByRowGroupWithHeaders(request.Table, config.RowGroupSize);
+
+                case ChunkStrategyEnum.KeyValuePairs:
+                    return TableChunker.ChunkByKeyValuePairs(request.Table);
+
+                case ChunkStrategyEnum.WholeTable:
+                    return TableChunker.ChunkWholeTable(request.Table);
+
+                default:
+                    string serialized = SerializeTable(request.Table);
+                    return ChunkText(serialized, config);
+            }
         }
 
         private string SerializeList(List<string> items, bool ordered)

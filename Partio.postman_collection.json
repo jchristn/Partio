@@ -1,7 +1,7 @@
 {
 	"info": {
 		"_postman_id": "partio-api-collection",
-		"name": "Partio API",
+		"name": "Partio",
 		"description": "Complete API collection for Partio — a multi-tenant RESTful platform for semantic cell chunking and embedding.\n\nVariables:\n- `baseUrl`: Server base URL (default: http://localhost:8400)\n- `bearerToken`: Admin API key or credential bearer token\n- `tenantId`: Target tenant ID\n- `userId`: Target user ID\n- `credentialId`: Target credential ID\n- `endpointId`: Target embedding endpoint ID\n- `requestId`: Target request history entry ID\n- `embeddingModel`: Embedding model name (default: all-minilm)\n- `chunkStrategy`: Chunking strategy (default: FixedTokenCount)\n- `fixedTokenCount`: Token count per chunk (default: 256)\n- `maxResults`: Enumeration page size (default: 100)\n- `continuationToken`: Pagination continuation token",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
@@ -322,7 +322,7 @@
 					}
 				},
 				{
-					"name": "Process Single Cell (Table)",
+					"name": "Process Single Cell (Table - RowWithHeaders)",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -333,14 +333,102 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [\n        [\"Name\", \"Age\", \"City\"],\n        [\"Alice\", \"30\", \"New York\"],\n        [\"Bob\", \"25\", \"London\"],\n        [\"Charlie\", \"35\", \"Tokyo\"]\n    ],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    },\n    \"Labels\": [\"test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [\n        [\"Name\", \"Age\", \"City\"],\n        [\"Alice\", \"30\", \"New York\"],\n        [\"Bob\", \"25\", \"London\"],\n        [\"Charlie\", \"35\", \"Tokyo\"]\n    ],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"RowWithHeaders\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    },\n    \"Labels\": [\"test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
 							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
-						"description": "Process a table where each row is a list of cell values. The table is chunked as structured tabular data."
+						"description": "Process a table using RowWithHeaders strategy. Each data row becomes its own chunk with markdown table headers prepended."
+					}
+				},
+				{
+					"name": "Process Single Cell (Table - Row)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [\n        [\"Name\", \"Age\", \"City\"],\n        [\"Alice\", \"30\", \"New York\"],\n        [\"Bob\", \"25\", \"London\"]\n    ],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"Row\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a table using Row strategy. Each data row becomes a chunk of space-separated values (no headers)."
+					}
+				},
+				{
+					"name": "Process Single Cell (Table - RowGroupWithHeaders)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [\n        [\"Name\", \"Age\", \"City\"],\n        [\"Alice\", \"30\", \"New York\"],\n        [\"Bob\", \"25\", \"London\"],\n        [\"Charlie\", \"35\", \"Tokyo\"],\n        [\"Diana\", \"28\", \"Berlin\"]\n    ],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"RowGroupWithHeaders\",\n        \"RowGroupSize\": 2\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a table using RowGroupWithHeaders strategy. Data rows are grouped into batches of RowGroupSize with headers prepended to each group."
+					}
+				},
+				{
+					"name": "Process Single Cell (Table - KeyValuePairs)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [\n        [\"Name\", \"Age\", \"City\"],\n        [\"Alice\", \"30\", \"New York\"],\n        [\"Bob\", \"25\", \"London\"]\n    ],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"KeyValuePairs\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a table using KeyValuePairs strategy. Each data row becomes 'key1: val1, key2: val2, ...'."
+					}
+				},
+				{
+					"name": "Process Single Cell (Table - WholeTable)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [\n        [\"Name\", \"Age\", \"City\"],\n        [\"Alice\", \"30\", \"New York\"],\n        [\"Bob\", \"25\", \"London\"]\n    ],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"WholeTable\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process a table using WholeTable strategy. The entire table is serialized as a single markdown table chunk."
 					}
 				},
 				{
@@ -385,28 +473,6 @@
 							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Process a hyperlink atom. Uses the Text field with Type set to Hyperlink."
-					}
-				},
-				{
-					"name": "Process Single Cell (Image with Description)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"Type\": \"Image\",\n    \"Text\": \"A photograph of a sunset over the ocean with orange and purple hues reflecting off calm waters.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
-						},
-						"description": "Process an image atom with a text description. When Text is provided for Image type, the text description is chunked and embedded."
 					}
 				},
 				{
@@ -1541,6 +1607,115 @@
 							"path": ["v1.0", "tenants", "ten_nonexistent_id_that_will_never_exist_12345"]
 						},
 						"description": "Request for a resource that does not exist. Expected: 404 Not Found."
+					}
+				},
+				{
+					"name": "Table Strategy on Text (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"pm.test('Error message mentions strategy compatibility', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Message).to.include('Table');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"This is text, not a table.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"Row\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Demonstrates 400 error when using a table-only strategy (Row) on a Text atom type. Set {{endpointId}} to a valid endpoint ID first."
+					}
+				},
+				{
+					"name": "Table Strategy on List (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"List\",\n    \"UnorderedList\": [\"Item 1\", \"Item 2\"],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"RowWithHeaders\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Demonstrates 400 error when using a table-only strategy (RowWithHeaders) on a List atom type. Set {{endpointId}} to a valid endpoint ID first."
+					}
+				},
+				{
+					"name": "List Strategy on Table (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Table\",\n    \"Table\": [[\"col1\"], [\"val1\"]],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"WholeList\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Demonstrates 400 error when using a list-only strategy (WholeList) on a Table atom type. Set {{endpointId}} to a valid endpoint ID first."
 					}
 				},
 				{

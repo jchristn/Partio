@@ -81,6 +81,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     api_format NVARCHAR(32) NOT NULL,
                     api_key NVARCHAR(512) NULL,
                     active BIT NOT NULL DEFAULT 1,
+                    enable_request_history BIT NOT NULL DEFAULT 0,
                     labels_json NVARCHAR(MAX) NULL,
                     tags_json NVARCHAR(MAX) NULL,
                     created_utc NVARCHAR(64) NOT NULL,

@@ -56,7 +56,7 @@ Process a single semantic cell using the specified embedding endpoint. Requires 
 
 **Request Body**: `SemanticCellRequest`
 
-The `Type` field determines which content field is used. Supported types: `Text`, `List`, `Table`, `Code`, `Hyperlink`, `Meta`, `Image`, `Binary`, `Unknown`.
+The `Type` field determines which content field is used. Supported types: `Text`, `List`, `Table`, `Code`, `Hyperlink`, `Meta`.
 
 #### Text
 ```json
@@ -106,7 +106,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
 }
 ```
 
-#### Table
+#### Table (RowWithHeaders)
 ```json
 {
     "Type": "Table",
@@ -116,8 +116,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         ["Bob", "25", "London"]
     ],
     "ChunkingConfiguration": {
-        "Strategy": "FixedTokenCount",
-        "FixedTokenCount": 512
+        "Strategy": "RowWithHeaders"
     },
     "EmbeddingConfiguration": {
         "L2Normalization": false
@@ -155,21 +154,6 @@ The `Type` field determines which content field is used. Supported types: `Text`
 }
 ```
 
-#### Image (with text description)
-```json
-{
-    "Type": "Image",
-    "Text": "A photograph of a sunset over the ocean with orange and purple hues.",
-    "ChunkingConfiguration": {
-        "Strategy": "FixedTokenCount",
-        "FixedTokenCount": 256
-    },
-    "EmbeddingConfiguration": {
-        "L2Normalization": false
-    }
-}
-```
-
 #### Meta
 ```json
 {
@@ -184,6 +168,88 @@ The `Type` field determines which content field is used. Supported types: `Text`
     }
 }
 ```
+
+#### Table (Row)
+```json
+{
+    "Type": "Table",
+    "Table": [
+        ["Name", "Age", "City"],
+        ["Alice", "30", "New York"],
+        ["Bob", "25", "London"]
+    ],
+    "ChunkingConfiguration": {
+        "Strategy": "Row"
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+Each data row becomes a chunk of space-separated values: `"Alice 30 New York"`.
+
+#### Table (RowGroupWithHeaders)
+```json
+{
+    "Type": "Table",
+    "Table": [
+        ["Name", "Age", "City"],
+        ["Alice", "30", "New York"],
+        ["Bob", "25", "London"],
+        ["Carol", "35", "Paris"]
+    ],
+    "ChunkingConfiguration": {
+        "Strategy": "RowGroupWithHeaders",
+        "RowGroupSize": 2
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+Groups of `RowGroupSize` rows with headers prepended as a markdown table. Default `RowGroupSize` is 5.
+
+#### Table (KeyValuePairs)
+```json
+{
+    "Type": "Table",
+    "Table": [
+        ["Name", "Age", "City"],
+        ["Alice", "30", "New York"],
+        ["Bob", "25", "London"]
+    ],
+    "ChunkingConfiguration": {
+        "Strategy": "KeyValuePairs"
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+Each data row becomes: `"Name: Alice, Age: 30, City: New York"`.
+
+#### Table (WholeTable)
+```json
+{
+    "Type": "Table",
+    "Table": [
+        ["Name", "Age", "City"],
+        ["Alice", "30", "New York"],
+        ["Bob", "25", "London"]
+    ],
+    "ChunkingConfiguration": {
+        "Strategy": "WholeTable"
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+Entire table serialized as a single markdown table chunk.
 
 **Response**: `200 OK` — `SemanticCellResponse`
 ```json
@@ -202,7 +268,36 @@ The `Type` field determines which content field is used. Supported types: `Text`
 
 **Errors**:
 - `404 Not Found` — Endpoint ID not found or does not belong to the caller's tenant
-- `400 Bad Request` — Endpoint is inactive, or request body is missing/invalid
+- `400 Bad Request` — Endpoint is inactive, request body is missing/invalid, or strategy is incompatible with atom type
+
+#### Strategy-to-Type Validation
+
+The API validates that the chunking strategy is compatible with the atom type. Incompatible combinations return `400 Bad Request`.
+
+- **Generic strategies** (`FixedTokenCount`, `SentenceBased`, `ParagraphBased`) work with all types
+- **List strategies** (`WholeList`, `ListEntry`) only work with `List`
+- **Table strategies** (`Row`, `RowWithHeaders`, `RowGroupWithHeaders`, `KeyValuePairs`, `WholeTable`) only work with `Table`
+
+Example error response for using `Row` strategy on a `Text` type:
+```json
+{
+    "Error": "BadRequest",
+    "Message": "Strategy 'Row' is only compatible with atom type 'Table', but got 'Text'.",
+    "StatusCode": 400
+}
+```
+
+#### ChunkingConfiguration Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Strategy` | string | `FixedTokenCount` | Chunking strategy to use |
+| `FixedTokenCount` | int | `256` | Tokens per chunk (for FixedTokenCount) |
+| `OverlapCount` | int | `0` | Overlap tokens between chunks |
+| `OverlapPercentage` | float? | `null` | Overlap as percentage (0.0-1.0) |
+| `OverlapStrategy` | string | `SlidingWindow` | Overlap boundary strategy |
+| `ContextPrefix` | string? | `null` | Prefix prepended to each chunk |
+| `RowGroupSize` | int | `5` | Rows per group (for RowGroupWithHeaders). Minimum: 1 |
 
 ### POST /v1.0/endpoints/{id}/process/batch
 Process multiple semantic cells using the specified embedding endpoint.

@@ -16,7 +16,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '' });
+  const [form, setForm] = useState({ TenantId: 'default', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -42,22 +42,22 @@ export default function EmbeddingEndpointsView() {
   const openCreate = () => {
     setEditing(null);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
-    setForm({ TenantId: tenantId, Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '' });
+    setForm({ TenantId: tenantId, Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false });
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditing(item);
-    setForm({ TenantId: item.TenantId, Model: item.Model, Endpoint: item.Endpoint, ApiFormat: item.ApiFormat, ApiKey: item.ApiKey || '' });
+    setForm({ TenantId: item.TenantId, Model: item.Model, Endpoint: item.Endpoint, ApiFormat: item.ApiFormat, ApiKey: item.ApiKey || '', EnableRequestHistory: item.EnableRequestHistory || false });
     setShowModal(true);
   };
 
   const handleSave = async () => {
     try {
       if (editing) {
-        await api.updateEndpoint(editing.Id, { ...editing, Model: form.Model, Endpoint: form.Endpoint, ApiFormat: form.ApiFormat, ApiKey: form.ApiKey || null });
+        await api.updateEndpoint(editing.Id, { ...editing, Model: form.Model, Endpoint: form.Endpoint, ApiFormat: form.ApiFormat, ApiKey: form.ApiKey || null, EnableRequestHistory: form.EnableRequestHistory });
       } else {
-        await api.createEndpoint({ TenantId: form.TenantId, Model: form.Model, Endpoint: form.Endpoint, ApiFormat: form.ApiFormat, ApiKey: form.ApiKey || null });
+        await api.createEndpoint({ TenantId: form.TenantId, Model: form.Model, Endpoint: form.Endpoint, ApiFormat: form.ApiFormat, ApiKey: form.ApiKey || null, EnableRequestHistory: form.EnableRequestHistory });
       }
       setShowModal(false);
       load();
@@ -105,6 +105,16 @@ export default function EmbeddingEndpointsView() {
       )
     },
     {
+      key: 'EnableRequestHistory',
+      label: 'History',
+      filterValue: (item) => item.EnableRequestHistory ? 'On' : 'Off',
+      render: (item) => (
+        <span className={`status-badge ${item.EnableRequestHistory ? 'active' : 'inactive'}`}>
+          {item.EnableRequestHistory ? 'On' : 'Off'}
+        </span>
+      )
+    },
+    {
       key: 'actions',
       label: 'Actions',
       isAction: true,
@@ -133,6 +143,7 @@ export default function EmbeddingEndpointsView() {
           <div className="form-group"><label>Endpoint</label><input value={form.Endpoint} onChange={e => setForm({ ...form, Endpoint: e.target.value })} placeholder="http://localhost:11434" /></div>
           <div className="form-group"><label>API Format</label><select value={form.ApiFormat} onChange={e => setForm({ ...form, ApiFormat: e.target.value })}><option value="Ollama">Ollama</option><option value="OpenAI">OpenAI</option></select></div>
           <div className="form-group"><label>API Key (optional)</label><input type="password" value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} /></div>
+          <div className="form-group"><label className="checkbox-label"><input type="checkbox" checked={form.EnableRequestHistory} onChange={e => setForm({ ...form, EnableRequestHistory: e.target.checked })} /> Enable Request History</label></div>
           <div className="btn-group" style={{ marginTop: 16 }}><button className="primary" onClick={handleSave}>Save</button><button className="secondary" onClick={() => setShowModal(false)}>Cancel</button></div>
         </Modal>
       )}

@@ -1,6 +1,6 @@
 services:
   partio-server:
-    image: jchristn77/partio:latest
+    image: jchristn77/partio-server:latest
     container_name: partio-server
     ports:
       - "8400:8400"
@@ -18,7 +18,7 @@ services:
       start_period: 5s
 
   partio-dashboard:
-    image: jchristn77/partio-ui:latest
+    image: jchristn77/partio-dashboard:latest
     container_name: partio-dashboard
     ports:
       - "8401:8401"

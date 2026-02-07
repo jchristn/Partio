@@ -70,6 +70,7 @@ namespace Partio.Core.Database.Postgresql.Queries
                 api_format VARCHAR(32) NOT NULL,
                 api_key VARCHAR(512) NULL,
                 active BOOLEAN NOT NULL DEFAULT TRUE,
+                enable_request_history BOOLEAN NOT NULL DEFAULT FALSE,
                 labels_json TEXT NULL,
                 tags_json TEXT NULL,
                 created_utc TEXT NOT NULL,

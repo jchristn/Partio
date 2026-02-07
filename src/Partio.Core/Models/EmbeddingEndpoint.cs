@@ -15,6 +15,7 @@ namespace Partio.Core.Models
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
         private string? _ApiKey = null;
         private bool _Active = true;
+        private bool _EnableRequestHistory = false;
         private List<string> _Labels = new List<string>();
         private Dictionary<string, string> _Tags = new Dictionary<string, string>();
         private DateTime _CreatedUtc = DateTime.UtcNow;
@@ -90,6 +91,16 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
+        /// Whether request history is enabled for this endpoint.
+        /// </summary>
+        /// <remarks>Default: false.</remarks>
+        public bool EnableRequestHistory
+        {
+            get => _EnableRequestHistory;
+            set => _EnableRequestHistory = value;
+        }
+
+        /// <summary>
         /// Labels for categorization.
         /// </summary>
         public List<string> Labels
@@ -142,6 +153,7 @@ namespace Partio.Core.Models
             ep.ApiFormat = Enum.Parse<ApiFormatEnum>(row["api_format"].ToString() ?? "Ollama");
             ep.ApiKey = row["api_key"] == DBNull.Value ? null : row["api_key"].ToString();
             ep.Active = Convert.ToBoolean(row["active"]);
+            ep.EnableRequestHistory = Convert.ToBoolean(row["enable_request_history"]);
             ep.CreatedUtc = DateTime.Parse(row["created_utc"].ToString() ?? DateTime.UtcNow.ToString("o")).ToUniversalTime();
             ep.LastUpdateUtc = DateTime.Parse(row["last_update_utc"].ToString() ?? DateTime.UtcNow.ToString("o")).ToUniversalTime();
 
