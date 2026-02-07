@@ -46,6 +46,11 @@ def main():
             assert result and result.get("Status") == "Healthy"
         run_test("Health Check", test_health)
 
+        def test_whoami():
+            result = client.whoami()
+            assert result and "Role" in result
+        run_test("Who Am I", test_whoami)
+
         # Tenant CRUD
         def test_create_tenant():
             nonlocal test_tenant_id
@@ -132,6 +137,35 @@ def main():
             result = client.enumerate_request_history()
             assert result is not None
         run_test("Enumerate Request History", test_enumerate_history)
+
+        # Process Single Cell (requires an active embedding endpoint)
+        def test_process_single_cell():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            result = client.process(active_ep["Id"], {
+                "Type": "Text",
+                "Text": "Partio is a multi-tenant embedding platform.",
+                "ChunkingConfiguration": {"Strategy": "FixedTokenCount", "FixedTokenCount": 256},
+                "EmbeddingConfiguration": {"L2Normalization": False},
+                "Labels": ["test"],
+                "Tags": {"source": "sdk-test"}
+            })
+
+            assert result is not None, "No response"
+            assert result.get("Text"), "Missing Text"
+            assert result.get("Chunks") and len(result["Chunks"]) > 0, "No chunks"
+            assert result["Chunks"][0].get("Embeddings") and len(result["Chunks"][0]["Embeddings"]) > 0, "No embeddings"
+            assert result["Chunks"][0].get("Labels") and len(result["Chunks"][0]["Labels"]) > 0, "No labels on chunk"
+            assert result["Chunks"][0].get("Tags") and len(result["Chunks"][0]["Tags"]) > 0, "No tags on chunk"
+        run_test("Process Single Cell", test_process_single_cell)
 
         # Error cases
         def test_unauthenticated():

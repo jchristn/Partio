@@ -34,17 +34,13 @@ namespace Partio.Core.Chunking
             if (request == null) throw new ArgumentNullException(nameof(request));
 
             List<string> rawChunks = GetRawChunks(request);
-            string? contextPrefix = request.ChunkingConfiguration.ContextPrefix;
 
             List<ChunkResult> results = new List<ChunkResult>();
 
             foreach (string chunk in rawChunks)
             {
-                string chunkedText = string.IsNullOrEmpty(contextPrefix) ? chunk : contextPrefix + chunk;
-
                 ChunkResult result = new ChunkResult();
                 result.Text = chunk;
-                result.ChunkedText = chunkedText;
                 results.Add(result);
             }
 

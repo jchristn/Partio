@@ -89,5 +89,10 @@ namespace Partio.Core
         /// Default request history directory.
         /// </summary>
         public static readonly string RequestHistoryDirectory = "./request-history/";
+
+        /// <summary>
+        /// Default database filename.
+        /// </summary>
+        public static readonly string DatabaseFilename = "partio.db";
     }
 }

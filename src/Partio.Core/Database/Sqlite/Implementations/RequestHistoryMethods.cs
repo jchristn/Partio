@@ -161,7 +161,7 @@ namespace Partio.Core.Database.Sqlite.Implementations
 
             result.Data = entries;
 
-            if (entries.Count > 0)
+            if (result.HasMore && entries.Count > 0)
                 result.ContinuationToken = entries[entries.Count - 1].Id;
 
             return result;

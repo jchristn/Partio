@@ -48,10 +48,11 @@ export class PartioClient {
 
   // Health
   async health() { return this._request('GET', '/v1.0/health'); }
+  async whoami() { return this._request('GET', '/v1.0/whoami'); }
 
   // Process
-  async process(request) { return this._request('POST', '/v1.0/process', request); }
-  async processBatch(requests) { return this._request('POST', '/v1.0/process/batch', requests); }
+  async process(endpointId, request) { return this._request('POST', `/v1.0/endpoints/${endpointId}/process`, request); }
+  async processBatch(endpointId, requests) { return this._request('POST', `/v1.0/endpoints/${endpointId}/process/batch`, requests); }
 
   // Tenants
   async createTenant(data) { return this._request('PUT', '/v1.0/tenants', data); }

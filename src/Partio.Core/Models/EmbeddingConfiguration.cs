@@ -5,18 +5,17 @@ namespace Partio.Core.Models
     /// </summary>
     public class EmbeddingConfiguration
     {
-        private string _Model = string.Empty;
+        private string? _Model = null;
         private bool _L2Normalization = false;
 
         /// <summary>
         /// Embedding model name (e.g. "all-minilm", "text-embedding-3-small").
+        /// Optional when the endpoint is specified in the URL path.
         /// </summary>
-        public string Model
+        public string? Model
         {
             get => _Model;
-            set => _Model = !string.IsNullOrEmpty(value)
-                ? value
-                : throw new ArgumentException("Model must not be null or empty.", nameof(Model));
+            set => _Model = value;
         }
 
         /// <summary>

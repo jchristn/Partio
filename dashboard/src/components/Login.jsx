@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import './Login.css';
 
 export default function Login() {
-  const { login, error } = useApp();
+  const { login, error, theme } = useApp();
   const navigate = useNavigate();
   const [serverUrl, setServerUrl] = useState('http://localhost:8400');
   const [token, setToken] = useState('partioadmin');
@@ -21,8 +21,14 @@ export default function Login() {
   return (
     <div className="login-container">
       <div className="login-card">
-        <h1>Partio</h1>
-        <p className="login-subtitle">Admin Dashboard</p>
+        <div className="login-header">
+          <img
+            src={theme === 'dark' ? '/logo-light-text.png' : '/logo-dark-text.png'}
+            alt="Partio"
+            className="login-logo"
+          />
+          <p className="login-subtitle">Admin Dashboard</p>
+        </div>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Server URL</label>

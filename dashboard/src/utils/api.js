@@ -32,6 +32,7 @@ export class PartioApi {
 
   // Health
   health() { return this.request('GET', '/v1.0/health'); }
+  whoami() { return this.request('GET', '/v1.0/whoami'); }
 
   // Tenants
   createTenant(data) { return this.request('PUT', '/v1.0/tenants', data); }
@@ -68,6 +69,6 @@ export class PartioApi {
   enumerateRequestHistory(req = {}) { return this.request('POST', '/v1.0/requests/enumerate', req); }
 
   // Process
-  process(data) { return this.request('POST', '/v1.0/process', data); }
-  processBatch(data) { return this.request('POST', '/v1.0/process/batch', data); }
+  process(endpointId, data) { return this.request('POST', `/v1.0/endpoints/${endpointId}/process`, data); }
+  processBatch(endpointId, data) { return this.request('POST', `/v1.0/endpoints/${endpointId}/process/batch`, data); }
 }

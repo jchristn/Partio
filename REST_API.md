@@ -32,10 +32,27 @@ Health status JSON (no auth required).
 
 ---
 
+## Identity
+
+### GET /v1.0/whoami
+Returns the role and tenant of the authenticated caller.
+
+**Response**: `200 OK`
+```json
+{ "Role": "Admin", "TenantName": "Admin" }
+```
+- `Role` — `"Admin"` or `"User"`
+- `TenantName` — `"Admin"` for global admins, or the tenant's name
+
+---
+
 ## Process (Chunk & Embed)
 
-### POST /v1.0/process
-Process a single semantic cell. Requires bearer token authentication.
+### POST /v1.0/endpoints/{id}/process
+Process a single semantic cell using the specified embedding endpoint. Requires bearer token authentication.
+
+**Path Parameters**:
+- `id` — Embedding endpoint ID (e.g. `ep_xxxx`). The endpoint must belong to the caller's tenant (non-admin) and be active.
 
 **Request Body**: `SemanticCellRequest`
 ```json
@@ -50,7 +67,6 @@ Process a single semantic cell. Requires bearer token authentication.
         "ContextPrefix": "doc-123 "
     },
     "EmbeddingConfiguration": {
-        "Model": "all-minilm",
         "L2Normalization": true
     },
     "Labels": ["label1"],
@@ -61,22 +77,27 @@ Process a single semantic cell. Requires bearer token authentication.
 **Response**: `200 OK` — `SemanticCellResponse`
 ```json
 {
-    "Cells": 1,
-    "TotalChunks": 1,
+    "Text": "Your text content here...",
     "Chunks": [
         {
             "Text": "Your text content here...",
-            "ChunkedText": "doc-123 Your text content here...",
+            "Labels": ["label1"],
+            "Tags": { "key": "value" },
             "Embeddings": [-0.4418, 0.1234, ...]
         }
-    ],
-    "Labels": ["label1"],
-    "Tags": { "key": "value" }
+    ]
 }
 ```
 
-### POST /v1.0/process/batch
-Process multiple semantic cells.
+**Errors**:
+- `404 Not Found` — Endpoint ID not found or does not belong to the caller's tenant
+- `400 Bad Request` — Endpoint is inactive, or request body is missing/invalid
+
+### POST /v1.0/endpoints/{id}/process/batch
+Process multiple semantic cells using the specified embedding endpoint.
+
+**Path Parameters**:
+- `id` — Embedding endpoint ID
 
 **Request Body**: `List<SemanticCellRequest>`
 

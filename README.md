@@ -34,7 +34,7 @@ On first run, Partio creates a `partio.json` settings file and initializes the d
 
 ## Configuration
 
-Partio is configured via `partio.json`. See [Appendix C in PARTIO.md](PARTIO.md#appendix-c--settings-file-partiojson) for the full schema.
+Partio is configured via `partio.json`.
 
 Key settings:
 
@@ -53,7 +53,7 @@ All API endpoints use JSON and require a `Authorization: Bearer {token}` header 
 | Category | Endpoints |
 |----------|-----------|
 | Health | `HEAD /`, `GET /`, `GET /v1.0/health` |
-| Process | `POST /v1.0/process`, `POST /v1.0/process/batch` |
+| Process | `POST /v1.0/endpoints/{id}/process`, `POST /v1.0/endpoints/{id}/process/batch` |
 | Tenants | CRUD at `/v1.0/tenants` |
 | Users | CRUD at `/v1.0/users` |
 | Credentials | CRUD at `/v1.0/credentials` |
@@ -65,7 +65,7 @@ See [REST_API.md](REST_API.md) for full API documentation.
 ### Example: Process Text
 
 ```bash
-curl -X POST http://localhost:8400/v1.0/process \
+curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process \
   -H "Authorization: Bearer partioadmin" \
   -H "Content-Type: application/json" \
   -d '{
@@ -76,7 +76,7 @@ curl -X POST http://localhost:8400/v1.0/process \
       "FixedTokenCount": 256
     },
     "EmbeddingConfiguration": {
-      "Model": "all-minilm"
+      "L2Normalization": false
     }
   }'
 ```
@@ -91,11 +91,10 @@ using Partio.Sdk.Models;
 
 using PartioClient client = new PartioClient("http://localhost:8400", "partioadmin");
 
-SemanticCellResponse? response = await client.ProcessAsync(new SemanticCellRequest
+SemanticCellResponse? response = await client.ProcessAsync("ep_YOUR_ENDPOINT_ID", new SemanticCellRequest
 {
     Type = "Text",
-    Text = "Hello world",
-    EmbeddingConfiguration = new EmbeddingConfiguration { Model = "all-minilm" }
+    Text = "Hello world"
 });
 ```
 
@@ -105,11 +104,10 @@ SemanticCellResponse? response = await client.ProcessAsync(new SemanticCellReque
 from partio_sdk import PartioClient
 
 with PartioClient("http://localhost:8400", "partioadmin") as client:
-    result = client.process({
+    result = client.process("ep_YOUR_ENDPOINT_ID", {
         "Type": "Text",
         "Text": "Hello world",
-        "ChunkingConfiguration": {"Strategy": "FixedTokenCount", "FixedTokenCount": 256},
-        "EmbeddingConfiguration": {"Model": "all-minilm"}
+        "ChunkingConfiguration": {"Strategy": "FixedTokenCount", "FixedTokenCount": 256}
     })
 ```
 
@@ -119,11 +117,10 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
 import { PartioClient } from './partio-sdk.js';
 
 const client = new PartioClient('http://localhost:8400', 'partioadmin');
-const result = await client.process({
+const result = await client.process('ep_YOUR_ENDPOINT_ID', {
   Type: 'Text',
   Text: 'Hello world',
-  ChunkingConfiguration: { Strategy: 'FixedTokenCount', FixedTokenCount: 256 },
-  EmbeddingConfiguration: { Model: 'all-minilm' }
+  ChunkingConfiguration: { Strategy: 'FixedTokenCount', FixedTokenCount: 256 }
 });
 ```
 

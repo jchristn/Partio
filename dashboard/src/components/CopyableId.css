@@ -1,32 +1,38 @@
 .copyable-id {
-  cursor: pointer;
-  font-family: 'Courier New', monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.id-cell {
   font-size: 12px;
-  color: var(--primary);
-  position: relative;
-}
-
-.copyable-id:hover {
-  text-decoration: underline;
-}
-
-.copyable-id-text {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.copied-badge {
-  position: absolute;
-  top: -24px;
-  left: 0;
-  background: var(--success);
-  color: white;
-  padding: 2px 6px;
+  background: var(--bg-color);
+  padding: 4px 8px;
   border-radius: 4px;
-  font-size: 11px;
-  white-space: nowrap;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  color: var(--text-primary);
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s;
+  border-radius: 3px;
+}
+
+.copy-btn:hover {
+  opacity: 1;
+  color: var(--primary-color);
+}
+
+.copy-btn.copied {
+  opacity: 1;
+  color: #22c55e;
 }

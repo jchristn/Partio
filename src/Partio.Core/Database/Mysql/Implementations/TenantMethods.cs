@@ -207,7 +207,7 @@ namespace Partio.Core.Database.Mysql.Implementations
 
             result.Data = tenants;
 
-            if (tenants.Count > 0)
+            if (result.HasMore && tenants.Count > 0)
                 result.ContinuationToken = tenants[tenants.Count - 1].Id;
 
             return result;

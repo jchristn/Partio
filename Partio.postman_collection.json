@@ -202,10 +202,12 @@
 									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
-									"pm.test('Response has chunks', function () {",
+									"pm.test('Response has Text and Chunks', function () {",
 									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.TotalChunks).to.be.above(0);",
-									"    pm.expect(jsonData.Chunks).to.be.an('array');",
+									"    pm.expect(jsonData.Text).to.be.a('string').and.not.empty;",
+									"    pm.expect(jsonData.Chunks).to.be.an('array').and.not.empty;",
+									"    pm.expect(jsonData.Chunks[0].Labels).to.be.an('array');",
+									"    pm.expect(jsonData.Chunks[0].Tags).to.be.an('object');",
 									"});"
 								]
 							}
@@ -224,11 +226,11 @@
 							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"Partio is a multi-tenant RESTful platform that accepts semantic cells with a chunking and embedding configuration, and returns chunked text with computed embeddings. It supports multiple chunking strategies including fixed token count, sentence-based, and paragraph-based approaches.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}},\n        \"OverlapCount\": {{overlapCount}},\n        \"OverlapStrategy\": \"SlidingWindow\",\n        \"ContextPrefix\": \"{{contextPrefix}}\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    },\n    \"Labels\": [\"test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
-						"description": "Process a single semantic cell. Chunks the input text and computes embeddings using the specified model."
+						"description": "Process a single semantic cell. Chunks the input text and computes embeddings using the specified endpoint."
 					}
 				},
 				{
@@ -246,9 +248,9 @@
 							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"First sentence here. Second sentence here. Third sentence goes here. And a fourth one too.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"SentenceBased\",\n        \"FixedTokenCount\": {{fixedTokenCount}},\n        \"OverlapCount\": {{overlapCount}},\n        \"OverlapStrategy\": \"SentenceBoundaryAware\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Process text using sentence-based chunking strategy."
 					}
@@ -268,9 +270,9 @@
 							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"First paragraph content here.\\n\\nSecond paragraph content here.\\n\\nThird paragraph content here.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"ParagraphBased\",\n        \"FixedTokenCount\": {{fixedTokenCount}},\n        \"OverlapCount\": {{overlapCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Process text using paragraph-based chunking strategy."
 					}
@@ -290,9 +292,9 @@
 							"raw": "{\n    \"Type\": \"UnorderedList\",\n    \"UnorderedList\": [\"First item\", \"Second item\", \"Third item\"],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"WholeList\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Process an unordered list as a single chunk using WholeList strategy."
 					}
@@ -312,9 +314,9 @@
 							"raw": "{\n    \"Type\": \"OrderedList\",\n    \"OrderedList\": [\"First item\", \"Second item\", \"Third item\"],\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"ListEntry\",\n        \"ContextPrefix\": \"{{contextPrefix}}\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Process an ordered list where each item becomes its own chunk."
 					}
@@ -334,9 +336,9 @@
 							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"Sample text for embedding with L2 normalization enabled.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}}\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": true\n    }\n}"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Process text with L2 normalization enabled on embeddings."
 					}
@@ -352,10 +354,12 @@
 									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
-									"pm.test('Response is an array', function () {",
+									"pm.test('Response is an array with Text', function () {",
 									"    var jsonData = pm.response.json();",
 									"    pm.expect(jsonData).to.be.an('array');",
 									"    pm.expect(jsonData.length).to.equal(2);",
+									"    pm.expect(jsonData[0].Text).to.be.a('string').and.not.empty;",
+									"    pm.expect(jsonData[1].Text).to.be.a('string').and.not.empty;",
 									"});"
 								]
 							}
@@ -374,9 +378,9 @@
 							"raw": "[\n    {\n        \"Type\": \"Text\",\n        \"Text\": \"First document to process.\",\n        \"ChunkingConfiguration\": {\n            \"Strategy\": \"{{chunkStrategy}}\",\n            \"FixedTokenCount\": {{fixedTokenCount}}\n        },\n        \"EmbeddingConfiguration\": {\n            \"Model\": \"{{embeddingModel}}\",\n            \"L2Normalization\": false\n        },\n        \"Labels\": [\"batch\", \"doc-1\"]\n    },\n    {\n        \"Type\": \"Text\",\n        \"Text\": \"Second document to process.\",\n        \"ChunkingConfiguration\": {\n            \"Strategy\": \"{{chunkStrategy}}\",\n            \"FixedTokenCount\": {{fixedTokenCount}}\n        },\n        \"EmbeddingConfiguration\": {\n            \"Model\": \"{{embeddingModel}}\",\n            \"L2Normalization\": false\n        },\n        \"Labels\": [\"batch\", \"doc-2\"]\n    }\n]"
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process/batch",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process/batch",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process", "batch"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process", "batch"]
 						},
 						"description": "Process multiple semantic cells in a single request."
 					}
@@ -1457,11 +1461,11 @@
 							"raw": ""
 						},
 						"url": {
-							"raw": "{{baseUrl}}/v1.0/process",
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
 							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
-						"description": "Process request with empty body. Expected: 400 Bad Request."
+						"description": "Process request with empty body. Expected: 400 Bad Request. Set {{endpointId}} to a valid endpoint ID first."
 					}
 				}
 			]

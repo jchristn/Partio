@@ -4,29 +4,29 @@ import { PartioApi } from '../utils/api';
 import Modal from './Modal';
 import CopyableId from './CopyableId';
 import ActionMenu from './ActionMenu';
-import Pagination from './Pagination';
+import DataTable from './DataTable';
 import TagInput from './TagInput';
 import KeyValueEditor from './KeyValueEditor';
+import AlertModal from './modals/AlertModal';
+import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import './TenantsView.css';
 
 export default function TenantsView() {
   const { serverUrl, bearerToken } = useApp();
   const api = new PartioApi(serverUrl, bearerToken);
   const [data, setData] = useState([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [continuationToken, setContinuationToken] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ Name: '', Labels: [], Tags: {} });
+  const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
 
-  const load = useCallback(async (token = null) => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api.enumerateTenants({ MaxResults: 25, ContinuationToken: token });
+      const result = await api.enumerateTenants({ MaxResults: 1000 });
       setData(result.Data || []);
-      setHasMore(result.HasMore);
-      setContinuationToken(result.ContinuationToken);
     } catch (err) {
       console.error(err);
     }
@@ -57,19 +57,61 @@ export default function TenantsView() {
       setShowModal(false);
       load();
     } catch (err) {
-      alert(err.message);
+      setAlertModal({ isOpen: true, message: err.message, type: 'error' });
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this tenant?')) return;
+  const handleDelete = async () => {
     try {
-      await api.deleteTenant(id);
+      await api.deleteTenant(deleteModal.id);
+      setDeleteModal({ isOpen: false, id: null });
       load();
     } catch (err) {
-      alert(err.message);
+      setDeleteModal({ isOpen: false, id: null });
+      setAlertModal({ isOpen: true, message: err.message, type: 'error' });
     }
   };
+
+  const columns = [
+    {
+      key: 'Id',
+      label: 'ID',
+      width: '280px',
+      render: (item) => <CopyableId value={item.Id} />
+    },
+    {
+      key: 'Name',
+      label: 'Name'
+    },
+    {
+      key: 'Active',
+      label: 'Status',
+      filterValue: (item) => item.Active ? 'Active' : 'Inactive',
+      render: (item) => (
+        <span className={`status-badge ${item.Active ? 'active' : 'inactive'}`}>
+          {item.Active ? 'Active' : 'Inactive'}
+        </span>
+      )
+    },
+    {
+      key: 'CreatedUtc',
+      label: 'Created',
+      render: (item) => new Date(item.CreatedUtc).toLocaleDateString()
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      isAction: true,
+      sortable: false,
+      render: (item) => (
+        <ActionMenu actions={[
+          { label: 'Edit', onClick: () => openEdit(item) },
+          { divider: true },
+          { label: 'Delete', danger: true, onClick: () => setDeleteModal({ isOpen: true, id: item.Id }) }
+        ]} />
+      )
+    }
+  ];
 
   return (
     <div>
@@ -77,38 +119,7 @@ export default function TenantsView() {
         <h2>Tenants</h2>
         <button className="primary" onClick={openCreate}>Create Tenant</button>
       </div>
-      {data.length === 0 && !loading ? (
-        <div className="empty-state">No tenants found.</div>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map(item => (
-              <tr key={item.Id}>
-                <td><CopyableId value={item.Id} /></td>
-                <td>{item.Name}</td>
-                <td><span className={`status-badge ${item.Active ? 'active' : 'inactive'}`}>{item.Active ? 'Active' : 'Inactive'}</span></td>
-                <td>{new Date(item.CreatedUtc).toLocaleDateString()}</td>
-                <td>
-                  <ActionMenu actions={[
-                    { label: 'Edit', onClick: () => openEdit(item) },
-                    { label: 'Delete', onClick: () => handleDelete(item.Id) }
-                  ]} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <Pagination hasMore={hasMore} onNext={() => load(continuationToken)} onReset={() => load()} loading={loading} />
+      <DataTable data={data} columns={columns} loading={loading} />
       {showModal && (
         <Modal title={editing ? 'Edit Tenant' : 'Create Tenant'} onClose={() => setShowModal(false)}>
           <div className="form-group">
@@ -129,6 +140,18 @@ export default function TenantsView() {
           </div>
         </Modal>
       )}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ isOpen: false, message: '', type: 'error' })}
+        message={alertModal.message}
+        type={alertModal.type}
+      />
+      <DeleteConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, id: null })}
+        onConfirm={handleDelete}
+        entityType="tenant"
+      />
     </div>
   );
 }

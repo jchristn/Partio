@@ -1,0 +1,74 @@
+.delete-confirm-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 0;
+}
+
+.delete-warning-icon {
+  color: #dc2626;
+  margin-bottom: 16px;
+}
+
+.delete-message {
+  font-size: 16px;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.delete-entity-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-color);
+  padding: 8px 16px;
+  border-radius: 4px;
+  margin: 8px 0;
+  word-break: break-all;
+}
+
+.delete-warning {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 8px 0 24px 0;
+}
+
+.delete-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.delete-actions .btn-delete-cancel {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.delete-actions .btn-delete-cancel:hover {
+  background: var(--bg-color);
+}
+
+.delete-actions .btn-delete-confirm {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.delete-actions .btn-delete-confirm:hover {
+  background: #b91c1c;
+}

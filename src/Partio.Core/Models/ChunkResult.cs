@@ -6,7 +6,8 @@ namespace Partio.Core.Models
     public class ChunkResult
     {
         private string _Text = string.Empty;
-        private string _ChunkedText = string.Empty;
+        private List<string> _Labels = new List<string>();
+        private Dictionary<string, string> _Tags = new Dictionary<string, string>();
         private List<float> _Embeddings = new List<float>();
 
         /// <summary>
@@ -19,12 +20,21 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
-        /// Context prefix + chunk text — the string that was actually embedded.
+        /// Labels echoed from the request.
         /// </summary>
-        public string ChunkedText
+        public List<string> Labels
         {
-            get => _ChunkedText;
-            set => _ChunkedText = value ?? string.Empty;
+            get => _Labels;
+            set => _Labels = value ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Tags echoed from the request.
+        /// </summary>
+        public Dictionary<string, string> Tags
+        {
+            get => _Tags;
+            set => _Tags = value ?? new Dictionary<string, string>();
         }
 
         /// <summary>

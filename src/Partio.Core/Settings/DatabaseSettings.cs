@@ -8,7 +8,7 @@ namespace Partio.Core.Settings
     public class DatabaseSettings
     {
         private DatabaseTypeEnum _Type = DatabaseTypeEnum.Sqlite;
-        private string _Filename = "./partio.db";
+        private string _Filename = "./" + Constants.DatabaseFilename;
         private string? _Hostname = null;
         private int _Port = 0;
         private string? _DatabaseName = null;

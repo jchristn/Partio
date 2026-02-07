@@ -231,7 +231,7 @@ namespace Partio.Core.Database.Postgresql.Implementations
 
             result.Data = credentials;
 
-            if (credentials.Count > 0)
+            if (result.HasMore && credentials.Count > 0)
                 result.ContinuationToken = credentials[credentials.Count - 1].Id;
 
             return result;

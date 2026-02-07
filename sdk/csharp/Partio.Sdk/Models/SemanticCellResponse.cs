@@ -7,8 +7,11 @@ namespace Partio.Sdk.Models
         [JsonPropertyName("Text")]
         public string Text { get; set; } = string.Empty;
 
-        [JsonPropertyName("ChunkedText")]
-        public string ChunkedText { get; set; } = string.Empty;
+        [JsonPropertyName("Labels")]
+        public List<string>? Labels { get; set; }
+
+        [JsonPropertyName("Tags")]
+        public Dictionary<string, string>? Tags { get; set; }
 
         [JsonPropertyName("Embeddings")]
         public List<float>? Embeddings { get; set; }
@@ -16,19 +19,10 @@ namespace Partio.Sdk.Models
 
     public class SemanticCellResponse
     {
-        [JsonPropertyName("Cells")]
-        public int Cells { get; set; }
-
-        [JsonPropertyName("TotalChunks")]
-        public int TotalChunks { get; set; }
+        [JsonPropertyName("Text")]
+        public string Text { get; set; } = string.Empty;
 
         [JsonPropertyName("Chunks")]
         public List<ChunkResult> Chunks { get; set; } = new List<ChunkResult>();
-
-        [JsonPropertyName("Labels")]
-        public List<string>? Labels { get; set; }
-
-        [JsonPropertyName("Tags")]
-        public Dictionary<string, string>? Tags { get; set; }
     }
 }

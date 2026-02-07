@@ -3,7 +3,7 @@
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: var(--sidebar-bg);
+  background: linear-gradient(135deg, var(--sidebar-bg) 0%, #334155 100%);
 }
 
 .login-card {
@@ -14,22 +14,25 @@
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
-.login-card h1 {
+.login-header {
   text-align: center;
-  font-size: 28px;
-  color: var(--primary);
-  margin-bottom: 4px;
+  margin-bottom: 24px;
+}
+
+.login-logo {
+  height: 120px;
+  width: auto;
+  margin-bottom: 8px;
 }
 
 .login-subtitle {
   text-align: center;
-  color: var(--text-light);
-  margin-bottom: 24px;
+  color: var(--text-secondary);
 }
 
 .login-error {
-  background: #fbe9e7;
-  color: var(--danger);
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--danger-color);
   padding: 8px 12px;
   border-radius: var(--radius);
   margin-bottom: 12px;

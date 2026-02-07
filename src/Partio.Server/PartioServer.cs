@@ -36,6 +36,7 @@ namespace Partio.Server
         private static ChunkingEngine _ChunkingEngine = null!;
         private static PartioSerializer _Serializer = new PartioSerializer();
         private static SerializationHelper.Serializer _JsonSerializer = new SerializationHelper.Serializer();
+        private static DateTime _StartTimeUtc = DateTime.UtcNow;
         private static string _Header = "[PartioServer] ";
         private static ConcurrentDictionary<string, AuthContext> _AuthContexts = new ConcurrentDictionary<string, AuthContext>();
 
@@ -142,6 +143,38 @@ namespace Partio.Server
             {
                 if (_Settings.Debug.Exceptions)
                     _Logging.Warn(_Header + "exception: " + ex.Message);
+
+                int statusCode = 500;
+                string error = "InternalServerError";
+
+                if (ex is KeyNotFoundException)
+                {
+                    statusCode = 404;
+                    error = "NotFound";
+                }
+                else if (ex is ArgumentException || ex is ArgumentNullException)
+                {
+                    statusCode = 400;
+                    error = "BadRequest";
+                }
+                else if (ex is UnauthorizedAccessException)
+                {
+                    statusCode = 401;
+                    error = "Unauthorized";
+                }
+
+                ctx.Response.StatusCode = statusCode;
+                ctx.Response.ContentType = Constants.JsonContentType;
+
+                ApiErrorResponse errorResponse = new ApiErrorResponse
+                {
+                    Error = error,
+                    Message = ex.Message,
+                    StatusCode = statusCode
+                };
+
+                string json = _Serializer.SerializeJson(errorResponse, true);
+                await ctx.Response.Send(json).ConfigureAwait(false);
             };
 
             // Health (no auth)
@@ -157,25 +190,35 @@ namespace Partio.Server
                 .WithTag("Health")
                 .WithSummary("Health status JSON")
                 .WithResponse(200, OpenApiResponseMetadata.Json<Dictionary<string, string>>("Health status")), false);
-
-            // Process (auth required)
-            rest.Post<SemanticCellRequest>("/v1.0/process", ProcessSingle, api => api
-                .WithTag("Process")
-                .WithSummary("Process a single semantic cell")
-                .WithDescription("Chunks and embeds a single semantic cell using the specified configuration.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<SemanticCellRequest>("Semantic cell to process", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<SemanticCellResponse>("Processed cell with chunks and embeddings"))
-                .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request"))
+            rest.Get("/v1.0/whoami", WhoAmI, api => api
+                .WithTag("Health")
+                .WithSummary("Returns the role and tenant of the authenticated caller")
+                .WithResponse(200, OpenApiResponseMetadata.Json<Dictionary<string, string>>("Caller identity"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<List<SemanticCellRequest>>("/v1.0/process/batch", ProcessBatch, api => api
+
+            // Process (auth required)
+            rest.Post<SemanticCellRequest>("/v1.0/endpoints/{id}/process", ProcessSingle, api => api
+                .WithTag("Process")
+                .WithSummary("Process a single semantic cell")
+                .WithDescription("Chunks and embeds a single semantic cell using the specified embedding endpoint.")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Embedding endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<SemanticCellRequest>("Semantic cell to process", true))
+                .WithResponse(200, OpenApiResponseMetadata.Json<SemanticCellResponse>("Processed cell with chunks and embeddings"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request or inactive endpoint"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Embedding endpoint not found"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Post<List<SemanticCellRequest>>("/v1.0/endpoints/{id}/process/batch", ProcessBatch, api => api
                 .WithTag("Process")
                 .WithSummary("Process multiple semantic cells")
-                .WithDescription("Chunks and embeds multiple semantic cells in a single request.")
+                .WithDescription("Chunks and embeds multiple semantic cells in a single request using the specified embedding endpoint.")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Embedding endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<List<SemanticCellRequest>>("Semantic cells to process", true))
                 .WithResponse(200, OpenApiResponseMetadata.Json<List<SemanticCellResponse>>("Processed cells"))
-                .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request or inactive endpoint"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Embedding endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
             // Tenants (admin)
@@ -418,8 +461,6 @@ namespace Partio.Server
             defaults.DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>
             {
                 new DefaultEmbeddingEndpoint { Model = "all-minilm", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
-                new DefaultEmbeddingEndpoint { Model = "text-embedding-3-small", Endpoint = "https://api.openai.com", ApiFormat = ApiFormatEnum.OpenAI },
-                new DefaultEmbeddingEndpoint { Model = "text-embedding-3-large", Endpoint = "https://api.openai.com", ApiFormat = ApiFormatEnum.OpenAI }
             };
 
             string defaultJson = _JsonSerializer.SerializeJson(defaults, true);
@@ -510,13 +551,18 @@ namespace Partio.Server
             }
 
             Console.WriteLine();
-            Console.WriteLine("=== FIRST RUN ===");
-            Console.WriteLine("Default tenant created: 'Default Tenant' (id: default)");
-            Console.WriteLine("Default user created: admin@partio / password (id: default)");
-            Console.WriteLine("Default credential created with bearer token: default");
-            Console.WriteLine("Admin API key: " + string.Join(", ", _Settings.AdminApiKeys));
+            Console.WriteLine("===== FIRST RUN =====");
+            Console.WriteLine("");
+            Console.WriteLine("Default objects were created to help you get started quickly.");
+            Console.WriteLine("");
+            Console.WriteLine("Tenant         : Default Tenant, ID default");
+            Console.WriteLine("User           : admin@partio / password, ID default");
+            Console.WriteLine("Credential     : Bearer token: default");
+            Console.WriteLine("Admin API keys : " + string.Join(", ", _Settings.AdminApiKeys));
+            Console.WriteLine("");
             Console.WriteLine("WARNING: Change these credentials before production use!");
-            Console.WriteLine("=================");
+            Console.WriteLine("");
+            Console.WriteLine("=====================");
             Console.WriteLine();
         }
 
@@ -533,20 +579,45 @@ namespace Partio.Server
         private static async Task<object> HealthGet(AppRequest req)
         {
             req.Http.Response.StatusCode = 200;
-            return new Dictionary<string, string>
+            return new Dictionary<string, object>
             {
                 { "Status", "Healthy" },
-                { "Version", Constants.Version }
+                { "Version", Constants.Version },
+                { "Uptime", DateTime.UtcNow - _StartTimeUtc }
             };
         }
 
         private static async Task<object> HealthJson(AppRequest req)
         {
             req.Http.Response.StatusCode = 200;
-            return new Dictionary<string, string>
+            return new Dictionary<string, object>
             {
                 { "Status", "Healthy" },
-                { "Version", Constants.Version }
+                { "Version", Constants.Version },
+                { "Uptime", DateTime.UtcNow - _StartTimeUtc }
+            };
+        }
+
+        private static async Task<object> WhoAmI(AppRequest req)
+        {
+            AuthContext auth = (AuthContext)req.Metadata;
+
+            if (auth.IsGlobalAdmin)
+            {
+                return new Dictionary<string, string>
+                {
+                    { "Role", "Admin" },
+                    { "TenantName", "Admin" }
+                };
+            }
+
+            TenantMetadata? tenant = await _Database.Tenant.ReadByIdAsync(auth.TenantId).ConfigureAwait(false);
+            UserMaster? user = await _Database.User.ReadByIdAsync(auth.UserId).ConfigureAwait(false);
+
+            return new Dictionary<string, string>
+            {
+                { "Role", user != null && user.IsAdmin ? "Admin" : "User" },
+                { "TenantName", tenant?.Name ?? "Unknown" }
             };
         }
 
@@ -556,48 +627,87 @@ namespace Partio.Server
 
         private static async Task<object> ProcessSingle(AppRequest req)
         {
-            AuthContext auth = (AuthContext)req.Metadata;
+            EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
             SemanticCellRequest? cellReq = req.GetData<SemanticCellRequest>();
             if (cellReq == null) throw new ArgumentException("Request body is required.");
 
-            SemanticCellResponse response = await ProcessCellAsync(cellReq, auth).ConfigureAwait(false);
+            SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
             return response;
         }
 
         private static async Task<object> ProcessBatch(AppRequest req)
         {
-            AuthContext auth = (AuthContext)req.Metadata;
+            EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
             List<SemanticCellRequest>? cellReqs = req.GetData<List<SemanticCellRequest>>();
             if (cellReqs == null || cellReqs.Count == 0) throw new ArgumentException("Request body must contain at least one cell.");
 
             List<SemanticCellResponse> responses = new List<SemanticCellResponse>();
             foreach (SemanticCellRequest cellReq in cellReqs)
             {
-                SemanticCellResponse response = await ProcessCellAsync(cellReq, auth).ConfigureAwait(false);
+                SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
                 responses.Add(response);
             }
 
             return responses;
         }
 
-        private static async Task<SemanticCellResponse> ProcessCellAsync(SemanticCellRequest request, AuthContext auth)
+        private static async Task<EmbeddingEndpoint> ResolveEndpointForProcessing(AppRequest req)
         {
-            string tenantId = auth.TenantId ?? "default";
-            string model = request.EmbeddingConfiguration.Model;
+            AuthContext auth = (AuthContext)req.Metadata;
+            string id = req.Parameters["id"];
 
-            // Resolve embedding endpoint
-            EmbeddingEndpoint? endpoint = await _Database.EmbeddingEndpoint.ReadByModelAsync(tenantId, model).ConfigureAwait(false);
-            if (endpoint == null)
-                throw new ArgumentException("No embedding endpoint configured for model '" + model + "' in tenant '" + tenantId + "'.");
+            EmbeddingEndpoint? endpoint = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
 
-            // Chunk
-            List<ChunkResult> chunks = _ChunkingEngine.Chunk(request);
+            // Return 404 if not found, or if non-admin caller's tenant doesn't match
+            if (endpoint == null || (!auth.IsGlobalAdmin && endpoint.TenantId != auth.TenantId))
+                throw new KeyNotFoundException("Embedding endpoint not found: " + id);
 
-            // Embed
+            if (!endpoint.Active)
+                throw new ArgumentException("Embedding endpoint '" + id + "' is inactive.");
+
+            return endpoint;
+        }
+
+        /// <summary>
+        /// Scaling factor to convert from model-native token counts to cl100k_base token counts.
+        /// cl100k_base (100k vocab BPE) is more efficient than most embedding model tokenizers,
+        /// so N model tokens ≈ N * 0.75 cl100k_base tokens.
+        /// </summary>
+        private const double TokenScalingFactor = 0.75;
+
+        private static async Task<SemanticCellResponse> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint)
+        {
+            string model = endpoint.Model;
+
             EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
             using (client)
             {
-                List<string> textsToEmbed = chunks.Select(c => c.ChunkedText).ToList();
+                // Query the model's context length and cap the chunk size accordingly
+                int? modelContextLength = await client.GetModelContextLengthAsync(model).ConfigureAwait(false);
+                if (modelContextLength.HasValue)
+                {
+                    int maxCl100kTokens = (int)(modelContextLength.Value * TokenScalingFactor);
+                    if (maxCl100kTokens < 1) maxCl100kTokens = 1;
+
+                    if (request.ChunkingConfiguration.FixedTokenCount > maxCl100kTokens)
+                    {
+                        _Logging.Info("[ProcessCell] capping FixedTokenCount from "
+                            + request.ChunkingConfiguration.FixedTokenCount
+                            + " to " + maxCl100kTokens
+                            + " (model context length: " + modelContextLength.Value + ")");
+                        request.ChunkingConfiguration.FixedTokenCount = maxCl100kTokens;
+                    }
+                }
+
+                // Chunk
+                List<ChunkResult> chunks = _ChunkingEngine.Chunk(request);
+
+                // Embed — apply context prefix inline
+                string? contextPrefix = request.ChunkingConfiguration.ContextPrefix;
+                List<string> textsToEmbed = chunks.Select(c =>
+                    string.IsNullOrEmpty(contextPrefix) ? c.Text : contextPrefix + c.Text
+                ).ToList();
+
                 List<List<float>> embeddings = await client.EmbedBatchAsync(textsToEmbed, model).ConfigureAwait(false);
 
                 for (int i = 0; i < chunks.Count && i < embeddings.Count; i++)
@@ -607,16 +717,64 @@ namespace Partio.Server
                         emb = client.NormalizeL2(emb);
                     chunks[i].Embeddings = emb;
                 }
+
+                // Populate Labels and Tags on each chunk
+                List<string> labels = request.Labels ?? new List<string>();
+                Dictionary<string, string> tags = request.Tags ?? new Dictionary<string, string>();
+
+                foreach (ChunkResult chunk in chunks)
+                {
+                    chunk.Labels = labels;
+                    chunk.Tags = tags;
+                }
+
+                SemanticCellResponse response = new SemanticCellResponse();
+                response.Text = ResolveInputText(request);
+                response.Chunks = chunks;
+
+                return response;
             }
+        }
 
-            SemanticCellResponse response = new SemanticCellResponse();
-            response.Cells = 1;
-            response.TotalChunks = chunks.Count;
-            response.Chunks = chunks;
-            response.Labels = request.Labels ?? new List<string>();
-            response.Tags = request.Tags ?? new Dictionary<string, string>();
+        private static string ResolveInputText(SemanticCellRequest request)
+        {
+            switch (request.Type)
+            {
+                case AtomTypeEnum.Text:
+                case AtomTypeEnum.Code:
+                case AtomTypeEnum.Hyperlink:
+                case AtomTypeEnum.Meta:
+                    return request.Text ?? string.Empty;
 
-            return response;
+                case AtomTypeEnum.List:
+                    List<string>? items = request.OrderedList ?? request.UnorderedList;
+                    if (items == null || items.Count == 0) return string.Empty;
+                    bool ordered = request.OrderedList != null;
+                    List<string> lines = new List<string>();
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        if (ordered)
+                            lines.Add($"{i + 1}. {items[i]}");
+                        else
+                            lines.Add($"- {items[i]}");
+                    }
+                    return string.Join("\n", lines);
+
+                case AtomTypeEnum.Table:
+                    if (request.Table == null || request.Table.Count == 0) return string.Empty;
+                    List<string> rows = new List<string>();
+                    foreach (List<string> row in request.Table)
+                    {
+                        rows.Add(string.Join(" | ", row));
+                    }
+                    return string.Join("\n", rows);
+
+                case AtomTypeEnum.Binary:
+                case AtomTypeEnum.Image:
+                case AtomTypeEnum.Unknown:
+                default:
+                    return request.Text ?? string.Empty;
+            }
         }
 
         private static EmbeddingClientBase CreateEmbeddingClient(EmbeddingEndpoint endpoint)

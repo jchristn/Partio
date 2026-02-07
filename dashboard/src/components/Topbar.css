@@ -15,12 +15,13 @@
 
 .topbar-label {
   font-size: 13px;
-  color: var(--text-light);
+  color: var(--text-secondary);
 }
 
 .topbar-url {
   font-size: 13px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .connection-dot {
@@ -30,9 +31,74 @@
 }
 
 .connection-dot.connected {
-  background: var(--success);
+  background: var(--success-color);
 }
 
 .connection-dot.disconnected {
-  background: var(--danger);
+  background: var(--danger-color);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.role-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.role-indicator svg {
+  opacity: 0.9;
+}
+
+.role-admin {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.role-user {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-secondary);
+}
+
+.tenant-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.tenant-badge svg {
+  opacity: 0.7;
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-color);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
 }

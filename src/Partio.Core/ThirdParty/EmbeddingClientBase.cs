@@ -65,6 +65,18 @@ namespace Partio.Core.ThirdParty
         public abstract Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default);
 
         /// <summary>
+        /// Retrieve the model's context length (in model-native tokens).
+        /// Returns null if the information is unavailable.
+        /// </summary>
+        /// <param name="model">Model name.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Context length or null.</returns>
+        public virtual Task<int?> GetModelContextLengthAsync(string model, CancellationToken token = default)
+        {
+            return Task.FromResult<int?>(null);
+        }
+
+        /// <summary>
         /// Apply L2 normalization to an embedding vector.
         /// </summary>
         /// <param name="embeddings">Embedding vector to normalize.</param>

@@ -38,6 +38,12 @@ namespace Partio.Sdk.TestHarness
                     if (result["Status"] != "Healthy") throw new Exception("Not healthy: " + result["Status"]);
                 });
 
+                await RunTest("Who Am I", async () =>
+                {
+                    WhoAmIResponse? result = await admin.WhoAmIAsync();
+                    if (result == null || string.IsNullOrEmpty(result.Role)) throw new Exception("No role");
+                });
+
                 // Tenant CRUD
                 string testTenantId = "";
                 await RunTest("Create Tenant", async () =>
@@ -169,6 +175,30 @@ namespace Partio.Sdk.TestHarness
                 {
                     EnumerationResult<RequestHistoryEntry>? result = await admin.EnumerateRequestHistoryAsync();
                     if (result == null) throw new Exception("No response");
+                });
+
+                // Process Single Cell (requires an active embedding endpoint)
+                await RunTest("Process Single Cell", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Text",
+                        Text = "Partio is a multi-tenant embedding platform.",
+                        Labels = new List<string> { "test" },
+                        Tags = new Dictionary<string, string> { { "source", "sdk-test" } }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null) throw new Exception("No response");
+                    if (string.IsNullOrEmpty(result.Text)) throw new Exception("Missing Text");
+                    if (result.Chunks == null || result.Chunks.Count == 0) throw new Exception("No chunks");
+                    if (result.Chunks[0].Embeddings == null || result.Chunks[0].Embeddings.Count == 0) throw new Exception("No embeddings");
+                    if (result.Chunks[0].Labels == null || result.Chunks[0].Labels.Count == 0) throw new Exception("No labels on chunk");
+                    if (result.Chunks[0].Tags == null || result.Chunks[0].Tags.Count == 0) throw new Exception("No tags on chunk");
                 });
 
                 // Error cases

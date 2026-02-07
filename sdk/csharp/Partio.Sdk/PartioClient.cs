@@ -75,12 +75,15 @@ namespace Partio.Sdk
         public Task<Dictionary<string, string>?> HealthAsync() =>
             MakeRequestAsync<Dictionary<string, string>>(HttpMethod.Get, "/v1.0/health");
 
-        // Process
-        public Task<SemanticCellResponse?> ProcessAsync(SemanticCellRequest request) =>
-            MakeRequestAsync<SemanticCellResponse>(HttpMethod.Post, "/v1.0/process", request);
+        public Task<WhoAmIResponse?> WhoAmIAsync() =>
+            MakeRequestAsync<WhoAmIResponse>(HttpMethod.Get, "/v1.0/whoami");
 
-        public Task<List<SemanticCellResponse>?> ProcessBatchAsync(List<SemanticCellRequest> requests) =>
-            MakeRequestAsync<List<SemanticCellResponse>>(HttpMethod.Post, "/v1.0/process/batch", requests);
+        // Process
+        public Task<SemanticCellResponse?> ProcessAsync(string endpointId, SemanticCellRequest request) =>
+            MakeRequestAsync<SemanticCellResponse>(HttpMethod.Post, $"/v1.0/endpoints/{endpointId}/process", request);
+
+        public Task<List<SemanticCellResponse>?> ProcessBatchAsync(string endpointId, List<SemanticCellRequest> requests) =>
+            MakeRequestAsync<List<SemanticCellResponse>>(HttpMethod.Post, $"/v1.0/endpoints/{endpointId}/process/batch", requests);
 
         // Tenants
         public Task<TenantMetadata?> CreateTenantAsync(TenantMetadata tenant) =>

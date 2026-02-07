@@ -14,7 +14,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--primary);
+  background: var(--primary-color);
   color: white;
   padding: 2px 8px;
   border-radius: 12px;

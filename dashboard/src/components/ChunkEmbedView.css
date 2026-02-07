@@ -16,23 +16,81 @@
 }
 
 .chunk-result {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius);
   padding: 12px;
   margin-top: 12px;
 }
 
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 24px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+}
+
 .chunk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-weight: 600;
   font-size: 13px;
-  color: var(--primary);
+  color: var(--primary-color);
   margin-bottom: 8px;
+}
+
+.chunk-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s;
+  border-radius: 3px;
+}
+
+.chunk-copy-btn:hover {
+  opacity: 1;
+  color: var(--primary-color);
+}
+
+.chunk-copy-btn.copied {
+  opacity: 1;
+  color: #22c55e;
+}
+
+.embeddings-toggle {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--primary-color);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.embeddings-expanded {
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--bg-color);
+  padding: 8px;
+  border-radius: var(--radius);
+  margin-top: 4px;
 }
 
 .chunk-field {
   font-size: 13px;
   margin-bottom: 4px;
   word-break: break-all;
+  color: var(--text-primary);
 }
 
 @media (max-width: 900px) {

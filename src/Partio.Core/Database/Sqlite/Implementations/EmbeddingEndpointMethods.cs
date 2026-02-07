@@ -235,7 +235,7 @@ namespace Partio.Core.Database.Sqlite.Implementations
 
             result.Data = endpoints;
 
-            if (endpoints.Count > 0)
+            if (result.HasMore && endpoints.Count > 0)
                 result.ContinuationToken = endpoints[endpoints.Count - 1].Id;
 
             return result;

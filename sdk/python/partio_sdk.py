@@ -58,12 +58,15 @@ class PartioClient:
     def health(self):
         return self._request("GET", "/v1.0/health")
 
-    # Process
-    def process(self, request):
-        return self._request("POST", "/v1.0/process", request)
+    def whoami(self):
+        return self._request("GET", "/v1.0/whoami")
 
-    def process_batch(self, requests_list):
-        return self._request("POST", "/v1.0/process/batch", requests_list)
+    # Process
+    def process(self, endpoint_id, request):
+        return self._request("POST", f"/v1.0/endpoints/{endpoint_id}/process", request)
+
+    def process_batch(self, endpoint_id, requests_list):
+        return self._request("POST", f"/v1.0/endpoints/{endpoint_id}/process/batch", requests_list)
 
     # Tenants
     def create_tenant(self, data):

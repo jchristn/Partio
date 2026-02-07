@@ -26,7 +26,7 @@ namespace Partio.Sdk.Models
     public class EmbeddingConfiguration
     {
         [JsonPropertyName("Model")]
-        public string Model { get; set; } = "all-minilm";
+        public string? Model { get; set; } = null;
 
         [JsonPropertyName("L2Normalization")]
         public bool L2Normalization { get; set; } = false;

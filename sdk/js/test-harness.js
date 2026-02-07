@@ -45,6 +45,11 @@ await runTest('Health Check', async () => {
   if (!result || result.Status !== 'Healthy') throw new Error('Not healthy');
 });
 
+await runTest('Who Am I', async () => {
+  const result = await client.whoami();
+  if (!result || !result.Role) throw new Error('No role');
+});
+
 // Tenant CRUD
 await runTest('Create Tenant', async () => {
   const tenant = await client.createTenant({ Name: 'Test Tenant', Labels: ['test'] });
@@ -126,6 +131,29 @@ await runTest('Enumerate Endpoints', async () => {
 await runTest('Enumerate Request History', async () => {
   const result = await client.enumerateRequestHistory();
   if (!result) throw new Error('No response');
+});
+
+// Process Single Cell (requires an active embedding endpoint)
+await runTest('Process Single Cell', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  const result = await client.process(activeEp.Id, {
+    Type: 'Text',
+    Text: 'Partio is a multi-tenant embedding platform.',
+    ChunkingConfiguration: { Strategy: 'FixedTokenCount', FixedTokenCount: 256 },
+    EmbeddingConfiguration: { L2Normalization: false },
+    Labels: ['test'],
+    Tags: { source: 'sdk-test' }
+  });
+
+  if (!result) throw new Error('No response');
+  if (!result.Text) throw new Error('Missing Text');
+  if (!result.Chunks || result.Chunks.length === 0) throw new Error('No chunks');
+  if (!result.Chunks[0].Embeddings || result.Chunks[0].Embeddings.length === 0) throw new Error('No embeddings');
+  if (!result.Chunks[0].Labels || result.Chunks[0].Labels.length === 0) throw new Error('No labels on chunk');
+  if (!result.Chunks[0].Tags || Object.keys(result.Chunks[0].Tags).length === 0) throw new Error('No tags on chunk');
 });
 
 // Error cases
