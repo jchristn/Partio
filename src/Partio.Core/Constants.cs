@@ -94,5 +94,15 @@ namespace Partio.Core
         /// Default database filename.
         /// </summary>
         public static readonly string DatabaseFilename = "partio.db";
+
+        /// <summary>
+        /// Response header for the embedding endpoint ID.
+        /// </summary>
+        public static readonly string EndpointIdHeader = "X-Partio-Endpoint-Id";
+
+        /// <summary>
+        /// Response header for the model name.
+        /// </summary>
+        public static readonly string ModelHeader = "X-Model";
     }
 }

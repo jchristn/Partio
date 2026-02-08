@@ -7,6 +7,7 @@ import ActionMenu from './ActionMenu';
 import DataTable from './DataTable';
 import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
+import JsonViewModal from './modals/JsonViewModal';
 import './UsersView.css';
 
 export default function UsersView() {
@@ -20,6 +21,7 @@ export default function UsersView() {
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
+  const [jsonModal, setJsonModal] = useState({ isOpen: false, data: null });
 
   const loadTenants = useCallback(async () => {
     try {
@@ -118,6 +120,7 @@ export default function UsersView() {
       render: (item) => (
         <ActionMenu actions={[
           { label: 'Edit', onClick: () => openEdit(item) },
+          { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
           { divider: true },
           { label: 'Delete', danger: true, onClick: () => setDeleteModal({ isOpen: true, id: item.Id }) }
         ]} />
@@ -129,7 +132,15 @@ export default function UsersView() {
     <div>
       <div className="header-row">
         <h2>Users</h2>
-        <button className="primary" onClick={openCreate}>Create User</button>
+        <div className="header-row-actions">
+          <button className="refresh-btn" onClick={load} title="Refresh">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+          </button>
+          <button className="primary" onClick={openCreate}>Create User</button>
+        </div>
       </div>
       <DataTable data={data} columns={columns} loading={loading} />
       {showModal && (
@@ -154,6 +165,12 @@ export default function UsersView() {
         onClose={() => setDeleteModal({ isOpen: false, id: null })}
         onConfirm={handleDelete}
         entityType="user"
+      />
+      <JsonViewModal
+        isOpen={jsonModal.isOpen}
+        onClose={() => setJsonModal({ isOpen: false, data: null })}
+        title="User JSON"
+        data={jsonModal.data}
       />
     </div>
   );

@@ -25,6 +25,36 @@ namespace Partio.Sdk.Models
         [JsonPropertyName("Active")]
         public bool Active { get; set; } = true;
 
+        [JsonPropertyName("EnableRequestHistory")]
+        public bool EnableRequestHistory { get; set; } = true;
+
+        [JsonPropertyName("HealthCheckEnabled")]
+        public bool HealthCheckEnabled { get; set; } = false;
+
+        [JsonPropertyName("HealthCheckUrl")]
+        public string? HealthCheckUrl { get; set; }
+
+        [JsonPropertyName("HealthCheckMethod")]
+        public string HealthCheckMethod { get; set; } = "GET";
+
+        [JsonPropertyName("HealthCheckIntervalMs")]
+        public int HealthCheckIntervalMs { get; set; } = 5000;
+
+        [JsonPropertyName("HealthCheckTimeoutMs")]
+        public int HealthCheckTimeoutMs { get; set; } = 2000;
+
+        [JsonPropertyName("HealthCheckExpectedStatusCode")]
+        public int HealthCheckExpectedStatusCode { get; set; } = 200;
+
+        [JsonPropertyName("HealthyThreshold")]
+        public int HealthyThreshold { get; set; } = 3;
+
+        [JsonPropertyName("UnhealthyThreshold")]
+        public int UnhealthyThreshold { get; set; } = 3;
+
+        [JsonPropertyName("HealthCheckUseAuth")]
+        public bool HealthCheckUseAuth { get; set; } = false;
+
         [JsonPropertyName("Labels")]
         public List<string>? Labels { get; set; }
 

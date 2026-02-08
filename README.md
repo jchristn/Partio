@@ -90,8 +90,9 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Pluggable embedding providers** supporting both Ollama and OpenAI-compatible APIs, selectable per endpoint
 - **Multi-tenant architecture** with tenant, user, credential, and endpoint isolation
 - **Four database backends** out of the box: SQLite (default, zero config), PostgreSQL, MySQL, and SQL Server
-- **Request history and audit logging** with automatic cleanup, filesystem body persistence, and configurable retention
+- **Request history and audit logging** with automatic cleanup, filesystem body persistence, configurable retention, and upstream embedding call capture (request/response headers, bodies, timing, and status for each call to the embedding provider)
 - **Bearer token authentication** with global admin API keys and tenant-scoped credentials
+- **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return 502)
 - **Batch processing** for submitting multiple semantic cells in a single request
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history
 - **SDKs** for C#, Python, and JavaScript
@@ -187,6 +188,13 @@ All endpoints use JSON and require an `Authorization: Bearer {token}` header unl
 |--------|-------|-------------|
 | `POST` | `/v1.0/endpoints/{id}/process` | Process a single semantic cell |
 | `POST` | `/v1.0/endpoints/{id}/process/batch` | Process multiple semantic cells |
+
+### Endpoint Health
+
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| `GET` | `/v1.0/endpoints/{id}/health` | Yes | Health status for one endpoint |
+| `GET` | `/v1.0/endpoints/health` | Yes | Health status for all endpoints |
 
 ### Administration (CRUD + Enumerate)
 

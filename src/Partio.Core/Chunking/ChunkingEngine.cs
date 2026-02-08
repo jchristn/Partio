@@ -10,8 +10,6 @@ namespace Partio.Core.Chunking
     /// </summary>
     public class ChunkingEngine
     {
-        private readonly LoggingModule _Logging;
-        private readonly string _Header = "[ChunkingEngine] ";
         private readonly GptEncoding _Encoding;
 
         /// <summary>
@@ -20,7 +18,6 @@ namespace Partio.Core.Chunking
         /// <param name="logging">Logging module.</param>
         public ChunkingEngine(LoggingModule logging)
         {
-            _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _Encoding = GptEncoding.GetEncoding("cl100k_base");
         }
 

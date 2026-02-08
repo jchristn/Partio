@@ -19,6 +19,9 @@ namespace Partio.Core.Database.Interfaces
         /// <summary>Enumerate request history with pagination, scoped to a tenant.</summary>
         Task<EnumerationResult<RequestHistoryEntry>> EnumerateAsync(string tenantId, EnumerationRequest request, CancellationToken token = default);
 
+        /// <summary>Enumerate all request history with pagination (no tenant filter).</summary>
+        Task<EnumerationResult<RequestHistoryEntry>> EnumerateAllAsync(EnumerationRequest request, CancellationToken token = default);
+
         /// <summary>Delete a request history entry by ID.</summary>
         Task DeleteByIdAsync(string id, CancellationToken token = default);
 

@@ -9,10 +9,12 @@ namespace Partio.Server
     using Partio.Core.Database.Mysql;
     using Partio.Core.Database.Sqlserver;
     using Partio.Core.Enums;
+    using Partio.Core.Exceptions;
     using Partio.Core.Models;
     using Partio.Core.Serialization;
     using Partio.Core.Settings;
     using Partio.Core.ThirdParty;
+    using Partio.Server.Models;
     using Partio.Server.Services;
     using SyslogLogging;
     using SwiftStack;
@@ -33,6 +35,7 @@ namespace Partio.Server
         private static AuthenticationService _AuthService = null!;
         private static RequestHistoryService? _RequestHistoryService;
         private static RequestHistoryCleanupService? _CleanupService;
+        private static EmbeddingHealthCheckService? _HealthCheckService;
         private static ChunkingEngine _ChunkingEngine = null!;
         private static PartioSerializer _Serializer = new PartioSerializer();
         private static SerializationHelper.Serializer _JsonSerializer = new SerializationHelper.Serializer();
@@ -76,6 +79,10 @@ namespace Partio.Server
                 _CleanupService.Start();
                 _Logging.Info(_Header + "request history enabled");
             }
+
+            // 6b. Health check service
+            _HealthCheckService = new EmbeddingHealthCheckService(_Database, _Logging);
+            await _HealthCheckService.StartAsync().ConfigureAwait(false);
 
             // 7. Initialize SwiftStack
             SwiftStackApp app = new SwiftStackApp("Partio Server");
@@ -161,6 +168,11 @@ namespace Partio.Server
                 {
                     statusCode = 401;
                     error = "Unauthorized";
+                }
+                else if (ex is EndpointUnhealthyException)
+                {
+                    statusCode = 502;
+                    error = "BadGateway";
                 }
 
                 ctx.Response.StatusCode = statusCode;
@@ -356,6 +368,9 @@ namespace Partio.Server
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
             // Embedding Endpoints (admin)
+            // NOTE: Literal path routes (/health, /enumerate) must be registered BEFORE
+            // parameterized routes (/{id}) to prevent the router from matching literal
+            // segments as parameter values.
             rest.Put<EmbeddingEndpoint>("/v1.0/endpoints", CreateEndpoint, api => api
                 .WithTag("Endpoints")
                 .WithSummary("Create an embedding endpoint")
@@ -363,12 +378,31 @@ namespace Partio.Server
                 .WithResponse(201, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Created endpoint"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Post<EnumerationRequest>("/v1.0/endpoints/enumerate", EnumerateEndpoints, api => api
+                .WithTag("Endpoints")
+                .WithSummary("List embedding endpoints")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
+                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<EmbeddingEndpoint>>("Paginated endpoint list"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Get("/v1.0/endpoints/health", GetAllEndpointHealth, api => api
+                .WithTag("Endpoints")
+                .WithSummary("List health status for all endpoints")
+                .WithDescription("Returns health status for all monitored endpoints. Scoped by tenant for non-admins.")
+                .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of endpoint health statuses"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
             rest.Get("/v1.0/endpoints/{id}", ReadEndpoint, api => api
                 .WithTag("Endpoints")
                 .WithSummary("Read an embedding endpoint")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithResponse(200, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Endpoint details"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Get("/v1.0/endpoints/{id}/health", GetEndpointHealth, api => api
+                .WithTag("Endpoints")
+                .WithSummary("Get health status for a single endpoint")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointHealthStatus>("Endpoint health status"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found or health check not enabled"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
             rest.Put<EmbeddingEndpoint>("/v1.0/endpoints/{id}", UpdateEndpoint, api => api
                 .WithTag("Endpoints")
@@ -391,12 +425,6 @@ namespace Partio.Server
                 .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithResponse(200, OpenApiResponseMetadata.Create("Endpoint exists"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/endpoints/enumerate", EnumerateEndpoints, api => api
-                .WithTag("Endpoints")
-                .WithSummary("List embedding endpoints")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<EmbeddingEndpoint>>("Paginated endpoint list"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
             // Request History (admin)
@@ -438,6 +466,8 @@ namespace Partio.Server
 
             // 9. Graceful shutdown
             _Logging.Info(_Header + "shutting down");
+            if (_HealthCheckService != null)
+                await _HealthCheckService.StopAsync().ConfigureAwait(false);
             if (_CleanupService != null)
                 await _CleanupService.StopAsync().ConfigureAwait(false);
             serverCts.Cancel();
@@ -547,6 +577,8 @@ namespace Partio.Server
                 ep.Endpoint = defaultEp.Endpoint;
                 ep.ApiFormat = defaultEp.ApiFormat;
                 ep.ApiKey = defaultEp.ApiKey;
+                ep.HealthCheckEnabled = true;
+                EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
                 await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
             }
 
@@ -627,11 +659,7 @@ namespace Partio.Server
 
         private static async Task<object> ProcessSingle(AppRequest req)
         {
-            EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
-            SemanticCellRequest? cellReq = req.GetData<SemanticCellRequest>();
-            if (cellReq == null) throw new ArgumentException("Request body is required.");
-
-            bool recordHistory = _Settings.RequestHistory.Enabled && endpoint.EnableRequestHistory && _RequestHistoryService != null;
+            bool recordHistory = _Settings.RequestHistory.Enabled && _RequestHistoryService != null;
             RequestHistoryEntry? historyEntry = null;
             Stopwatch? sw = null;
 
@@ -646,29 +674,43 @@ namespace Partio.Server
                 sw = Stopwatch.StartNew();
             }
 
+            SemanticCellRequest? cellReq = null;
+
             try
             {
-                SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
+                EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
+                cellReq = req.GetData<SemanticCellRequest>();
+                if (cellReq == null) throw new ArgumentException("Request body is required.");
+
+                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
+                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+
+                ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
 
                 if (recordHistory && historyEntry != null && sw != null)
                 {
                     sw.Stop();
                     string requestJson = _Serializer.SerializeJson(cellReq, false);
-                    string responseJson = _Serializer.SerializeJson(response, false);
+                    string responseJson = _Serializer.SerializeJson(cellResult.Response, false);
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson).ConfigureAwait(false);
+                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, cellResult.EmbeddingCalls).ConfigureAwait(false);
                 }
 
-                return response;
+                return cellResult.Response;
             }
             catch (Exception ex)
             {
                 if (recordHistory && historyEntry != null && sw != null)
                 {
                     sw.Stop();
-                    string requestJson = _Serializer.SerializeJson(cellReq, false);
+                    int statusCode = MapExceptionToStatusCode(ex);
+                    string? requestBody = cellReq != null ? _Serializer.SerializeJson(cellReq, false) : null;
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 500, sw.ElapsedMilliseconds, requestJson, ex.Message).ConfigureAwait(false);
+                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null).ConfigureAwait(false);
                 }
                 throw;
             }
@@ -676,11 +718,7 @@ namespace Partio.Server
 
         private static async Task<object> ProcessBatch(AppRequest req)
         {
-            EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
-            List<SemanticCellRequest>? cellReqs = req.GetData<List<SemanticCellRequest>>();
-            if (cellReqs == null || cellReqs.Count == 0) throw new ArgumentException("Request body must contain at least one cell.");
-
-            bool recordHistory = _Settings.RequestHistory.Enabled && endpoint.EnableRequestHistory && _RequestHistoryService != null;
+            bool recordHistory = _Settings.RequestHistory.Enabled && _RequestHistoryService != null;
             RequestHistoryEntry? historyEntry = null;
             Stopwatch? sw = null;
 
@@ -695,13 +733,24 @@ namespace Partio.Server
                 sw = Stopwatch.StartNew();
             }
 
+            List<SemanticCellRequest>? cellReqs = null;
+
             try
             {
+                EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
+                cellReqs = req.GetData<List<SemanticCellRequest>>();
+                if (cellReqs == null || cellReqs.Count == 0) throw new ArgumentException("Request body must contain at least one cell.");
+
+                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
+                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+
                 List<SemanticCellResponse> responses = new List<SemanticCellResponse>();
+                List<EmbeddingCallDetail> allEmbeddingCalls = new List<EmbeddingCallDetail>();
                 foreach (SemanticCellRequest cellReq in cellReqs)
                 {
-                    SemanticCellResponse response = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
-                    responses.Add(response);
+                    ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
+                    responses.Add(cellResult.Response);
+                    allEmbeddingCalls.AddRange(cellResult.EmbeddingCalls);
                 }
 
                 if (recordHistory && historyEntry != null && sw != null)
@@ -709,8 +758,10 @@ namespace Partio.Server
                     sw.Stop();
                     string requestJson = _Serializer.SerializeJson(cellReqs, false);
                     string responseJson = _Serializer.SerializeJson(responses, false);
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson).ConfigureAwait(false);
+                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, allEmbeddingCalls).ConfigureAwait(false);
                 }
 
                 return responses;
@@ -720,9 +771,12 @@ namespace Partio.Server
                 if (recordHistory && historyEntry != null && sw != null)
                 {
                     sw.Stop();
-                    string requestJson = _Serializer.SerializeJson(cellReqs, false);
+                    int statusCode = MapExceptionToStatusCode(ex);
+                    string? requestBody = cellReqs != null ? _Serializer.SerializeJson(cellReqs, false) : null;
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 500, sw.ElapsedMilliseconds, requestJson, ex.Message).ConfigureAwait(false);
+                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null).ConfigureAwait(false);
                 }
                 throw;
             }
@@ -741,6 +795,10 @@ namespace Partio.Server
 
             if (!endpoint.Active)
                 throw new ArgumentException("Embedding endpoint '" + id + "' is inactive.");
+
+            if (_HealthCheckService != null && !_HealthCheckService.IsHealthy(endpoint.Id))
+                throw new EndpointUnhealthyException(endpoint.Id,
+                    "Endpoint " + endpoint.Id + " (" + endpoint.Model + ") is currently unhealthy");
 
             return endpoint;
         }
@@ -786,7 +844,7 @@ namespace Partio.Server
             }
         }
 
-        private static async Task<SemanticCellResponse> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint)
+        private static async Task<ProcessCellResult> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint)
         {
             ValidateStrategyForAtomType(request);
 
@@ -845,7 +903,10 @@ namespace Partio.Server
                 response.Text = ResolveInputText(request);
                 response.Chunks = chunks;
 
-                return response;
+                ProcessCellResult cellResult = new ProcessCellResult();
+                cellResult.Response = response;
+                cellResult.EmbeddingCalls = client.CallDetails.ToList();
+                return cellResult;
             }
         }
 
@@ -888,6 +949,29 @@ namespace Partio.Server
                 default:
                     return request.Text ?? string.Empty;
             }
+        }
+
+        private static int MapExceptionToStatusCode(Exception ex)
+        {
+            if (ex is KeyNotFoundException) return 404;
+            if (ex is ArgumentException || ex is ArgumentNullException) return 400;
+            if (ex is UnauthorizedAccessException) return 401;
+            if (ex is EndpointUnhealthyException) return 502;
+            return 500;
+        }
+
+        private static Dictionary<string, string> ExtractHeaders(System.Collections.Specialized.NameValueCollection? headers)
+        {
+            Dictionary<string, string> dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (headers != null)
+            {
+                foreach (string? key in headers.AllKeys)
+                {
+                    if (!string.IsNullOrEmpty(key))
+                        dict[key] = headers[key] ?? "";
+                }
+            }
+            return dict;
         }
 
         private static EmbeddingClientBase CreateEmbeddingClient(EmbeddingEndpoint endpoint)
@@ -937,7 +1021,10 @@ namespace Partio.Server
                 ep.Endpoint = defaultEp.Endpoint;
                 ep.ApiFormat = defaultEp.ApiFormat;
                 ep.ApiKey = defaultEp.ApiKey;
-                await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
+                ep.HealthCheckEnabled = true;
+                EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
+                EmbeddingEndpoint createdEp = await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
+                _HealthCheckService?.OnEndpointCreated(createdEp);
             }
 
             req.Http.Response.StatusCode = 201;
@@ -1129,7 +1216,9 @@ namespace Partio.Server
             RequireAdmin(req);
             EmbeddingEndpoint? ep = req.GetData<EmbeddingEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
+            EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
             EmbeddingEndpoint created = await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
+            _HealthCheckService?.OnEndpointCreated(created);
             req.Http.Response.StatusCode = 201;
             return created;
         }
@@ -1150,7 +1239,9 @@ namespace Partio.Server
             EmbeddingEndpoint? ep = req.GetData<EmbeddingEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
             ep.Id = id;
+            EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
             EmbeddingEndpoint updated = await _Database.EmbeddingEndpoint.UpdateAsync(ep).ConfigureAwait(false);
+            _HealthCheckService?.OnEndpointUpdated(updated);
             return updated;
         }
 
@@ -1159,6 +1250,7 @@ namespace Partio.Server
             RequireAdmin(req);
             string id = req.Parameters["id"];
             await _Database.EmbeddingEndpoint.DeleteByIdAsync(id).ConfigureAwait(false);
+            _HealthCheckService?.OnEndpointDeleted(id);
             req.Http.Response.StatusCode = 204;
             return null!;
         }
@@ -1181,6 +1273,44 @@ namespace Partio.Server
             string tenantId = auth.TenantId ?? "default";
             EnumerationResult<EmbeddingEndpoint> result = await _Database.EmbeddingEndpoint.EnumerateAsync(tenantId, enumReq).ConfigureAwait(false);
             return result;
+        }
+
+        #endregion
+
+        #region Endpoint Health
+
+        private static async Task<object> GetAllEndpointHealth(AppRequest req)
+        {
+            RequireAdmin(req);
+            AuthContext auth = (AuthContext)req.Metadata;
+
+            if (_HealthCheckService == null)
+                return new List<EndpointHealthStatus>();
+
+            string? tenantFilter = auth.IsGlobalAdmin ? null : auth.TenantId;
+            List<EndpointHealthState> states = _HealthCheckService.GetAllHealthStates(tenantFilter);
+
+            List<EndpointHealthStatus> statuses = new List<EndpointHealthStatus>();
+            foreach (EndpointHealthState state in states)
+            {
+                statuses.Add(EndpointHealthStatus.FromState(state));
+            }
+            return statuses;
+        }
+
+        private static async Task<object> GetEndpointHealth(AppRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+
+            if (_HealthCheckService == null)
+                throw new KeyNotFoundException("Health check service not available");
+
+            EndpointHealthState? state = _HealthCheckService.GetHealthState(id);
+            if (state == null)
+                throw new KeyNotFoundException("No health state for endpoint " + id + " (health check may not be enabled)");
+
+            return EndpointHealthStatus.FromState(state);
         }
 
         #endregion
@@ -1221,8 +1351,18 @@ namespace Partio.Server
             AuthContext auth = (AuthContext)req.Metadata;
             EnumerationRequest? enumReq = req.GetData<EnumerationRequest>();
             if (enumReq == null) enumReq = new EnumerationRequest();
-            string tenantId = auth.TenantId ?? "default";
-            EnumerationResult<RequestHistoryEntry> result = await _Database.RequestHistory.EnumerateAsync(tenantId, enumReq).ConfigureAwait(false);
+
+            EnumerationResult<RequestHistoryEntry> result;
+            if (auth.IsGlobalAdmin)
+            {
+                result = await _Database.RequestHistory.EnumerateAllAsync(enumReq).ConfigureAwait(false);
+            }
+            else
+            {
+                string tenantId = auth.TenantId ?? "default";
+                result = await _Database.RequestHistory.EnumerateAsync(tenantId, enumReq).ConfigureAwait(false);
+            }
+
             return result;
         }
 

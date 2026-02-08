@@ -146,6 +146,10 @@ input:focus, select:focus, textarea:focus {
   cursor: pointer;
 }
 
+.form-group label.checkbox-label input[type="checkbox"] {
+  width: auto;
+}
+
 .header-row {
   display: flex;
   justify-content: space-between;
@@ -156,6 +160,32 @@ input:focus, select:focus, textarea:focus {
 .header-row h2 {
   font-size: 20px;
   font-weight: 600;
+}
+
+.header-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.refresh-btn:hover {
+  background: var(--bg-color);
+  color: var(--text-primary);
 }
 
 .status-badge {

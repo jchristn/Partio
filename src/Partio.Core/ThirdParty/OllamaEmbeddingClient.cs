@@ -54,8 +54,9 @@ namespace Partio.Core.ThirdParty
 
             _Logging.Debug(_Header + "POST " + url + " (batch of " + texts.Count + ")");
 
-            HttpResponseMessage batchResponse = await _HttpClient.PostAsync(url, batchContent, token).ConfigureAwait(false);
-            string batchResponseBody = await batchResponse.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            EmbeddingHttpResult batchResult = await PostAndRecordAsync(url, batchContent, batchJson, token).ConfigureAwait(false);
+            HttpResponseMessage batchResponse = batchResult.Response;
+            string batchResponseBody = batchResult.ResponseBody;
 
             if (batchResponse.IsSuccessStatusCode)
             {
@@ -159,8 +160,9 @@ namespace Partio.Core.ThirdParty
 
                 _Logging.Debug(_Header + "POST " + url);
 
-                HttpResponseMessage response = await _HttpClient.PostAsync(url, content, token).ConfigureAwait(false);
-                string responseBody = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+                EmbeddingHttpResult result = await PostAndRecordAsync(url, content, json, token).ConfigureAwait(false);
+                HttpResponseMessage response = result.Response;
+                string responseBody = result.ResponseBody;
 
                 if (!response.IsSuccessStatusCode)
                 {

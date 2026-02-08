@@ -13,8 +13,6 @@ namespace Partio.Core.Database.Mysql.Implementations
     public class CredentialMethods : ICredentialMethods
     {
         private readonly MysqlDatabaseDriver _Driver;
-        private readonly LoggingModule _Logging;
-        private readonly string _Header = "[CredentialMethods] ";
 
         /// <summary>
         /// Initialize a new instance of CredentialMethods.
@@ -24,7 +22,6 @@ namespace Partio.Core.Database.Mysql.Implementations
         public CredentialMethods(MysqlDatabaseDriver driver, LoggingModule logging)
         {
             _Driver = driver ?? throw new ArgumentNullException(nameof(driver));
-            _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
         }
 
         /// <summary>

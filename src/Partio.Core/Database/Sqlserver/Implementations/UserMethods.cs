@@ -13,8 +13,6 @@ namespace Partio.Core.Database.Sqlserver.Implementations
     public class UserMethods : IUserMethods
     {
         private readonly SqlServerDatabaseDriver _Driver;
-        private readonly LoggingModule _Logging;
-        private readonly string _Header = "[UserMethods] ";
 
         /// <summary>
         /// Initialize a new instance of UserMethods.
@@ -24,7 +22,6 @@ namespace Partio.Core.Database.Sqlserver.Implementations
         public UserMethods(SqlServerDatabaseDriver driver, LoggingModule logging)
         {
             _Driver = driver ?? throw new ArgumentNullException(nameof(driver));
-            _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
         }
 
         /// <summary>

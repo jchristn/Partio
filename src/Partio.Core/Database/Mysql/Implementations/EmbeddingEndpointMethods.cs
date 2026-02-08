@@ -13,8 +13,6 @@ namespace Partio.Core.Database.Mysql.Implementations
     public class EmbeddingEndpointMethods : IEmbeddingEndpointMethods
     {
         private readonly MysqlDatabaseDriver _Driver;
-        private readonly LoggingModule _Logging;
-        private readonly string _Header = "[EmbeddingEndpointMethods] ";
 
         /// <summary>
         /// Initialize a new instance of EmbeddingEndpointMethods.
@@ -24,7 +22,6 @@ namespace Partio.Core.Database.Mysql.Implementations
         public EmbeddingEndpointMethods(MysqlDatabaseDriver driver, LoggingModule logging)
         {
             _Driver = driver ?? throw new ArgumentNullException(nameof(driver));
-            _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
         }
 
         /// <summary>
@@ -42,7 +39,10 @@ namespace Partio.Core.Database.Mysql.Implementations
             string tagsJson = serializer.SerializeJson(endpoint.Tags, false);
 
             string query =
-                "INSERT INTO embedding_endpoints (id, tenant_id, model, endpoint, api_format, api_key, active, enable_request_history, labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
+                "INSERT INTO embedding_endpoints (id, tenant_id, model, endpoint, api_format, api_key, active, enable_request_history, " +
+                "health_check_enabled, health_check_url, health_check_method, health_check_interval_ms, health_check_timeout_ms, " +
+                "health_check_expected_status, healthy_threshold, unhealthy_threshold, health_check_use_auth, " +
+                "labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
                 "'" + _Driver.Sanitize(endpoint.Id) + "', " +
                 "'" + _Driver.Sanitize(endpoint.TenantId) + "', " +
                 "'" + _Driver.Sanitize(endpoint.Model) + "', " +
@@ -51,6 +51,15 @@ namespace Partio.Core.Database.Mysql.Implementations
                 _Driver.FormatNullableString(endpoint.ApiKey) + ", " +
                 _Driver.FormatBoolean(endpoint.Active) + ", " +
                 _Driver.FormatBoolean(endpoint.EnableRequestHistory) + ", " +
+                _Driver.FormatBoolean(endpoint.HealthCheckEnabled) + ", " +
+                _Driver.FormatNullableString(endpoint.HealthCheckUrl) + ", " +
+                (int)endpoint.HealthCheckMethod + ", " +
+                endpoint.HealthCheckIntervalMs + ", " +
+                endpoint.HealthCheckTimeoutMs + ", " +
+                endpoint.HealthCheckExpectedStatusCode + ", " +
+                endpoint.HealthyThreshold + ", " +
+                endpoint.UnhealthyThreshold + ", " +
+                _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
                 "'" + _Driver.Sanitize(labelsJson) + "', " +
                 "'" + _Driver.Sanitize(tagsJson) + "', " +
                 "'" + _Driver.FormatDateTime(endpoint.CreatedUtc) + "', " +
@@ -122,6 +131,15 @@ namespace Partio.Core.Database.Mysql.Implementations
                 "api_key = " + _Driver.FormatNullableString(endpoint.ApiKey) + ", " +
                 "active = " + _Driver.FormatBoolean(endpoint.Active) + ", " +
                 "enable_request_history = " + _Driver.FormatBoolean(endpoint.EnableRequestHistory) + ", " +
+                "health_check_enabled = " + _Driver.FormatBoolean(endpoint.HealthCheckEnabled) + ", " +
+                "health_check_url = " + _Driver.FormatNullableString(endpoint.HealthCheckUrl) + ", " +
+                "health_check_method = " + (int)endpoint.HealthCheckMethod + ", " +
+                "health_check_interval_ms = " + endpoint.HealthCheckIntervalMs + ", " +
+                "health_check_timeout_ms = " + endpoint.HealthCheckTimeoutMs + ", " +
+                "health_check_expected_status = " + endpoint.HealthCheckExpectedStatusCode + ", " +
+                "healthy_threshold = " + endpoint.HealthyThreshold + ", " +
+                "unhealthy_threshold = " + endpoint.UnhealthyThreshold + ", " +
+                "health_check_use_auth = " + _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
                 "labels_json = '" + _Driver.Sanitize(labelsJson) + "', " +
                 "tags_json = '" + _Driver.Sanitize(tagsJson) + "', " +
                 "last_update_utc = '" + _Driver.FormatDateTime(endpoint.LastUpdateUtc) + "' " +

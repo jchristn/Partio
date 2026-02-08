@@ -1,1 +1,76 @@
 /* EmbeddingEndpointsView uses shared styles from index.css */
+
+/* Form section layout */
+.endpoint-form-section {
+  margin-top: 20px;
+}
+
+.endpoint-form-section:first-child {
+  margin-top: 0;
+}
+
+.endpoint-form-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.endpoint-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Field tooltip */
+.field-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  cursor: help;
+}
+
+.field-tooltip-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.field-tooltip:hover .field-tooltip-icon {
+  opacity: 1;
+}
+
+.field-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #f1f5f9;
+  background: #1e293b;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+
+.field-tooltip:hover::after {
+  opacity: 1;
+}

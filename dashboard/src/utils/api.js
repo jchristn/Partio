@@ -62,6 +62,10 @@ export class PartioApi {
   deleteEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/${id}`); }
   enumerateEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/enumerate', req); }
 
+  // Endpoint Health
+  getEndpointHealth(id) { return this.request('GET', `/v1.0/endpoints/${id}/health`); }
+  getAllEndpointHealth() { return this.request('GET', '/v1.0/endpoints/health'); }
+
   // Request History
   getRequestHistory(id) { return this.request('GET', `/v1.0/requests/${id}`); }
   getRequestHistoryDetail(id) { return this.request('GET', `/v1.0/requests/${id}/detail`); }

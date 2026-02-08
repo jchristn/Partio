@@ -197,12 +197,19 @@ namespace Partio.Sdk
         public Task<EnumerationResult<EmbeddingEndpoint>?> EnumerateEndpointsAsync(EnumerationRequest? req = null) =>
             MakeRequestAsync<EnumerationResult<EmbeddingEndpoint>>(HttpMethod.Post, "/v1.0/endpoints/enumerate", req ?? new EnumerationRequest());
 
+        // Endpoint Health
+        public Task<EndpointHealthStatus?> GetEndpointHealthAsync(string id) =>
+            MakeRequestAsync<EndpointHealthStatus>(HttpMethod.Get, $"/v1.0/endpoints/{id}/health");
+
+        public Task<List<EndpointHealthStatus>?> GetAllEndpointHealthAsync() =>
+            MakeRequestAsync<List<EndpointHealthStatus>>(HttpMethod.Get, "/v1.0/endpoints/health");
+
         // Request History
         public Task<RequestHistoryEntry?> GetRequestHistoryAsync(string id) =>
             MakeRequestAsync<RequestHistoryEntry>(HttpMethod.Get, $"/v1.0/requests/{id}");
 
-        public Task<object?> GetRequestHistoryDetailAsync(string id) =>
-            MakeRequestAsync<object>(HttpMethod.Get, $"/v1.0/requests/{id}/detail");
+        public Task<RequestHistoryDetail?> GetRequestHistoryDetailAsync(string id) =>
+            MakeRequestAsync<RequestHistoryDetail>(HttpMethod.Get, $"/v1.0/requests/{id}/detail");
 
         public async Task DeleteRequestHistoryAsync(string id) =>
             await MakeRequestAsync<object>(HttpMethod.Delete, $"/v1.0/requests/{id}").ConfigureAwait(false);

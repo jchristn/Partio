@@ -148,11 +148,28 @@ class PartioClient:
     def enumerate_endpoints(self, req=None):
         return self._request("POST", "/v1.0/endpoints/enumerate", req or {})
 
+    # Endpoint Health
+    def get_endpoint_health(self, endpoint_id):
+        """Get health status for a specific endpoint."""
+        return self._request("GET", f"/v1.0/endpoints/{endpoint_id}/health")
+
+    def get_all_endpoint_health(self):
+        """Get health status for all monitored endpoints."""
+        return self._request("GET", "/v1.0/endpoints/health")
+
     # Request History
     def get_request_history(self, entry_id):
         return self._request("GET", f"/v1.0/requests/{entry_id}")
 
     def get_request_history_detail(self, entry_id):
+        """Get request/response body detail for a request history entry.
+
+        Returns a dict with keys: RequestHeaders, RequestBody, ResponseHeaders,
+        ResponseBody, and EmbeddingCalls. The EmbeddingCalls field is a list of
+        upstream embedding HTTP call details (each with Url, Method, RequestHeaders,
+        RequestBody, StatusCode, ResponseHeaders, ResponseBody, ResponseTimeMs,
+        Success, Error, TimestampUtc). It is present only for process requests.
+        """
         return self._request("GET", f"/v1.0/requests/{entry_id}/detail")
 
     def delete_request_history(self, entry_id):

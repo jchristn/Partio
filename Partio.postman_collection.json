@@ -1225,7 +1225,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"HealthCheckEnabled\": false,\n    \"HealthCheckUrl\": null,\n    \"HealthCheckMethod\": \"GET\",\n    \"HealthCheckIntervalMs\": 5000,\n    \"HealthCheckTimeoutMs\": 2000,\n    \"HealthCheckExpectedStatusCode\": 200,\n    \"HealthyThreshold\": 3,\n    \"UnhealthyThreshold\": 3,\n    \"HealthCheckUseAuth\": false,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints",
@@ -1359,6 +1359,62 @@
 							"path": ["v1.0", "endpoints", "enumerate"]
 						},
 						"description": "List embedding endpoints with pagination and filtering."
+					}
+				},
+				{
+					"name": "Get Endpoint Health",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200 or 404', function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "health"]
+						},
+						"description": "Get the health status for a specific monitored endpoint. Returns 404 if health checking is not enabled for this endpoint."
+					}
+				},
+				{
+					"name": "Get All Endpoint Health",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response is an array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.be.an('array');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "health"]
+						},
+						"description": "Get health status for all monitored endpoints. Non-admin callers see only their tenant's endpoints."
 					}
 				},
 				{

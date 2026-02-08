@@ -13,8 +13,6 @@ namespace Partio.Core.Database.Sqlite.Implementations
     public class RequestHistoryMethods : IRequestHistoryMethods
     {
         private readonly SqliteDatabaseDriver _Driver;
-        private readonly LoggingModule _Logging;
-        private readonly string _Header = "[RequestHistoryMethods] ";
 
         /// <summary>
         /// Initialize a new instance of RequestHistoryMethods.
@@ -24,7 +22,6 @@ namespace Partio.Core.Database.Sqlite.Implementations
         public RequestHistoryMethods(SqliteDatabaseDriver driver, LoggingModule logging)
         {
             _Driver = driver ?? throw new ArgumentNullException(nameof(driver));
-            _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
         }
 
         /// <summary>
@@ -125,6 +122,64 @@ namespace Partio.Core.Database.Sqlite.Implementations
                 conditions.Add("id > '" + _Driver.Sanitize(request.ContinuationToken) + "'");
 
             string whereClause = "WHERE " + string.Join(" AND ", conditions);
+
+            string orderByClause;
+            switch (request.Order)
+            {
+                case EnumerationOrderEnum.CreatedAscending:
+                    orderByClause = "ORDER BY created_utc ASC";
+                    break;
+                case EnumerationOrderEnum.CreatedDescending:
+                    orderByClause = "ORDER BY created_utc DESC";
+                    break;
+                default:
+                    orderByClause = "ORDER BY created_utc DESC";
+                    break;
+            }
+
+            string countQuery = "SELECT COUNT(*) AS cnt FROM request_history " + whereClause + ";";
+            DataTable countResult = await _Driver.ExecuteQueryAsync(countQuery, false, token).ConfigureAwait(false);
+            long totalCount = Convert.ToInt64(countResult.Rows[0]["cnt"]);
+
+            int fetchCount = request.MaxResults + 1;
+            string dataQuery = "SELECT * FROM request_history " + whereClause + " " + orderByClause + " LIMIT " + fetchCount + ";";
+            DataTable dataResult = await _Driver.ExecuteQueryAsync(dataQuery, false, token).ConfigureAwait(false);
+
+            List<RequestHistoryEntry> entries = RequestHistoryEntry.FromDataTable(dataResult);
+
+            EnumerationResult<RequestHistoryEntry> result = new EnumerationResult<RequestHistoryEntry>();
+            result.TotalCount = totalCount;
+
+            if (entries.Count > request.MaxResults)
+            {
+                result.HasMore = true;
+                entries = entries.GetRange(0, request.MaxResults);
+            }
+
+            result.Data = entries;
+
+            if (result.HasMore && entries.Count > 0)
+                result.ContinuationToken = entries[entries.Count - 1].Id;
+
+            return result;
+        }
+
+        /// <summary>
+        /// Enumerate all request history with pagination (no tenant filter).
+        /// </summary>
+        /// <param name="request">Enumeration request parameters.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Paginated enumeration result.</returns>
+        public async Task<EnumerationResult<RequestHistoryEntry>> EnumerateAllAsync(EnumerationRequest request, CancellationToken token = default)
+        {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+
+            List<string> conditions = new List<string>();
+
+            if (!string.IsNullOrEmpty(request.ContinuationToken))
+                conditions.Add("id > '" + _Driver.Sanitize(request.ContinuationToken) + "'");
+
+            string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
 
             string orderByClause;
             switch (request.Order)

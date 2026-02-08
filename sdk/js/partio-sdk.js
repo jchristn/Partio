@@ -118,8 +118,17 @@ export class PartioClient {
   }
   async enumerateEndpoints(req = {}) { return this._request('POST', '/v1.0/endpoints/enumerate', req); }
 
+  // Endpoint Health
+  async getEndpointHealth(id) { return this._request('GET', `/v1.0/endpoints/${id}/health`); }
+  async getAllEndpointHealth() { return this._request('GET', '/v1.0/endpoints/health'); }
+
   // Request History
   async getRequestHistory(id) { return this._request('GET', `/v1.0/requests/${id}`); }
+  /**
+   * Get request/response body detail for a request history entry.
+   * @param {string} id - Request history entry ID.
+   * @returns {Promise<{RequestHeaders?: Object, RequestBody?: string, ResponseHeaders?: Object, ResponseBody?: string, EmbeddingCalls?: Array<{Url?: string, Method?: string, RequestHeaders?: Object, RequestBody?: string, StatusCode?: number, ResponseHeaders?: Object, ResponseBody?: string, ResponseTimeMs?: number, Success: boolean, Error?: string, TimestampUtc: string}>}>}
+   */
   async getRequestHistoryDetail(id) { return this._request('GET', `/v1.0/requests/${id}/detail`); }
   async deleteRequestHistory(id) { return this._request('DELETE', `/v1.0/requests/${id}`); }
   async enumerateRequestHistory(req = {}) { return this._request('POST', '/v1.0/requests/enumerate', req); }

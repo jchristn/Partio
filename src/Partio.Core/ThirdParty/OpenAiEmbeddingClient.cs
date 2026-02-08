@@ -50,8 +50,9 @@ namespace Partio.Core.ThirdParty
 
             _Logging.Debug(_Header + "POST " + url);
 
-            HttpResponseMessage response = await _HttpClient.PostAsync(url, content, token).ConfigureAwait(false);
-            string responseBody = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            EmbeddingHttpResult result = await PostAndRecordAsync(url, content, json, token).ConfigureAwait(false);
+            HttpResponseMessage response = result.Response;
+            string responseBody = result.ResponseBody;
 
             if (!response.IsSuccessStatusCode)
             {

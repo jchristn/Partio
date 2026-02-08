@@ -466,9 +466,40 @@ Create an embedding endpoint.
     "Model": "all-minilm",
     "Endpoint": "http://localhost:11434",
     "ApiFormat": "Ollama",
-    "ApiKey": null
+    "ApiKey": null,
+    "Active": true,
+    "EnableRequestHistory": true,
+    "HealthCheckEnabled": false,
+    "HealthCheckUrl": null,
+    "HealthCheckMethod": "GET",
+    "HealthCheckIntervalMs": 5000,
+    "HealthCheckTimeoutMs": 2000,
+    "HealthCheckExpectedStatusCode": 200,
+    "HealthyThreshold": 3,
+    "UnhealthyThreshold": 3,
+    "HealthCheckUseAuth": false
 }
 ```
+
+#### Health Check Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `HealthCheckEnabled` | bool | `false` | Enable background health checking for this endpoint |
+| `HealthCheckUrl` | string? | `null` | Custom URL to check (defaults to the endpoint URL if null) |
+| `HealthCheckMethod` | string | `"GET"` | HTTP method for health checks (`GET` or `HEAD`) |
+| `HealthCheckIntervalMs` | int | `5000` | Milliseconds between health checks |
+| `HealthCheckTimeoutMs` | int | `2000` | Timeout per health check request in milliseconds |
+| `HealthCheckExpectedStatusCode` | int | `200` | Expected HTTP status code for a healthy response |
+| `HealthyThreshold` | int | `3` | Consecutive successes required to transition to healthy |
+| `UnhealthyThreshold` | int | `3` | Consecutive failures required to transition to unhealthy |
+| `HealthCheckUseAuth` | bool | `false` | Include the endpoint's API key as a Bearer token in health checks |
+
+When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs a background loop that periodically checks the endpoint. If the endpoint becomes unhealthy, process requests to it return `502 Bad Gateway`.
+
+Health check defaults are applied automatically based on `ApiFormat` when creating or updating an endpoint:
+- **Ollama**: URL defaults to `{Endpoint}/api/tags`, 10s interval, 5s timeout, no auth
+- **OpenAI**: URL defaults to `{Endpoint}/v1/models`, 30s interval, 10s timeout, auth enabled
 
 **Response**: `201 Created` — `EmbeddingEndpoint`
 
@@ -497,6 +528,50 @@ List endpoints with pagination.
 
 ---
 
+## Endpoint Health (Admin)
+
+### GET /v1.0/endpoints/{id}/health
+Get the health status for a specific monitored endpoint.
+
+**Path Parameters**:
+- `id` — Embedding endpoint ID
+
+**Response**: `200 OK` — `EndpointHealthStatus`
+```json
+{
+    "EndpointId": "ep_xxxx",
+    "EndpointName": "all-minilm",
+    "TenantId": "ten_xxxx",
+    "IsHealthy": true,
+    "FirstCheckUtc": "2026-02-07T12:00:00Z",
+    "LastCheckUtc": "2026-02-07T12:01:00Z",
+    "LastHealthyUtc": "2026-02-07T12:00:30Z",
+    "LastUnhealthyUtc": null,
+    "LastStateChangeUtc": "2026-02-07T12:00:30Z",
+    "TotalUptimeMs": 60000,
+    "TotalDowntimeMs": 30000,
+    "UptimePercentage": 66.67,
+    "ConsecutiveSuccesses": 3,
+    "ConsecutiveFailures": 0,
+    "LastError": null,
+    "History": [
+        { "TimestampUtc": "2026-02-07T12:00:10Z", "Success": false },
+        { "TimestampUtc": "2026-02-07T12:00:20Z", "Success": true },
+        { "TimestampUtc": "2026-02-07T12:00:30Z", "Success": true }
+    ]
+}
+```
+
+**Errors**:
+- `404 Not Found` — No health state exists (health check not enabled or endpoint not found)
+
+### GET /v1.0/endpoints/health
+Get health status for all monitored endpoints. Non-admin callers see only their tenant's endpoints.
+
+**Response**: `200 OK` — `List<EndpointHealthStatus>`
+
+---
+
 ## Request History (Admin)
 
 ### GET /v1.0/requests/{id}
@@ -507,7 +582,31 @@ Read a request history entry.
 ### GET /v1.0/requests/{id}/detail
 Read request/response body detail from filesystem.
 
-**Response**: `200 OK` — JSON with `RequestBody` and `ResponseBody` fields
+**Response**: `200 OK` — JSON object with the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `RequestHeaders` | object? | Outer request headers (key-value pairs) |
+| `RequestBody` | string? | Outer request body (may be truncated) |
+| `ResponseHeaders` | object? | Outer response headers (key-value pairs) |
+| `ResponseBody` | string? | Outer response body (may be truncated) |
+| `EmbeddingCalls` | array? | Upstream embedding HTTP call details (present only for process requests) |
+
+Each item in the `EmbeddingCalls` array:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Url` | string? | Full URL called on the upstream embedding endpoint |
+| `Method` | string? | HTTP method (e.g. `POST`) |
+| `RequestHeaders` | object? | Headers sent to the upstream endpoint |
+| `RequestBody` | string? | Body sent to the upstream endpoint (may be truncated) |
+| `StatusCode` | int? | HTTP status code returned by the upstream endpoint |
+| `ResponseHeaders` | object? | Response headers from the upstream endpoint |
+| `ResponseBody` | string? | Response body from the upstream endpoint (may be truncated) |
+| `ResponseTimeMs` | long? | Round-trip time for this call in milliseconds |
+| `Success` | bool | Whether the call returned a success status code |
+| `Error` | string? | Error message if the call failed |
+| `TimestampUtc` | string | ISO 8601 timestamp when the call was initiated |
 
 ### DELETE /v1.0/requests/{id}
 Delete a request history entry.
@@ -537,6 +636,7 @@ All errors return an `ApiErrorResponse`:
 | 400 | Bad Request (invalid input) |
 | 401 | Unauthorized (missing/invalid token) |
 | 404 | Not Found |
+| 502 | Bad Gateway (endpoint is unhealthy) |
 | 500 | Internal Server Error |
 
 ---

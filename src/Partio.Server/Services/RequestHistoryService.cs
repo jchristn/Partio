@@ -67,12 +67,18 @@ namespace Partio.Server.Services
         /// <param name="responseTimeMs">Response time in milliseconds.</param>
         /// <param name="requestBody">Request body string.</param>
         /// <param name="responseBody">Response body string.</param>
+        /// <param name="requestHeaders">Request headers dictionary.</param>
+        /// <param name="responseHeaders">Response headers dictionary.</param>
+        /// <param name="embeddingCalls">Details of upstream embedding HTTP calls, if any.</param>
         public async Task UpdateWithResponseAsync(
             RequestHistoryEntry entry,
             int statusCode,
             long responseTimeMs,
             string? requestBody,
-            string? responseBody)
+            string? responseBody,
+            Dictionary<string, string>? requestHeaders = null,
+            Dictionary<string, string>? responseHeaders = null,
+            List<EmbeddingCallDetail>? embeddingCalls = null)
         {
             entry.HttpStatus = statusCode;
             entry.ResponseTimeMs = responseTimeMs;
@@ -92,14 +98,29 @@ namespace Partio.Server.Services
                     responseBody = responseBody.Substring(0, _Settings.RequestHistory.MaxResponseBodyBytes);
             }
 
+            // Truncate inner call bodies
+            if (embeddingCalls != null)
+            {
+                foreach (EmbeddingCallDetail call in embeddingCalls)
+                {
+                    if (!string.IsNullOrEmpty(call.RequestBody) && call.RequestBody.Length > _Settings.RequestHistory.MaxRequestBodyBytes)
+                        call.RequestBody = call.RequestBody.Substring(0, _Settings.RequestHistory.MaxRequestBodyBytes);
+                    if (!string.IsNullOrEmpty(call.ResponseBody) && call.ResponseBody.Length > _Settings.RequestHistory.MaxResponseBodyBytes)
+                        call.ResponseBody = call.ResponseBody.Substring(0, _Settings.RequestHistory.MaxResponseBodyBytes);
+                }
+            }
+
             // Persist bodies to filesystem
             string objectKey = Guid.NewGuid().ToString();
             entry.ObjectKey = objectKey;
 
             Dictionary<string, object?> detail = new Dictionary<string, object?>
             {
+                { "RequestHeaders", requestHeaders },
                 { "RequestBody", requestBody },
-                { "ResponseBody", responseBody }
+                { "ResponseHeaders", responseHeaders },
+                { "ResponseBody", responseBody },
+                { "EmbeddingCalls", embeddingCalls }
             };
 
             string json = _Serializer.SerializeJson(detail, true);
