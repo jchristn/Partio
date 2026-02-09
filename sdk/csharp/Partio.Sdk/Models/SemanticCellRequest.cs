@@ -3,7 +3,7 @@ namespace Partio.Sdk.Models
     using System.Text.Json.Serialization;
 
     /// <summary>
-    /// Valid Strategy values: FixedTokenCount, SentenceBased, ParagraphBased,
+    /// Valid Strategy values: FixedTokenCount, SentenceBased, ParagraphBased, RegexBased,
     /// WholeList, ListEntry, Row, RowWithHeaders, RowGroupWithHeaders, KeyValuePairs, WholeTable.
     /// </summary>
     public class ChunkingConfiguration
@@ -28,6 +28,9 @@ namespace Partio.Sdk.Models
 
         [JsonPropertyName("RowGroupSize")]
         public int RowGroupSize { get; set; } = 5;
+
+        [JsonPropertyName("RegexPattern")]
+        public string? RegexPattern { get; set; }
     }
 
     public class EmbeddingConfiguration

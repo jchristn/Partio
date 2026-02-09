@@ -6,7 +6,7 @@ namespace Test.Automated
 
     class Program
     {
-        private static string _Endpoint = "http://localhost:8000";
+        private static string _Endpoint = "http://localhost:8400";
         private static string _AdminKey = "partioadmin";
         private static string _TestToken = "default";
         private static int _Passed = 0;
@@ -240,6 +240,165 @@ namespace Test.Automated
                 {
                     EnumerationResult<RequestHistoryEntry>? result = await admin.EnumerateRequestHistoryAsync(new EnumerationRequest { MaxResults = 10 });
                     if (result == null) throw new Exception("No response");
+                });
+
+                // ===== Process (RegexBased) =====
+
+                await RunTest("Process Text (RegexBased - Markdown Headings)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Text",
+                        Text = "# A\nText about A.\n\n# B\nText about B.\n\n# C\nText about C.",
+                        ChunkingConfiguration = new ChunkingConfiguration
+                        {
+                            Strategy = "RegexBased",
+                            RegexPattern = @"(?=^#{1,3}\s)",
+                            FixedTokenCount = 512
+                        }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 3) throw new Exception("Expected 3 chunks, got " + (result?.Chunks?.Count ?? 0));
+                });
+
+                await RunTest("Process Text (RegexBased - Double Newline)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Text",
+                        Text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+                        ChunkingConfiguration = new ChunkingConfiguration
+                        {
+                            Strategy = "RegexBased",
+                            RegexPattern = @"\n\n+",
+                            FixedTokenCount = 512
+                        }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 3) throw new Exception("Expected 3 chunks, got " + (result?.Chunks?.Count ?? 0));
+                });
+
+                await RunTest("Process Text (RegexBased - Single Segment)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Text",
+                        Text = "No headings in this text whatsoever.",
+                        ChunkingConfiguration = new ChunkingConfiguration
+                        {
+                            Strategy = "RegexBased",
+                            RegexPattern = @"(?=^#{1,3}\s)",
+                            FixedTokenCount = 512
+                        }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count != 1) throw new Exception("Expected 1 chunk, got " + (result?.Chunks?.Count ?? 0));
+                });
+
+                await RunTest("Process Code (RegexBased)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Code",
+                        Text = "def foo():\n    pass\n\ndef bar():\n    pass\n\ndef baz():\n    pass",
+                        ChunkingConfiguration = new ChunkingConfiguration
+                        {
+                            Strategy = "RegexBased",
+                            RegexPattern = @"(?=^def\s)",
+                            FixedTokenCount = 512
+                        }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null || result.Chunks == null || result.Chunks.Count == 0) throw new Exception("Expected chunks");
+                });
+
+                await RunTest("Regex Strategy Missing Pattern (400)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    try
+                    {
+                        SemanticCellRequest req = new SemanticCellRequest
+                        {
+                            Type = "Text",
+                            Text = "Some text.",
+                            ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased" }
+                        };
+                        await admin.ProcessAsync(activeEp.Id, req);
+                        throw new Exception("Expected PartioException with 400");
+                    }
+                    catch (PartioException ex) when (ex.StatusCode == 400)
+                    {
+                        // Expected
+                    }
+                });
+
+                await RunTest("Regex Strategy Empty Pattern (400)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    try
+                    {
+                        SemanticCellRequest req = new SemanticCellRequest
+                        {
+                            Type = "Text",
+                            Text = "Some text.",
+                            ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased", RegexPattern = "" }
+                        };
+                        await admin.ProcessAsync(activeEp.Id, req);
+                        throw new Exception("Expected PartioException with 400");
+                    }
+                    catch (PartioException ex) when (ex.StatusCode == 400)
+                    {
+                        // Expected
+                    }
+                });
+
+                await RunTest("Regex Strategy Invalid Pattern (400)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    try
+                    {
+                        SemanticCellRequest req = new SemanticCellRequest
+                        {
+                            Type = "Text",
+                            Text = "Some text.",
+                            ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased", RegexPattern = "([" }
+                        };
+                        await admin.ProcessAsync(activeEp.Id, req);
+                        throw new Exception("Expected PartioException with 400");
+                    }
+                    catch (PartioException ex) when (ex.StatusCode == 400)
+                    {
+                        // Expected
+                    }
                 });
 
                 // ===== Error Cases =====

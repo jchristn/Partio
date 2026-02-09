@@ -24,6 +24,8 @@ namespace Partio.Core.Enums
         /// <summary>Each table row as key-value pairs (e.g. "col1: val1, col2: val2").</summary>
         KeyValuePairs,
         /// <summary>Entire table as a single markdown table chunk.</summary>
-        WholeTable
+        WholeTable,
+        /// <summary>Split at boundaries defined by a user-supplied regular expression.</summary>
+        RegexBased
     }
 }

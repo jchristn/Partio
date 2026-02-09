@@ -130,6 +130,11 @@
 			"key": "apiKey",
 			"value": "",
 			"type": "string"
+		},
+		{
+			"key": "regexPattern",
+			"value": "(?=^#{1,3}\\s)",
+			"type": "string"
 		}
 	],
 	"item": [
@@ -517,6 +522,28 @@
 							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Process text with L2 normalization enabled on embeddings."
+					}
+				},
+				{
+					"name": "Process Single Cell (RegexBased)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"# Introduction\\nPartio is a chunking platform.\\n\\n# Architecture\\nPartio uses a modular design.\\n\\n# Deployment\\nUse Docker Compose to deploy.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"RegexBased\",\n        \"RegexPattern\": \"{{regexPattern}}\",\n        \"FixedTokenCount\": 512\n    },\n    \"EmbeddingConfiguration\": {\n        \"Model\": \"{{embeddingModel}}\",\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Process text using regex-based chunking. Splits at boundaries defined by the RegexPattern (default: Markdown headings)."
 					}
 				},
 				{
@@ -1772,6 +1799,45 @@
 							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
 						},
 						"description": "Demonstrates 400 error when using a list-only strategy (WholeList) on a Table atom type. Set {{endpointId}} to a valid endpoint ID first."
+					}
+				},
+				{
+					"name": "Regex Strategy Missing Pattern (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"pm.test('Error message mentions RegexPattern', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Message).to.include('RegexPattern');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"Some text here.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"RegexBased\"\n    },\n    \"EmbeddingConfiguration\": {\n        \"L2Normalization\": false\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/{{endpointId}}/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "{{endpointId}}", "process"]
+						},
+						"description": "Demonstrates 400 error when using RegexBased strategy without providing a RegexPattern. Set {{endpointId}} to a valid endpoint ID first."
 					}
 				},
 				{

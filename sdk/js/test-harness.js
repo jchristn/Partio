@@ -227,6 +227,42 @@ await runTest('Process Table (WholeTable)', async () => {
   if (!result || !result.Chunks || result.Chunks.length !== 1) throw new Error('Expected 1 chunk');
 });
 
+await runTest('Process Text (RegexBased)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  const result = await client.process(activeEp.Id, {
+    Type: 'Text',
+    Text: '# Intro\nSome text.\n\n# Body\nMore text.\n\n# End\nFinal text.',
+    ChunkingConfiguration: {
+      Strategy: 'RegexBased',
+      RegexPattern: '(?=^#{1,3}\\s)',
+      FixedTokenCount: 512
+    },
+    EmbeddingConfiguration: { L2Normalization: false }
+  });
+  if (!result || !result.Chunks || result.Chunks.length === 0) throw new Error('No chunks');
+});
+
+await runTest('Regex Strategy Missing Pattern (400)', async () => {
+  const eps = await client.enumerateEndpoints();
+  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
+  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+
+  try {
+    await client.process(activeEp.Id, {
+      Type: 'Text',
+      Text: 'Some text here.',
+      ChunkingConfiguration: { Strategy: 'RegexBased' },
+      EmbeddingConfiguration: { L2Normalization: false }
+    });
+    throw new Error('Expected 400');
+  } catch (ex) {
+    if (!(ex instanceof PartioError) || ex.statusCode !== 400) throw ex;
+  }
+});
+
 await runTest('Table Strategy on Text (400)', async () => {
   const eps = await client.enumerateEndpoints();
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;

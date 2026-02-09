@@ -14,6 +14,7 @@ namespace Partio.Core.Models
         private OverlapStrategyEnum _OverlapStrategy = OverlapStrategyEnum.SlidingWindow;
         private int _RowGroupSize = 5;
         private string? _ContextPrefix = null;
+        private string? _RegexPattern = null;
 
         /// <summary>
         /// Chunking strategy to use.
@@ -92,6 +93,16 @@ namespace Partio.Core.Models
         {
             get => _ContextPrefix;
             set => _ContextPrefix = value;
+        }
+
+        /// <summary>
+        /// Regular expression pattern used as a split delimiter (for RegexBased strategy).
+        /// The text is split at every match of this pattern.
+        /// </summary>
+        public string? RegexPattern
+        {
+            get => _RegexPattern;
+            set => _RegexPattern = value;
         }
     }
 }

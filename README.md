@@ -253,18 +253,20 @@ curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process/ba
 | `RowGroupWithHeaders` | Groups of N table rows with headers (configurable via `RowGroupSize`, default 5). |
 | `KeyValuePairs` | Each table row as key-value pairs (e.g. `"id: 1, firstname: george, lastname: bush"`). |
 | `WholeTable` | Entire table as a single markdown table chunk. |
+| `RegexBased` | Split at boundaries defined by a user-supplied regular expression (`RegexPattern`). Works with any content type. |
 
 Supported content types: Text, Code, Hyperlink, Meta, Lists (ordered/unordered), Tables, Binary, and Image.
 
 ### Strategy Compatibility
 
-Not all strategies work with all content types. The generic strategies (`FixedTokenCount`, `SentenceBased`, `ParagraphBased`) work with any type. List strategies (`WholeList`, `ListEntry`) only work with `List`. Table strategies (`Row`, `RowWithHeaders`, `RowGroupWithHeaders`, `KeyValuePairs`, `WholeTable`) only work with `Table`. The API returns `400 Bad Request` if an incompatible strategy is used.
+Not all strategies work with all content types. The generic strategies (`FixedTokenCount`, `SentenceBased`, `ParagraphBased`, `RegexBased`) work with any type. List strategies (`WholeList`, `ListEntry`) only work with `List`. Table strategies (`Row`, `RowWithHeaders`, `RowGroupWithHeaders`, `KeyValuePairs`, `WholeTable`) only work with `Table`. The API returns `400 Bad Request` if an incompatible strategy is used.
 
 | Strategy | Text | Code | Hyperlink | Meta | List | Table | Binary | Image | Unknown |
 |---|---|---|---|---|---|---|---|---|---|
 | FixedTokenCount | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | SentenceBased | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | ParagraphBased | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| RegexBased | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | WholeList | | | | | Y | | | | |
 | ListEntry | | | | | Y | | | | |
 | Row | | | | | | Y | | | |

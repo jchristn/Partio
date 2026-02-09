@@ -277,6 +277,56 @@ def main():
             assert result.get("Chunks") and len(result["Chunks"]) == 1, "Expected 1 chunk"
         run_test("Process Table (WholeTable)", test_process_table_whole)
 
+        # Process Text - RegexBased
+        def test_process_regex_based():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            result = client.process(active_ep["Id"], {
+                "Type": "Text",
+                "Text": "# Intro\nSome text.\n\n# Body\nMore text.\n\n# End\nFinal text.",
+                "ChunkingConfiguration": {
+                    "Strategy": "RegexBased",
+                    "RegexPattern": r"(?=^#{1,3}\s)",
+                    "FixedTokenCount": 512
+                },
+                "EmbeddingConfiguration": {"L2Normalization": False}
+            })
+            assert result is not None, "No response"
+            assert result.get("Chunks") and len(result["Chunks"]) > 0, "No chunks"
+        run_test("Process Text (RegexBased)", test_process_regex_based)
+
+        # Regex Strategy Missing Pattern (400)
+        def test_regex_missing_pattern():
+            eps = client.enumerate_endpoints()
+            active_ep = None
+            if eps and "Data" in eps:
+                for ep in eps["Data"]:
+                    if ep.get("Active", True) is not False:
+                        active_ep = ep
+                        break
+            if not active_ep:
+                raise Exception("SKIP: no active embedding endpoint")
+
+            try:
+                client.process(active_ep["Id"], {
+                    "Type": "Text",
+                    "Text": "Some text here.",
+                    "ChunkingConfiguration": {"Strategy": "RegexBased"},
+                    "EmbeddingConfiguration": {"L2Normalization": False}
+                })
+                raise AssertionError("Expected 400")
+            except PartioError as e:
+                assert e.status_code == 400
+        run_test("Regex Strategy Missing Pattern (400)", test_regex_missing_pattern)
+
         # Negative test: table strategy on text atom
         def test_table_strategy_on_text():
             eps = client.enumerate_endpoints()

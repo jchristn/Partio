@@ -91,6 +91,9 @@ namespace Partio.Core.Chunking
                 case ChunkStrategyEnum.ParagraphBased:
                     return ParagraphChunker.Chunk(text, config, _Encoding);
 
+                case ChunkStrategyEnum.RegexBased:
+                    return RegexChunker.Chunk(text, config, _Encoding);
+
                 case ChunkStrategyEnum.WholeList:
                     return new List<string> { text };
 

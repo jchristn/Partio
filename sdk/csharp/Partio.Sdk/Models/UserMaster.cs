@@ -5,7 +5,7 @@ namespace Partio.Sdk.Models
     public class UserMaster
     {
         [JsonPropertyName("Id")]
-        public string Id { get; set; } = string.Empty;
+        public string? Id { get; set; }
 
         [JsonPropertyName("TenantId")]
         public string TenantId { get; set; } = string.Empty;

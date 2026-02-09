@@ -312,6 +312,52 @@ namespace Partio.Sdk.TestHarness
                     if (result == null || result.Chunks == null || result.Chunks.Count != 1) throw new Exception("Expected 1 chunk");
                 });
 
+                await RunTest("Process Text (RegexBased)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    SemanticCellRequest req = new SemanticCellRequest
+                    {
+                        Type = "Text",
+                        Text = "# Intro\nSome text.\n\n# Body\nMore text.\n\n# End\nFinal text.",
+                        ChunkingConfiguration = new ChunkingConfiguration
+                        {
+                            Strategy = "RegexBased",
+                            RegexPattern = @"(?=^#{1,3}\s)",
+                            FixedTokenCount = 512
+                        }
+                    };
+
+                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    if (result == null) throw new Exception("No response");
+                    if (result.Chunks == null || result.Chunks.Count == 0) throw new Exception("No chunks");
+                });
+
+                await RunTest("Regex Strategy Missing Pattern (400)", async () =>
+                {
+                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
+                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
+                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+
+                    try
+                    {
+                        SemanticCellRequest req = new SemanticCellRequest
+                        {
+                            Type = "Text",
+                            Text = "Some text here.",
+                            ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased" }
+                        };
+                        await admin.ProcessAsync(activeEp.Id, req);
+                        throw new Exception("Expected 400");
+                    }
+                    catch (PartioException ex) when (ex.StatusCode == 400)
+                    {
+                        // Expected
+                    }
+                });
+
                 await RunTest("Table Strategy on Text (400)", async () =>
                 {
                     EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();

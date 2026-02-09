@@ -251,6 +251,24 @@ Each data row becomes: `"Name: Alice, Age: 30, City: New York"`.
 
 Entire table serialized as a single markdown table chunk.
 
+#### Text with RegexBased (Markdown headings)
+```json
+{
+    "Type": "Text",
+    "Text": "# Introduction\nPartio is a chunking platform.\n\n# Architecture\nPartio uses a ...\n\n# Deployment\nUse Docker Compose to ...",
+    "ChunkingConfiguration": {
+        "Strategy": "RegexBased",
+        "RegexPattern": "(?=^#{1,3}\\s)",
+        "FixedTokenCount": 512
+    },
+    "EmbeddingConfiguration": {
+        "L2Normalization": false
+    }
+}
+```
+
+Split at boundaries defined by the `RegexPattern`. Text is split using `Regex.Split` at every match. Useful for Markdown headings, log timestamps, LaTeX sections, function definitions, and more.
+
 **Response**: `200 OK` — `SemanticCellResponse`
 ```json
 {
@@ -274,9 +292,27 @@ Entire table serialized as a single markdown table chunk.
 
 The API validates that the chunking strategy is compatible with the atom type. Incompatible combinations return `400 Bad Request`.
 
-- **Generic strategies** (`FixedTokenCount`, `SentenceBased`, `ParagraphBased`) work with all types
+- **Generic strategies** (`FixedTokenCount`, `SentenceBased`, `ParagraphBased`, `RegexBased`) work with all types
 - **List strategies** (`WholeList`, `ListEntry`) only work with `List`
 - **Table strategies** (`Row`, `RowWithHeaders`, `RowGroupWithHeaders`, `KeyValuePairs`, `WholeTable`) only work with `Table`
+
+Example error response for missing `RegexPattern`:
+```json
+{
+    "Error": "BadRequest",
+    "Message": "RegexPattern is required when using the RegexBased strategy.",
+    "StatusCode": 400
+}
+```
+
+Example error response for invalid `RegexPattern`:
+```json
+{
+    "Error": "BadRequest",
+    "Message": "RegexPattern is not a valid regular expression: parsing '([' - Unterminated [] set.",
+    "StatusCode": 400
+}
+```
 
 Example error response for using `Row` strategy on a `Text` type:
 ```json
@@ -298,6 +334,7 @@ Example error response for using `Row` strategy on a `Text` type:
 | `OverlapStrategy` | string | `SlidingWindow` | Overlap boundary strategy |
 | `ContextPrefix` | string? | `null` | Prefix prepended to each chunk |
 | `RowGroupSize` | int | `5` | Rows per group (for RowGroupWithHeaders). Minimum: 1 |
+| `RegexPattern` | string? | `null` | Regular expression split pattern (required for `RegexBased` strategy). Text is split at every match of this pattern. |
 
 ### POST /v1.0/endpoints/{id}/process/batch
 Process multiple semantic cells using the specified embedding endpoint.

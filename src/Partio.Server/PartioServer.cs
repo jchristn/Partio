@@ -2,6 +2,7 @@ namespace Partio.Server
 {
     using System.Diagnostics;
     using System.Collections.Concurrent;
+    using System.Text.RegularExpressions;
     using Partio.Core.Chunking;
     using Partio.Core.Database;
     using Partio.Core.Database.Sqlite;
@@ -818,7 +819,8 @@ namespace Partio.Server
             // Generic strategies are universally applicable
             if (strategy == ChunkStrategyEnum.FixedTokenCount
                 || strategy == ChunkStrategyEnum.SentenceBased
-                || strategy == ChunkStrategyEnum.ParagraphBased)
+                || strategy == ChunkStrategyEnum.ParagraphBased
+                || strategy == ChunkStrategyEnum.RegexBased)
                 return;
 
             // List-only strategies
@@ -847,6 +849,23 @@ namespace Partio.Server
         private static async Task<ProcessCellResult> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint)
         {
             ValidateStrategyForAtomType(request);
+
+            if (request.ChunkingConfiguration.Strategy == ChunkStrategyEnum.RegexBased)
+            {
+                if (string.IsNullOrWhiteSpace(request.ChunkingConfiguration.RegexPattern))
+                    throw new ArgumentException(
+                        "RegexPattern is required when using the RegexBased strategy.");
+
+                try
+                {
+                    _ = new Regex(request.ChunkingConfiguration.RegexPattern, RegexOptions.None, TimeSpan.FromSeconds(5));
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new ArgumentException(
+                        "RegexPattern is not a valid regular expression: " + ex.Message);
+                }
+            }
 
             string model = endpoint.Model;
 
