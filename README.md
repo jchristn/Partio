@@ -103,27 +103,18 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 
 ### Prerequisites
 
-Partio requires an embedding provider to generate embeddings. Out of the box, Partio is configured to use [Ollama](https://ollama.com/) with the `all-minilm` model. Before starting Partio:
+Partio requires an embedding provider to generate embeddings. Out of the box, Partio is configured to use [Ollama](https://ollama.com/) with the `all-minilm` model.
+
+When using **Docker Compose** (recommended), Ollama is included automatically — just pull a model after starting the services (see below).
+
+When running **from source** or via **Docker (server only)**, install Ollama separately:
 
 1. [Install Ollama](https://ollama.com/download) and start it (default: `http://localhost:11434`)
 2. Pull an embedding model: `ollama pull all-minilm`
-3. Update the `DefaultEmbeddingEndpoints` section in `partio.json` (or `docker/partio.json` for Docker) to point to your Ollama instance:
-
-```json
-"DefaultEmbeddingEndpoints": [
-  {
-    "Model": "all-minilm",
-    "Endpoint": "http://localhost:11434",
-    "ApiFormat": "Ollama"
-  }
-]
-```
-
-> **Note**: When running Partio in Docker, `localhost` inside the container does not reach the host machine. Use `host.docker.internal` instead (e.g. `http://host.docker.internal:11434`), or run Ollama in the same Docker network.
 
 ### Docker Compose (Recommended)
 
-The fastest way to run Partio with all components.
+The fastest way to run Partio with all components. The Compose file includes Partio server, dashboard, and a local Ollama instance with persistent model storage.
 
 ```bash
 git clone https://github.com/jchristn/partio.git
@@ -131,10 +122,23 @@ cd partio/docker
 docker compose up -d
 ```
 
+Pull the default embedding model:
+
+```bash
+# Bash / macOS / Linux
+curl http://localhost:11434/api/pull -d '{"name": "all-minilm"}'
+
+# Windows Terminal (cmd)
+curl http://localhost:11434/api/pull -d "{\"name\": \"all-minilm\"}"
+```
+
 | Component | URL | Docker Image |
 |-----------|-----|--------------|
 | Server | http://localhost:8400 | `jchristn77/partio-server` |
 | Dashboard | http://localhost:8401 | `jchristn77/partio-dashboard` |
+| Ollama | (internal via shared network) | `ollama/ollama` |
+
+The Ollama container shares the server's network namespace, so the default `localhost:11434` endpoint works without any configuration changes. Models are persisted in a Docker volume across restarts.
 
 Default admin API key: `partioadmin`
 
@@ -418,7 +422,10 @@ Ensure you are passing the `Authorization: Bearer {token}` header. The default a
 
 ### Embedding requests fail or return errors
 
-- Confirm the embedding endpoint URL is reachable from the Partio server. When running in Docker, `localhost` inside the container is not the host machine; use `host.docker.internal` or the container network address instead.
+- If using Docker Compose, make sure you pulled a model:
+  - Bash: `curl http://localhost:11434/api/pull -d '{"name": "all-minilm"}'`
+  - Windows cmd: `curl http://localhost:11434/api/pull -d "{\"name\": \"all-minilm\"}"`
+- If running the server standalone in Docker with an external Ollama, `localhost` inside the container is not the host machine; use `host.docker.internal` or the container network address instead.
 - Verify the model name matches what your embedding provider expects (e.g. `all-minilm` for Ollama).
 - Check that `ApiFormat` is set correctly (`Ollama` or `OpenAI`).
 

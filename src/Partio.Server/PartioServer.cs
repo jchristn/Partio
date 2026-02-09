@@ -2,6 +2,7 @@ namespace Partio.Server
 {
     using System.Diagnostics;
     using System.Collections.Concurrent;
+    using System.Runtime.Loader;
     using System.Text.RegularExpressions;
     using Partio.Core.Chunking;
     using Partio.Core.Database;
@@ -43,6 +44,7 @@ namespace Partio.Server
         private static DateTime _StartTimeUtc = DateTime.UtcNow;
         private static string _Header = "[PartioServer] ";
         private static ConcurrentDictionary<string, AuthContext> _AuthContexts = new ConcurrentDictionary<string, AuthContext>();
+        private static bool _ShuttingDown = false;
 
         /// <summary>
         /// Application entry point.
@@ -119,7 +121,8 @@ namespace Partio.Server
                 };
             });
 
-            // Pipeline
+            #region Routes
+
             rest.AuthenticationRoute = async (HttpContextBase ctx) =>
             {
                 string? authHeader = ctx.Request.Headers?[Constants.AuthorizationHeader];
@@ -190,6 +193,8 @@ namespace Partio.Server
                 await ctx.Response.Send(json).ConfigureAwait(false);
             };
 
+            #region Health
+
             // Health (no auth)
             rest.Head("/", HealthHead, api => api
                 .WithTag("Health")
@@ -209,6 +214,10 @@ namespace Partio.Server
                 .WithResponse(200, OpenApiResponseMetadata.Json<Dictionary<string, string>>("Caller identity"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
+
+            #endregion
+
+            #region Processing
 
             // Process (auth required)
             rest.Post<SemanticCellRequest>("/v1.0/endpoints/{id}/process", ProcessSingle, api => api
@@ -233,6 +242,10 @@ namespace Partio.Server
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Embedding endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
+
+            #endregion
+
+            #region Tenants
 
             // Tenants (admin)
             rest.Put<TenantMetadata>("/v1.0/tenants", CreateTenant, api => api
@@ -279,6 +292,10 @@ namespace Partio.Server
                 .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<TenantMetadata>>("Paginated tenant list"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
+            #endregion
+
+            #region Users
+
             // Users (admin)
             rest.Put<UserMaster>("/v1.0/users", CreateUser, api => api
                 .WithTag("Users")
@@ -322,6 +339,10 @@ namespace Partio.Server
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
                 .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<UserMaster>>("Paginated user list"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
+
+            #endregion
+
+            #region Credentials
 
             // Credentials (admin)
             rest.Put<Credential>("/v1.0/credentials", CreateCredential, api => api
@@ -367,6 +388,10 @@ namespace Partio.Server
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
                 .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<Credential>>("Paginated credential list"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
+
+            #endregion
+
+            #region Endpoints
 
             // Embedding Endpoints (admin)
             // NOTE: Literal path routes (/health, /enumerate) must be registered BEFORE
@@ -428,6 +453,10 @@ namespace Partio.Server
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
+            #endregion
+
+            #region Request-History
+
             // Request History (admin)
             rest.Get("/v1.0/requests/{id}", ReadRequestHistory, api => api
                 .WithTag("Requests")
@@ -458,12 +487,36 @@ namespace Partio.Server
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Entry not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
+            #endregion
+
+            #endregion
+
             // 8. Start server
             CancellationTokenSource serverCts = new CancellationTokenSource();
             Task serverTask = app.Rest.Run(serverCts.Token);
             _Logging.Info(_Header + "listening on " + (_Settings.Rest.Ssl ? "https" : "http") + "://" + _Settings.Rest.Hostname + ":" + _Settings.Rest.Port);
-            Console.WriteLine("Press ENTER to exit.");
-            Console.ReadLine();
+
+            EventWaitHandle waitHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
+            AssemblyLoadContext.Default.Unloading += (ctx) => waitHandle.Set();
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+
+                if (!_ShuttingDown)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Shutting down");
+                    _ShuttingDown = true;
+                    waitHandle.Set();
+                }
+            };
+
+            bool waitHandleSignal = false;
+            do
+            {
+                waitHandleSignal = waitHandle.WaitOne(1000);
+            }
+            while (!waitHandleSignal);
 
             // 9. Graceful shutdown
             _Logging.Info(_Header + "shutting down");
