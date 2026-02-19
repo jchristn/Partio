@@ -79,11 +79,11 @@ namespace Partio.Sdk
             MakeRequestAsync<WhoAmIResponse>(HttpMethod.Get, "/v1.0/whoami");
 
         // Process
-        public Task<SemanticCellResponse?> ProcessAsync(string endpointId, SemanticCellRequest request) =>
-            MakeRequestAsync<SemanticCellResponse>(HttpMethod.Post, $"/v1.0/endpoints/{endpointId}/process", request);
+        public Task<SemanticCellResponse?> ProcessAsync(SemanticCellRequest request) =>
+            MakeRequestAsync<SemanticCellResponse>(HttpMethod.Post, "/v1.0/process", request);
 
-        public Task<List<SemanticCellResponse>?> ProcessBatchAsync(string endpointId, List<SemanticCellRequest> requests) =>
-            MakeRequestAsync<List<SemanticCellResponse>>(HttpMethod.Post, $"/v1.0/endpoints/{endpointId}/process/batch", requests);
+        public Task<List<SemanticCellResponse>?> ProcessBatchAsync(List<SemanticCellRequest> requests) =>
+            MakeRequestAsync<List<SemanticCellResponse>>(HttpMethod.Post, "/v1.0/process/batch", requests);
 
         // Tenants
         public Task<TenantMetadata?> CreateTenantAsync(TenantMetadata tenant) =>
@@ -171,22 +171,22 @@ namespace Partio.Sdk
 
         // Embedding Endpoints
         public Task<EmbeddingEndpoint?> CreateEndpointAsync(EmbeddingEndpoint endpoint) =>
-            MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Put, "/v1.0/endpoints", endpoint);
+            MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Put, "/v1.0/endpoints/embedding", endpoint);
 
         public Task<EmbeddingEndpoint?> GetEndpointAsync(string id) =>
-            MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Get, $"/v1.0/endpoints/{id}");
+            MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Get, $"/v1.0/endpoints/embedding/{id}");
 
         public Task<EmbeddingEndpoint?> UpdateEndpointAsync(string id, EmbeddingEndpoint endpoint) =>
-            MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Put, $"/v1.0/endpoints/{id}", endpoint);
+            MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Put, $"/v1.0/endpoints/embedding/{id}", endpoint);
 
         public async Task DeleteEndpointAsync(string id) =>
-            await MakeRequestAsync<object>(HttpMethod.Delete, $"/v1.0/endpoints/{id}").ConfigureAwait(false);
+            await MakeRequestAsync<object>(HttpMethod.Delete, $"/v1.0/endpoints/embedding/{id}").ConfigureAwait(false);
 
         public async Task<bool> EndpointExistsAsync(string id)
         {
             try
             {
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Head, _Endpoint + $"/v1.0/endpoints/{id}");
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Head, _Endpoint + $"/v1.0/endpoints/embedding/{id}");
                 request.Headers.Authorization = _HttpClient.DefaultRequestHeaders.Authorization;
                 HttpResponseMessage response = await _HttpClient.SendAsync(request).ConfigureAwait(false);
                 return response.IsSuccessStatusCode;
@@ -195,14 +195,49 @@ namespace Partio.Sdk
         }
 
         public Task<EnumerationResult<EmbeddingEndpoint>?> EnumerateEndpointsAsync(EnumerationRequest? req = null) =>
-            MakeRequestAsync<EnumerationResult<EmbeddingEndpoint>>(HttpMethod.Post, "/v1.0/endpoints/enumerate", req ?? new EnumerationRequest());
+            MakeRequestAsync<EnumerationResult<EmbeddingEndpoint>>(HttpMethod.Post, "/v1.0/endpoints/embedding/enumerate", req ?? new EnumerationRequest());
 
-        // Endpoint Health
+        // Embedding Endpoint Health
         public Task<EndpointHealthStatus?> GetEndpointHealthAsync(string id) =>
-            MakeRequestAsync<EndpointHealthStatus>(HttpMethod.Get, $"/v1.0/endpoints/{id}/health");
+            MakeRequestAsync<EndpointHealthStatus>(HttpMethod.Get, $"/v1.0/endpoints/embedding/{id}/health");
 
         public Task<List<EndpointHealthStatus>?> GetAllEndpointHealthAsync() =>
-            MakeRequestAsync<List<EndpointHealthStatus>>(HttpMethod.Get, "/v1.0/endpoints/health");
+            MakeRequestAsync<List<EndpointHealthStatus>>(HttpMethod.Get, "/v1.0/endpoints/embedding/health");
+
+        // Completion Endpoints
+        public Task<CompletionEndpoint?> CreateCompletionEndpointAsync(CompletionEndpoint endpoint) =>
+            MakeRequestAsync<CompletionEndpoint>(HttpMethod.Put, "/v1.0/endpoints/completion", endpoint);
+
+        public Task<CompletionEndpoint?> GetCompletionEndpointAsync(string id) =>
+            MakeRequestAsync<CompletionEndpoint>(HttpMethod.Get, $"/v1.0/endpoints/completion/{id}");
+
+        public Task<CompletionEndpoint?> UpdateCompletionEndpointAsync(string id, CompletionEndpoint endpoint) =>
+            MakeRequestAsync<CompletionEndpoint>(HttpMethod.Put, $"/v1.0/endpoints/completion/{id}", endpoint);
+
+        public async Task DeleteCompletionEndpointAsync(string id) =>
+            await MakeRequestAsync<object>(HttpMethod.Delete, $"/v1.0/endpoints/completion/{id}").ConfigureAwait(false);
+
+        public async Task<bool> CompletionEndpointExistsAsync(string id)
+        {
+            try
+            {
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Head, _Endpoint + $"/v1.0/endpoints/completion/{id}");
+                request.Headers.Authorization = _HttpClient.DefaultRequestHeaders.Authorization;
+                HttpResponseMessage response = await _HttpClient.SendAsync(request).ConfigureAwait(false);
+                return response.IsSuccessStatusCode;
+            }
+            catch { return false; }
+        }
+
+        public Task<EnumerationResult<CompletionEndpoint>?> EnumerateCompletionEndpointsAsync(EnumerationRequest? req = null) =>
+            MakeRequestAsync<EnumerationResult<CompletionEndpoint>>(HttpMethod.Post, "/v1.0/endpoints/completion/enumerate", req ?? new EnumerationRequest());
+
+        // Completion Endpoint Health
+        public Task<EndpointHealthStatus?> GetCompletionEndpointHealthAsync(string id) =>
+            MakeRequestAsync<EndpointHealthStatus>(HttpMethod.Get, $"/v1.0/endpoints/completion/{id}/health");
+
+        public Task<List<EndpointHealthStatus>?> GetAllCompletionEndpointHealthAsync() =>
+            MakeRequestAsync<List<EndpointHealthStatus>>(HttpMethod.Get, "/v1.0/endpoints/completion/health");
 
         // Request History
         public Task<RequestHistoryEntry?> GetRequestHistoryAsync(string id) =>

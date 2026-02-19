@@ -56,15 +56,26 @@ export class PartioApi {
   enumerateCredentials(req = {}) { return this.request('POST', '/v1.0/credentials/enumerate', req); }
 
   // Embedding Endpoints
-  createEndpoint(data) { return this.request('PUT', '/v1.0/endpoints', data); }
-  getEndpoint(id) { return this.request('GET', `/v1.0/endpoints/${id}`); }
-  updateEndpoint(id, data) { return this.request('PUT', `/v1.0/endpoints/${id}`, data); }
-  deleteEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/${id}`); }
-  enumerateEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/enumerate', req); }
+  createEndpoint(data) { return this.request('PUT', '/v1.0/endpoints/embedding', data); }
+  getEndpoint(id) { return this.request('GET', `/v1.0/endpoints/embedding/${id}`); }
+  updateEndpoint(id, data) { return this.request('PUT', `/v1.0/endpoints/embedding/${id}`, data); }
+  deleteEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/embedding/${id}`); }
+  enumerateEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/embedding/enumerate', req); }
 
-  // Endpoint Health
-  getEndpointHealth(id) { return this.request('GET', `/v1.0/endpoints/${id}/health`); }
-  getAllEndpointHealth() { return this.request('GET', '/v1.0/endpoints/health'); }
+  // Embedding Endpoint Health
+  getEndpointHealth(id) { return this.request('GET', `/v1.0/endpoints/embedding/${id}/health`); }
+  getAllEndpointHealth() { return this.request('GET', '/v1.0/endpoints/embedding/health'); }
+
+  // Completion Endpoints
+  createCompletionEndpoint(data) { return this.request('PUT', '/v1.0/endpoints/completion', data); }
+  getCompletionEndpoint(id) { return this.request('GET', `/v1.0/endpoints/completion/${id}`); }
+  updateCompletionEndpoint(id, data) { return this.request('PUT', `/v1.0/endpoints/completion/${id}`, data); }
+  deleteCompletionEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/completion/${id}`); }
+  enumerateCompletionEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/completion/enumerate', req); }
+
+  // Completion Endpoint Health
+  getCompletionEndpointHealth(id) { return this.request('GET', `/v1.0/endpoints/completion/${id}/health`); }
+  getAllCompletionEndpointHealth() { return this.request('GET', '/v1.0/endpoints/completion/health'); }
 
   // Request History
   getRequestHistory(id) { return this.request('GET', `/v1.0/requests/${id}`); }
@@ -73,6 +84,6 @@ export class PartioApi {
   enumerateRequestHistory(req = {}) { return this.request('POST', '/v1.0/requests/enumerate', req); }
 
   // Process
-  process(endpointId, data) { return this.request('POST', `/v1.0/endpoints/${endpointId}/process`, data); }
-  processBatch(endpointId, data) { return this.request('POST', `/v1.0/endpoints/${endpointId}/process/batch`, data); }
+  process(data) { return this.request('POST', '/v1.0/process', data); }
+  processBatch(data) { return this.request('POST', '/v1.0/process/batch', data); }
 }

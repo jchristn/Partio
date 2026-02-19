@@ -28,6 +28,11 @@ namespace Test.Automated
 
             _TotalTimer.Start();
 
+            // ===== Unit Tests (no server required) =====
+            Console.WriteLine("--- Summarization Unit Tests ---");
+            await SummarizationTests.RunAll(RunTest);
+            Console.WriteLine();
+
             using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
             using (PartioClient user = new PartioClient(_Endpoint, _TestToken))
             {
@@ -234,6 +239,55 @@ namespace Test.Automated
                     if (result == null || result.Data.Count == 0) throw new Exception("No endpoints returned");
                 });
 
+                // ===== Completion Endpoint CRUD =====
+
+                string testCepId = "";
+                await RunTest("Create Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                    {
+                        TenantId = testTenantId,
+                        Name = "Test Inference",
+                        Model = "test-model",
+                        Endpoint = "http://localhost:11434",
+                        ApiFormat = "Ollama"
+                    });
+                    if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
+                    testCepId = cep.Id;
+                });
+
+                await RunTest("Read Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? cep = await admin.GetCompletionEndpointAsync(testCepId);
+                    if (cep == null) throw new Exception("Endpoint not found");
+                    if (cep.Model != "test-model") throw new Exception("Model mismatch");
+                });
+
+                await RunTest("Update Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint
+                    {
+                        TenantId = testTenantId,
+                        Name = "Updated Inference",
+                        Model = "test-model-v2",
+                        Endpoint = "http://localhost:11434",
+                        ApiFormat = "Ollama"
+                    });
+                    if (updated == null) throw new Exception("Update failed");
+                });
+
+                await RunTest("Completion Endpoint Exists (HEAD)", async () =>
+                {
+                    bool exists = await admin.CompletionEndpointExistsAsync(testCepId);
+                    if (!exists) throw new Exception("Endpoint should exist");
+                });
+
+                await RunTest("Enumerate Completion Endpoints", async () =>
+                {
+                    EnumerationResult<CompletionEndpoint>? result = await admin.EnumerateCompletionEndpointsAsync(new EnumerationRequest { MaxResults = 10 });
+                    if (result == null || result.Data.Count == 0) throw new Exception("No endpoints returned");
+                });
+
                 // ===== Request History =====
 
                 await RunTest("Enumerate Request History", async () =>
@@ -254,6 +308,7 @@ namespace Test.Automated
                     {
                         Type = "Text",
                         Text = "# A\nText about A.\n\n# B\nText about B.\n\n# C\nText about C.",
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration
                         {
                             Strategy = "RegexBased",
@@ -262,7 +317,7 @@ namespace Test.Automated
                         }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 3) throw new Exception("Expected 3 chunks, got " + (result?.Chunks?.Count ?? 0));
                 });
 
@@ -276,6 +331,7 @@ namespace Test.Automated
                     {
                         Type = "Text",
                         Text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration
                         {
                             Strategy = "RegexBased",
@@ -284,7 +340,7 @@ namespace Test.Automated
                         }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 3) throw new Exception("Expected 3 chunks, got " + (result?.Chunks?.Count ?? 0));
                 });
 
@@ -298,6 +354,7 @@ namespace Test.Automated
                     {
                         Type = "Text",
                         Text = "No headings in this text whatsoever.",
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration
                         {
                             Strategy = "RegexBased",
@@ -306,7 +363,7 @@ namespace Test.Automated
                         }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 1) throw new Exception("Expected 1 chunk, got " + (result?.Chunks?.Count ?? 0));
                 });
 
@@ -320,6 +377,7 @@ namespace Test.Automated
                     {
                         Type = "Code",
                         Text = "def foo():\n    pass\n\ndef bar():\n    pass\n\ndef baz():\n    pass",
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration
                         {
                             Strategy = "RegexBased",
@@ -328,7 +386,7 @@ namespace Test.Automated
                         }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count == 0) throw new Exception("Expected chunks");
                 });
 
@@ -344,9 +402,10 @@ namespace Test.Automated
                         {
                             Type = "Text",
                             Text = "Some text.",
+                            EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                             ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased" }
                         };
-                        await admin.ProcessAsync(activeEp.Id, req);
+                        await admin.ProcessAsync(req);
                         throw new Exception("Expected PartioException with 400");
                     }
                     catch (PartioException ex) when (ex.StatusCode == 400)
@@ -367,9 +426,10 @@ namespace Test.Automated
                         {
                             Type = "Text",
                             Text = "Some text.",
+                            EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                             ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased", RegexPattern = "" }
                         };
-                        await admin.ProcessAsync(activeEp.Id, req);
+                        await admin.ProcessAsync(req);
                         throw new Exception("Expected PartioException with 400");
                     }
                     catch (PartioException ex) when (ex.StatusCode == 400)
@@ -390,9 +450,10 @@ namespace Test.Automated
                         {
                             Type = "Text",
                             Text = "Some text.",
+                            EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                             ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased", RegexPattern = "([" }
                         };
-                        await admin.ProcessAsync(activeEp.Id, req);
+                        await admin.ProcessAsync(req);
                         throw new Exception("Expected PartioException with 400");
                     }
                     catch (PartioException ex) when (ex.StatusCode == 400)
@@ -449,6 +510,13 @@ namespace Test.Automated
                 });
 
                 // ===== Cleanup =====
+
+                await RunTest("Delete Completion Endpoint", async () =>
+                {
+                    await admin.DeleteCompletionEndpointAsync(testCepId);
+                    bool exists = await admin.CompletionEndpointExistsAsync(testCepId);
+                    if (exists) throw new Exception("Completion endpoint still exists after delete");
+                });
 
                 await RunTest("Delete Embedding Endpoint", async () =>
                 {

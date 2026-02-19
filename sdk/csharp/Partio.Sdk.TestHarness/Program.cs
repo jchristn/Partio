@@ -20,7 +20,7 @@ namespace Partio.Sdk.TestHarness
             if (args.Length >= 2) _AdminKey = args[1];
             if (args.Length >= 3) _TestToken = args[2];
 
-            Console.WriteLine("Partio SDK Test Harness");
+            Console.WriteLine("Partio C# SDK Test Harness");
             Console.WriteLine("Endpoint: " + _Endpoint);
             Console.WriteLine("Admin Key: " + _AdminKey);
             Console.WriteLine();
@@ -177,6 +177,39 @@ namespace Partio.Sdk.TestHarness
                     if (result == null) throw new Exception("No response");
                 });
 
+                // Completion Endpoint CRUD
+                string testCepId = "";
+                await RunTest("Create Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    if (cep == null) throw new Exception("No response");
+                    testCepId = cep.Id;
+                });
+
+                await RunTest("Read Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? cep = await admin.GetCompletionEndpointAsync(testCepId);
+                    if (cep == null || cep.Model != "test-model") throw new Exception("Endpoint mismatch");
+                });
+
+                await RunTest("Update Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint { TenantId = testTenantId, Name = "Updated Inference", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    if (updated == null) throw new Exception("Update failed");
+                });
+
+                await RunTest("Completion Endpoint Exists (HEAD)", async () =>
+                {
+                    bool exists = await admin.CompletionEndpointExistsAsync(testCepId);
+                    if (!exists) throw new Exception("Endpoint should exist");
+                });
+
+                await RunTest("Enumerate Completion Endpoints", async () =>
+                {
+                    EnumerationResult<CompletionEndpoint>? result = await admin.EnumerateCompletionEndpointsAsync();
+                    if (result == null || result.Data.Count == 0) throw new Exception("No endpoints found");
+                });
+
                 // Process Single Cell (requires an active embedding endpoint)
                 await RunTest("Process Single Cell", async () =>
                 {
@@ -188,11 +221,12 @@ namespace Partio.Sdk.TestHarness
                     {
                         Type = "Text",
                         Text = "Partio is a multi-tenant embedding platform.",
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         Labels = new List<string> { "test" },
                         Tags = new Dictionary<string, string> { { "source", "sdk-test" } }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null) throw new Exception("No response");
                     if (string.IsNullOrEmpty(result.Text)) throw new Exception("Missing Text");
                     if (result.Chunks == null || result.Chunks.Count == 0) throw new Exception("No chunks");
@@ -217,10 +251,11 @@ namespace Partio.Sdk.TestHarness
                             new List<string> { "1", "george", "bush" },
                             new List<string> { "2", "barack", "obama" }
                         },
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration { Strategy = "Row" }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 2) throw new Exception("Expected 2 chunks");
                 });
 
@@ -239,10 +274,11 @@ namespace Partio.Sdk.TestHarness
                             new List<string> { "1", "george", "bush" },
                             new List<string> { "2", "barack", "obama" }
                         },
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RowWithHeaders" }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 2) throw new Exception("Expected 2 chunks");
                 });
 
@@ -262,10 +298,11 @@ namespace Partio.Sdk.TestHarness
                             new List<string> { "2", "barack", "obama" },
                             new List<string> { "3", "donald", "trump" }
                         },
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RowGroupWithHeaders", RowGroupSize = 2 }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 2) throw new Exception("Expected 2 chunks (groups of 2)");
                 });
 
@@ -283,10 +320,11 @@ namespace Partio.Sdk.TestHarness
                             new List<string> { "id", "firstname", "lastname" },
                             new List<string> { "1", "george", "bush" }
                         },
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration { Strategy = "KeyValuePairs" }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 1) throw new Exception("Expected 1 chunk");
                 });
 
@@ -305,10 +343,11 @@ namespace Partio.Sdk.TestHarness
                             new List<string> { "1", "george", "bush" },
                             new List<string> { "2", "barack", "obama" }
                         },
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration { Strategy = "WholeTable" }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null || result.Chunks == null || result.Chunks.Count != 1) throw new Exception("Expected 1 chunk");
                 });
 
@@ -322,6 +361,7 @@ namespace Partio.Sdk.TestHarness
                     {
                         Type = "Text",
                         Text = "# Intro\nSome text.\n\n# Body\nMore text.\n\n# End\nFinal text.",
+                        EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                         ChunkingConfiguration = new ChunkingConfiguration
                         {
                             Strategy = "RegexBased",
@@ -330,7 +370,7 @@ namespace Partio.Sdk.TestHarness
                         }
                     };
 
-                    SemanticCellResponse? result = await admin.ProcessAsync(activeEp.Id, req);
+                    SemanticCellResponse? result = await admin.ProcessAsync(req);
                     if (result == null) throw new Exception("No response");
                     if (result.Chunks == null || result.Chunks.Count == 0) throw new Exception("No chunks");
                 });
@@ -347,9 +387,10 @@ namespace Partio.Sdk.TestHarness
                         {
                             Type = "Text",
                             Text = "Some text here.",
+                            EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                             ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased" }
                         };
-                        await admin.ProcessAsync(activeEp.Id, req);
+                        await admin.ProcessAsync(req);
                         throw new Exception("Expected 400");
                     }
                     catch (PartioException ex) when (ex.StatusCode == 400)
@@ -370,9 +411,10 @@ namespace Partio.Sdk.TestHarness
                         {
                             Type = "Text",
                             Text = "This is text, not a table.",
+                            EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = activeEp.Id },
                             ChunkingConfiguration = new ChunkingConfiguration { Strategy = "Row" }
                         };
-                        await admin.ProcessAsync(activeEp.Id, req);
+                        await admin.ProcessAsync(req);
                         throw new Exception("Expected 400");
                     }
                     catch (PartioException ex) when (ex.StatusCode == 400)
@@ -412,6 +454,13 @@ namespace Partio.Sdk.TestHarness
                 });
 
                 // Cleanup
+                await RunTest("Delete Completion Endpoint", async () =>
+                {
+                    await admin.DeleteCompletionEndpointAsync(testCepId);
+                    bool exists = await admin.CompletionEndpointExistsAsync(testCepId);
+                    if (exists) throw new Exception("Completion endpoint still exists after delete");
+                });
+
                 await RunTest("Delete Endpoint", async () =>
                 {
                     await admin.DeleteEndpointAsync(testEpId);

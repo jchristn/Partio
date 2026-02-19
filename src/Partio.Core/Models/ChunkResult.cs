@@ -5,10 +5,20 @@ namespace Partio.Core.Models
     /// </summary>
     public class ChunkResult
     {
+        private Guid _CellGUID = Guid.Empty;
         private string _Text = string.Empty;
         private List<string> _Labels = new List<string>();
         private Dictionary<string, string> _Tags = new Dictionary<string, string>();
         private List<float> _Embeddings = new List<float>();
+
+        /// <summary>
+        /// The GUID of the SemanticCellRequest that produced this chunk.
+        /// </summary>
+        public Guid CellGUID
+        {
+            get => _CellGUID;
+            set => _CellGUID = value;
+        }
 
         /// <summary>
         /// Original text of this chunk.

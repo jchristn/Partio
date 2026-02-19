@@ -15,6 +15,7 @@ namespace Partio.Server
     using Partio.Core.Models;
     using Partio.Core.Serialization;
     using Partio.Core.Settings;
+    using Partio.Core.Summarization;
     using Partio.Core.ThirdParty;
     using Partio.Server.Models;
     using Partio.Server.Services;
@@ -38,6 +39,7 @@ namespace Partio.Server
         private static RequestHistoryService? _RequestHistoryService;
         private static RequestHistoryCleanupService? _CleanupService;
         private static EmbeddingHealthCheckService? _HealthCheckService;
+        private static CompletionHealthCheckService? _CompletionHealthCheckService;
         private static ChunkingEngine _ChunkingEngine = null!;
         private static PartioSerializer _Serializer = new PartioSerializer();
         private static SerializationHelper.Serializer _JsonSerializer = new SerializationHelper.Serializer();
@@ -83,9 +85,11 @@ namespace Partio.Server
                 _Logging.Info(_Header + "request history enabled");
             }
 
-            // 6b. Health check service
+            // 6b. Health check services
             _HealthCheckService = new EmbeddingHealthCheckService(_Database, _Logging);
             await _HealthCheckService.StartAsync().ConfigureAwait(false);
+            _CompletionHealthCheckService = new CompletionHealthCheckService(_Database, _Logging);
+            await _CompletionHealthCheckService.StartAsync().ConfigureAwait(false);
 
             // 7. Initialize SwiftStack
             SwiftStackApp app = new SwiftStackApp("Partio Server");
@@ -112,7 +116,8 @@ namespace Partio.Server
                     new OpenApiTag("Tenants", "Tenant management (admin)"),
                     new OpenApiTag("Users", "User management (admin)"),
                     new OpenApiTag("Credentials", "Credential management (admin)"),
-                    new OpenApiTag("Endpoints", "Embedding endpoint management (admin)"),
+                    new OpenApiTag("Embedding Endpoints", "Embedding endpoint management (admin)"),
+                    new OpenApiTag("Completion Endpoints", "Completion/inference endpoint management (admin)"),
                     new OpenApiTag("Requests", "Request history (admin)")
                 };
                 settings.SecuritySchemes = new Dictionary<string, OpenApiSecurityScheme>
@@ -220,22 +225,20 @@ namespace Partio.Server
             #region Processing
 
             // Process (auth required)
-            rest.Post<SemanticCellRequest>("/v1.0/endpoints/{id}/process", ProcessSingle, api => api
+            rest.Post<SemanticCellRequest>("/v1.0/process", ProcessSingle, api => api
                 .WithTag("Process")
                 .WithSummary("Process a single semantic cell")
-                .WithDescription("Chunks and embeds a single semantic cell using the specified embedding endpoint.")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Embedding endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithDescription("Optionally summarizes, then chunks and embeds a single semantic cell. Embedding endpoint ID is specified in EmbeddingConfiguration.EmbeddingEndpointId.")
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<SemanticCellRequest>("Semantic cell to process", true))
                 .WithResponse(200, OpenApiResponseMetadata.Json<SemanticCellResponse>("Processed cell with chunks and embeddings"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request or inactive endpoint"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Embedding endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<List<SemanticCellRequest>>("/v1.0/endpoints/{id}/process/batch", ProcessBatch, api => api
+            rest.Post<List<SemanticCellRequest>>("/v1.0/process/batch", ProcessBatch, api => api
                 .WithTag("Process")
                 .WithSummary("Process multiple semantic cells")
-                .WithDescription("Chunks and embeds multiple semantic cells in a single request using the specified embedding endpoint.")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Embedding endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithDescription("Optionally summarizes, then chunks and embeds multiple semantic cells in a single request.")
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<List<SemanticCellRequest>>("Semantic cells to process", true))
                 .WithResponse(200, OpenApiResponseMetadata.Json<List<SemanticCellResponse>>("Processed cells"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request or inactive endpoint"))
@@ -397,60 +400,121 @@ namespace Partio.Server
             // NOTE: Literal path routes (/health, /enumerate) must be registered BEFORE
             // parameterized routes (/{id}) to prevent the router from matching literal
             // segments as parameter values.
-            rest.Put<EmbeddingEndpoint>("/v1.0/endpoints", CreateEndpoint, api => api
-                .WithTag("Endpoints")
+            rest.Put<EmbeddingEndpoint>("/v1.0/endpoints/embedding", CreateEndpoint, api => api
+                .WithTag("Embedding Endpoints")
                 .WithSummary("Create an embedding endpoint")
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<EmbeddingEndpoint>("Endpoint to create", true))
                 .WithResponse(201, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Created endpoint"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/endpoints/enumerate", EnumerateEndpoints, api => api
-                .WithTag("Endpoints")
+            rest.Post<EnumerationRequest>("/v1.0/endpoints/embedding/enumerate", EnumerateEndpoints, api => api
+                .WithTag("Embedding Endpoints")
                 .WithSummary("List embedding endpoints")
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
                 .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<EmbeddingEndpoint>>("Paginated endpoint list"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/health", GetAllEndpointHealth, api => api
-                .WithTag("Endpoints")
-                .WithSummary("List health status for all endpoints")
-                .WithDescription("Returns health status for all monitored endpoints. Scoped by tenant for non-admins.")
+            rest.Get("/v1.0/endpoints/embedding/health", GetAllEndpointHealth, api => api
+                .WithTag("Embedding Endpoints")
+                .WithSummary("List health status for all embedding endpoints")
+                .WithDescription("Returns health status for all monitored embedding endpoints. Scoped by tenant for non-admins.")
                 .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of endpoint health statuses"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/{id}", ReadEndpoint, api => api
-                .WithTag("Endpoints")
+            rest.Get("/v1.0/endpoints/embedding/{id}", ReadEndpoint, api => api
+                .WithTag("Embedding Endpoints")
                 .WithSummary("Read an embedding endpoint")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithResponse(200, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Endpoint details"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/{id}/health", GetEndpointHealth, api => api
-                .WithTag("Endpoints")
-                .WithSummary("Get health status for a single endpoint")
+            rest.Get("/v1.0/endpoints/embedding/{id}/health", GetEndpointHealth, api => api
+                .WithTag("Embedding Endpoints")
+                .WithSummary("Get health status for a single embedding endpoint")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithResponse(200, OpenApiResponseMetadata.Json<EndpointHealthStatus>("Endpoint health status"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found or health check not enabled"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Put<EmbeddingEndpoint>("/v1.0/endpoints/{id}", UpdateEndpoint, api => api
-                .WithTag("Endpoints")
+            rest.Put<EmbeddingEndpoint>("/v1.0/endpoints/embedding/{id}", UpdateEndpoint, api => api
+                .WithTag("Embedding Endpoints")
                 .WithSummary("Update an embedding endpoint")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithRequestBody(OpenApiRequestBodyMetadata.Json<EmbeddingEndpoint>("Endpoint fields to update", true))
                 .WithResponse(200, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Updated endpoint"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Delete("/v1.0/endpoints/{id}", DeleteEndpoint, api => api
-                .WithTag("Endpoints")
+            rest.Delete("/v1.0/endpoints/embedding/{id}", DeleteEndpoint, api => api
+                .WithTag("Embedding Endpoints")
                 .WithSummary("Delete an embedding endpoint")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Head("/v1.0/endpoints/{id}", HeadEndpoint, api => api
-                .WithTag("Endpoints")
-                .WithSummary("Check if an endpoint exists")
+            rest.Head("/v1.0/endpoints/embedding/{id}", HeadEndpoint, api => api
+                .WithTag("Embedding Endpoints")
+                .WithSummary("Check if an embedding endpoint exists")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
                 .WithResponse(200, OpenApiResponseMetadata.Create("Endpoint exists"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+
+            #endregion
+
+            #region Completion Endpoints
+
+            // Completion Endpoints (admin)
+            rest.Put<CompletionEndpoint>("/v1.0/endpoints/completion", CreateCompletionEndpoint, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("Create a completion endpoint")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<CompletionEndpoint>("Completion endpoint to create", true))
+                .WithResponse(201, OpenApiResponseMetadata.Json<CompletionEndpoint>("Created completion endpoint"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Post<EnumerationRequest>("/v1.0/endpoints/completion/enumerate", EnumerateCompletionEndpoints, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("List completion endpoints")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
+                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<CompletionEndpoint>>("Paginated completion endpoint list"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Get("/v1.0/endpoints/completion/health", GetAllCompletionEndpointHealth, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("List health status for all completion endpoints")
+                .WithDescription("Returns health status for all monitored completion endpoints. Scoped by tenant for non-admins.")
+                .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of completion endpoint health statuses"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Get("/v1.0/endpoints/completion/{id}", ReadCompletionEndpoint, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("Read a completion endpoint")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithResponse(200, OpenApiResponseMetadata.Json<CompletionEndpoint>("Completion endpoint details"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Get("/v1.0/endpoints/completion/{id}/health", GetCompletionEndpointHealth, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("Get health status for a single completion endpoint")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointHealthStatus>("Completion endpoint health status"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found or health check not enabled"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Put<CompletionEndpoint>("/v1.0/endpoints/completion/{id}", UpdateCompletionEndpoint, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("Update a completion endpoint")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<CompletionEndpoint>("Completion endpoint fields to update", true))
+                .WithResponse(200, OpenApiResponseMetadata.Json<CompletionEndpoint>("Updated completion endpoint"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Delete("/v1.0/endpoints/completion/{id}", DeleteCompletionEndpoint, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("Delete a completion endpoint")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithResponse(204, OpenApiResponseMetadata.NoContent())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Head("/v1.0/endpoints/completion/{id}", HeadCompletionEndpoint, api => api
+                .WithTag("Completion Endpoints")
+                .WithSummary("Check if a completion endpoint exists")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                .WithResponse(200, OpenApiResponseMetadata.Create("Completion endpoint exists"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
             #endregion
@@ -522,6 +586,8 @@ namespace Partio.Server
             _Logging.Info(_Header + "shutting down");
             if (_HealthCheckService != null)
                 await _HealthCheckService.StopAsync().ConfigureAwait(false);
+            if (_CompletionHealthCheckService != null)
+                await _CompletionHealthCheckService.StopAsync().ConfigureAwait(false);
             if (_CleanupService != null)
                 await _CleanupService.StopAsync().ConfigureAwait(false);
             serverCts.Cancel();
@@ -545,6 +611,10 @@ namespace Partio.Server
             defaults.DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>
             {
                 new DefaultEmbeddingEndpoint { Model = "all-minilm", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
+            };
+            defaults.DefaultInferenceEndpoints = new List<DefaultInferenceEndpoint>
+            {
+                new DefaultInferenceEndpoint { Name = "Default Inference", Model = "gemma3:4b", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
             };
 
             string defaultJson = _JsonSerializer.SerializeJson(defaults, true);
@@ -623,9 +693,11 @@ namespace Partio.Server
             await _Database.Credential.CreateAsync(credential).ConfigureAwait(false);
 
             // Create default embedding endpoints
+            List<string> embeddingEndpointSummaries = new List<string>();
             foreach (DefaultEmbeddingEndpoint defaultEp in _Settings.DefaultEmbeddingEndpoints)
             {
                 EmbeddingEndpoint ep = new EmbeddingEndpoint();
+                ep.Id = "default";
                 ep.TenantId = "default";
                 ep.Model = defaultEp.Model;
                 ep.Endpoint = defaultEp.Endpoint;
@@ -634,6 +706,25 @@ namespace Partio.Server
                 ep.HealthCheckEnabled = true;
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
                 await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
+                embeddingEndpointSummaries.Add(ep.Model + " @ " + ep.Endpoint + " (" + ep.ApiFormat + "), ID " + ep.Id);
+            }
+
+            // Create default inference (completion) endpoints
+            List<string> inferenceEndpointSummaries = new List<string>();
+            foreach (DefaultInferenceEndpoint defaultIep in _Settings.DefaultInferenceEndpoints)
+            {
+                CompletionEndpoint cep = new CompletionEndpoint();
+                cep.Id = "default";
+                cep.TenantId = "default";
+                cep.Name = defaultIep.Name;
+                cep.Model = defaultIep.Model;
+                cep.Endpoint = defaultIep.Endpoint;
+                cep.ApiFormat = defaultIep.ApiFormat;
+                cep.ApiKey = defaultIep.ApiKey;
+                cep.HealthCheckEnabled = true;
+                CompletionEndpoint.ApplyHealthCheckDefaults(cep);
+                await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);
+                inferenceEndpointSummaries.Add((cep.Name ?? cep.Model) + " @ " + cep.Endpoint + " (" + cep.ApiFormat + "), ID " + cep.Id);
             }
 
             Console.WriteLine();
@@ -645,6 +736,19 @@ namespace Partio.Server
             Console.WriteLine("User           : admin@partio / password, ID default");
             Console.WriteLine("Credential     : Bearer token: default");
             Console.WriteLine("Admin API keys : " + string.Join(", ", _Settings.AdminApiKeys));
+            Console.WriteLine("");
+            if (embeddingEndpointSummaries.Count > 0)
+            {
+                Console.WriteLine("Embedding endpoints:");
+                foreach (string summary in embeddingEndpointSummaries)
+                    Console.WriteLine("  " + summary);
+            }
+            if (inferenceEndpointSummaries.Count > 0)
+            {
+                Console.WriteLine("Inference endpoints:");
+                foreach (string summary in inferenceEndpointSummaries)
+                    Console.WriteLine("  " + summary);
+            }
             Console.WriteLine("");
             Console.WriteLine("WARNING: Change these credentials before production use!");
             Console.WriteLine("");
@@ -732,9 +836,11 @@ namespace Partio.Server
 
             try
             {
-                EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
+                AuthContext auth = (AuthContext)req.Metadata;
                 cellReq = req.GetData<SemanticCellRequest>();
                 if (cellReq == null) throw new ArgumentException("Request body is required.");
+
+                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(cellReq.EmbeddingConfiguration.EmbeddingEndpointId, auth).ConfigureAwait(false);
 
                 req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
                 req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
@@ -791,9 +897,13 @@ namespace Partio.Server
 
             try
             {
-                EmbeddingEndpoint endpoint = await ResolveEndpointForProcessing(req).ConfigureAwait(false);
+                AuthContext auth = (AuthContext)req.Metadata;
                 cellReqs = req.GetData<List<SemanticCellRequest>>();
                 if (cellReqs == null || cellReqs.Count == 0) throw new ArgumentException("Request body must contain at least one cell.");
+
+                // Resolve embedding endpoint from the first cell's config (all cells share the same endpoint in batch)
+                string embeddingEndpointId = cellReqs[0].EmbeddingConfiguration.EmbeddingEndpointId;
+                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(embeddingEndpointId, auth).ConfigureAwait(false);
 
                 req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
                 req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
@@ -836,10 +946,10 @@ namespace Partio.Server
             }
         }
 
-        private static async Task<EmbeddingEndpoint> ResolveEndpointForProcessing(AppRequest req)
+        private static async Task<EmbeddingEndpoint> ResolveEmbeddingEndpointFromBody(string id, AuthContext auth)
         {
-            AuthContext auth = (AuthContext)req.Metadata;
-            string id = req.Parameters["id"];
+            if (string.IsNullOrEmpty(id))
+                throw new ArgumentException("EmbeddingConfiguration.EmbeddingEndpointId is required.");
 
             EmbeddingEndpoint? endpoint = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
 
@@ -901,56 +1011,110 @@ namespace Partio.Server
 
         private static async Task<ProcessCellResult> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint)
         {
+            // 1. Normalize hierarchy
+            List<SemanticCellRequest> rootCells = SummarizationEngine.Deflatten(new List<SemanticCellRequest> { request });
+
+            // 2. Summarize (if configured)
+            List<CompletionCallDetail> completionCalls = new List<CompletionCallDetail>();
+            if (request.SummarizationConfiguration != null)
+            {
+                SummarizationConfiguration sumConfig = request.SummarizationConfiguration;
+
+                CompletionEndpoint? compEndpoint = await _Database.CompletionEndpoint.ReadByIdAsync(sumConfig.CompletionEndpointId).ConfigureAwait(false);
+                if (compEndpoint == null)
+                    throw new KeyNotFoundException("Completion endpoint not found: " + sumConfig.CompletionEndpointId);
+                if (!compEndpoint.Active)
+                    throw new ArgumentException("Completion endpoint '" + sumConfig.CompletionEndpointId + "' is inactive.");
+                if (_CompletionHealthCheckService != null && !_CompletionHealthCheckService.IsHealthy(compEndpoint.Id))
+                    throw new EndpointUnhealthyException(compEndpoint.Id,
+                        "Completion endpoint " + compEndpoint.Id + " (" + compEndpoint.Model + ") is currently unhealthy");
+
+                CompletionClientBase compClient = CreateCompletionClient(compEndpoint);
+                using (compClient)
+                {
+                    SummarizationEngine summarizer = new SummarizationEngine(_Logging);
+                    rootCells = await summarizer.SummarizeAsync(rootCells, sumConfig, compClient, compEndpoint.Model).ConfigureAwait(false);
+                    completionCalls.AddRange(compClient.CallDetails);
+                }
+            }
+
+            // 3. Chunk and embed all cells (including summaries) recursively
+            string model = endpoint.Model;
+            EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
+            using (client)
+            {
+                // Query the model's context length and cap the chunk size accordingly
+                int? modelContextLength = await client.GetModelContextLengthAsync(model).ConfigureAwait(false);
+                int maxCl100kTokens = int.MaxValue;
+                if (modelContextLength.HasValue)
+                {
+                    maxCl100kTokens = (int)(modelContextLength.Value * TokenScalingFactor);
+                    if (maxCl100kTokens < 1) maxCl100kTokens = 1;
+                }
+
+                // Process all cells in the hierarchy
+                List<SemanticCellResponse> rootResponses = new List<SemanticCellResponse>();
+                foreach (SemanticCellRequest rootCell in rootCells)
+                {
+                    SemanticCellResponse resp = await ProcessCellHierarchyAsync(rootCell, client, model, maxCl100kTokens).ConfigureAwait(false);
+                    rootResponses.Add(resp);
+                }
+
+                // For single cell processing, return the first root response
+                SemanticCellResponse response = rootResponses.Count > 0 ? rootResponses[0] : new SemanticCellResponse();
+
+                ProcessCellResult cellResult = new ProcessCellResult();
+                cellResult.Response = response;
+                cellResult.EmbeddingCalls = client.CallDetails.ToList();
+                cellResult.CompletionCalls = completionCalls;
+                return cellResult;
+            }
+        }
+
+        private static async Task<SemanticCellResponse> ProcessCellHierarchyAsync(
+            SemanticCellRequest request, EmbeddingClientBase client, string model, int maxCl100kTokens)
+        {
             ValidateStrategyForAtomType(request);
 
             if (request.ChunkingConfiguration.Strategy == ChunkStrategyEnum.RegexBased)
             {
                 if (string.IsNullOrWhiteSpace(request.ChunkingConfiguration.RegexPattern))
-                    throw new ArgumentException(
-                        "RegexPattern is required when using the RegexBased strategy.");
-
+                    throw new ArgumentException("RegexPattern is required when using the RegexBased strategy.");
                 try
                 {
                     _ = new Regex(request.ChunkingConfiguration.RegexPattern, RegexOptions.None, TimeSpan.FromSeconds(5));
                 }
                 catch (ArgumentException ex)
                 {
-                    throw new ArgumentException(
-                        "RegexPattern is not a valid regular expression: " + ex.Message);
+                    throw new ArgumentException("RegexPattern is not a valid regular expression: " + ex.Message);
                 }
             }
 
-            string model = endpoint.Model;
-
-            EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
-            using (client)
+            if (request.ChunkingConfiguration.FixedTokenCount > maxCl100kTokens)
             {
-                // Query the model's context length and cap the chunk size accordingly
-                int? modelContextLength = await client.GetModelContextLengthAsync(model).ConfigureAwait(false);
-                if (modelContextLength.HasValue)
-                {
-                    int maxCl100kTokens = (int)(modelContextLength.Value * TokenScalingFactor);
-                    if (maxCl100kTokens < 1) maxCl100kTokens = 1;
+                _Logging.Info("[ProcessCell] capping FixedTokenCount from "
+                    + request.ChunkingConfiguration.FixedTokenCount
+                    + " to " + maxCl100kTokens);
+                request.ChunkingConfiguration.FixedTokenCount = maxCl100kTokens;
+            }
 
-                    if (request.ChunkingConfiguration.FixedTokenCount > maxCl100kTokens)
-                    {
-                        _Logging.Info("[ProcessCell] capping FixedTokenCount from "
-                            + request.ChunkingConfiguration.FixedTokenCount
-                            + " to " + maxCl100kTokens
-                            + " (model context length: " + modelContextLength.Value + ")");
-                        request.ChunkingConfiguration.FixedTokenCount = maxCl100kTokens;
-                    }
-                }
+            // Chunk
+            List<ChunkResult> chunks = _ChunkingEngine.Chunk(request);
 
-                // Chunk
-                List<ChunkResult> chunks = _ChunkingEngine.Chunk(request);
+            // Set CellGUID on each chunk
+            foreach (ChunkResult chunk in chunks)
+            {
+                chunk.CellGUID = request.GUID;
+            }
 
-                // Embed — apply context prefix inline
-                string? contextPrefix = request.ChunkingConfiguration.ContextPrefix;
-                List<string> textsToEmbed = chunks.Select(c =>
-                    string.IsNullOrEmpty(contextPrefix) ? c.Text : contextPrefix + c.Text
-                ).ToList();
+            // Embed — apply context prefix inline
+            string? contextPrefix = request.ChunkingConfiguration.ContextPrefix;
+            List<string> textsToEmbed = chunks.Select(c =>
+                string.IsNullOrEmpty(contextPrefix) ? c.Text : contextPrefix + c.Text
+            ).ToList();
 
+            if (textsToEmbed.Count > 0)
+            {
                 List<List<float>> embeddings = await client.EmbedBatchAsync(textsToEmbed, model).ConfigureAwait(false);
 
                 for (int i = 0; i < chunks.Count && i < embeddings.Count; i++)
@@ -960,26 +1124,37 @@ namespace Partio.Server
                         emb = client.NormalizeL2(emb);
                     chunks[i].Embeddings = emb;
                 }
-
-                // Populate Labels and Tags on each chunk
-                List<string> labels = request.Labels ?? new List<string>();
-                Dictionary<string, string> tags = request.Tags ?? new Dictionary<string, string>();
-
-                foreach (ChunkResult chunk in chunks)
-                {
-                    chunk.Labels = labels;
-                    chunk.Tags = tags;
-                }
-
-                SemanticCellResponse response = new SemanticCellResponse();
-                response.Text = ResolveInputText(request);
-                response.Chunks = chunks;
-
-                ProcessCellResult cellResult = new ProcessCellResult();
-                cellResult.Response = response;
-                cellResult.EmbeddingCalls = client.CallDetails.ToList();
-                return cellResult;
             }
+
+            // Populate Labels and Tags on each chunk
+            List<string> labels = request.Labels ?? new List<string>();
+            Dictionary<string, string> tags = request.Tags ?? new Dictionary<string, string>();
+
+            foreach (ChunkResult chunk in chunks)
+            {
+                chunk.Labels = labels;
+                chunk.Tags = tags;
+            }
+
+            SemanticCellResponse response = new SemanticCellResponse();
+            response.GUID = request.GUID;
+            response.ParentGUID = request.ParentGUID;
+            response.Type = request.Type;
+            response.Text = ResolveInputText(request);
+            response.Chunks = chunks;
+
+            // Recurse into children
+            if (request.Children != null && request.Children.Count > 0)
+            {
+                response.Children = new List<SemanticCellResponse>();
+                foreach (SemanticCellRequest child in request.Children)
+                {
+                    SemanticCellResponse childResp = await ProcessCellHierarchyAsync(child, client, model, maxCl100kTokens).ConfigureAwait(false);
+                    response.Children.Add(childResp);
+                }
+            }
+
+            return response;
         }
 
         private static string ResolveInputText(SemanticCellRequest request)
@@ -1059,6 +1234,19 @@ namespace Partio.Server
             }
         }
 
+        private static CompletionClientBase CreateCompletionClient(CompletionEndpoint endpoint)
+        {
+            switch (endpoint.ApiFormat)
+            {
+                case ApiFormatEnum.Ollama:
+                    return new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                case ApiFormatEnum.OpenAI:
+                    return new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                default:
+                    throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
+            }
+        }
+
         #endregion
 
         #region Tenants
@@ -1097,6 +1285,21 @@ namespace Partio.Server
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
                 EmbeddingEndpoint createdEp = await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
                 _HealthCheckService?.OnEndpointCreated(createdEp);
+            }
+
+            foreach (DefaultInferenceEndpoint defaultIep in _Settings.DefaultInferenceEndpoints)
+            {
+                CompletionEndpoint cep = new CompletionEndpoint();
+                cep.TenantId = created.Id;
+                cep.Name = defaultIep.Name;
+                cep.Model = defaultIep.Model;
+                cep.Endpoint = defaultIep.Endpoint;
+                cep.ApiFormat = defaultIep.ApiFormat;
+                cep.ApiKey = defaultIep.ApiKey;
+                cep.HealthCheckEnabled = true;
+                CompletionEndpoint.ApplyHealthCheckDefaults(cep);
+                CompletionEndpoint createdCep = await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);
+                _CompletionHealthCheckService?.OnEndpointCreated(createdCep);
             }
 
             req.Http.Response.StatusCode = 201;
@@ -1381,6 +1584,112 @@ namespace Partio.Server
             EndpointHealthState? state = _HealthCheckService.GetHealthState(id);
             if (state == null)
                 throw new KeyNotFoundException("No health state for endpoint " + id + " (health check may not be enabled)");
+
+            return EndpointHealthStatus.FromState(state);
+        }
+
+        #endregion
+
+        #region Completion Endpoints
+
+        private static async Task<object> CreateCompletionEndpoint(AppRequest req)
+        {
+            RequireAdmin(req);
+            CompletionEndpoint? ep = req.GetData<CompletionEndpoint>();
+            if (ep == null) throw new ArgumentException("Request body is required.");
+            CompletionEndpoint.ApplyHealthCheckDefaults(ep);
+            CompletionEndpoint created = await _Database.CompletionEndpoint.CreateAsync(ep).ConfigureAwait(false);
+            _CompletionHealthCheckService?.OnEndpointCreated(created);
+            req.Http.Response.StatusCode = 201;
+            return created;
+        }
+
+        private static async Task<object> ReadCompletionEndpoint(AppRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+            CompletionEndpoint? ep = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
+            if (ep == null) throw new KeyNotFoundException("Completion endpoint not found: " + id);
+            return ep;
+        }
+
+        private static async Task<object> UpdateCompletionEndpoint(AppRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+            CompletionEndpoint? ep = req.GetData<CompletionEndpoint>();
+            if (ep == null) throw new ArgumentException("Request body is required.");
+            ep.Id = id;
+            CompletionEndpoint.ApplyHealthCheckDefaults(ep);
+            CompletionEndpoint updated = await _Database.CompletionEndpoint.UpdateAsync(ep).ConfigureAwait(false);
+            _CompletionHealthCheckService?.OnEndpointUpdated(updated);
+            return updated;
+        }
+
+        private static async Task<object> DeleteCompletionEndpoint(AppRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+            await _Database.CompletionEndpoint.DeleteByIdAsync(id).ConfigureAwait(false);
+            _CompletionHealthCheckService?.OnEndpointDeleted(id);
+            req.Http.Response.StatusCode = 204;
+            return null!;
+        }
+
+        private static async Task<object> HeadCompletionEndpoint(AppRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+            bool exists = await _Database.CompletionEndpoint.ExistsByIdAsync(id).ConfigureAwait(false);
+            req.Http.Response.StatusCode = exists ? 200 : 404;
+            return null!;
+        }
+
+        private static async Task<object> EnumerateCompletionEndpoints(AppRequest req)
+        {
+            RequireAdmin(req);
+            AuthContext auth = (AuthContext)req.Metadata;
+            EnumerationRequest? enumReq = req.GetData<EnumerationRequest>();
+            if (enumReq == null) enumReq = new EnumerationRequest();
+            string tenantId = auth.TenantId ?? "default";
+            EnumerationResult<CompletionEndpoint> result = await _Database.CompletionEndpoint.EnumerateAsync(tenantId, enumReq).ConfigureAwait(false);
+            return result;
+        }
+
+        #endregion
+
+        #region Completion Endpoint Health
+
+        private static async Task<object> GetAllCompletionEndpointHealth(AppRequest req)
+        {
+            RequireAdmin(req);
+            AuthContext auth = (AuthContext)req.Metadata;
+
+            if (_CompletionHealthCheckService == null)
+                return new List<EndpointHealthStatus>();
+
+            string? tenantFilter = auth.IsGlobalAdmin ? null : auth.TenantId;
+            List<EndpointHealthState> states = _CompletionHealthCheckService.GetAllHealthStates(tenantFilter);
+
+            List<EndpointHealthStatus> statuses = new List<EndpointHealthStatus>();
+            foreach (EndpointHealthState state in states)
+            {
+                statuses.Add(EndpointHealthStatus.FromState(state));
+            }
+            return statuses;
+        }
+
+        private static async Task<object> GetCompletionEndpointHealth(AppRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+
+            if (_CompletionHealthCheckService == null)
+                throw new KeyNotFoundException("Health check service not available");
+
+            EndpointHealthState? state = _CompletionHealthCheckService.GetHealthState(id);
+            if (state == null)
+                throw new KeyNotFoundException("No health state for completion endpoint " + id + " (health check may not be enabled)");
 
             return EndpointHealthStatus.FromState(state);
         }

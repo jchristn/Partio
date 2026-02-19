@@ -5,12 +5,22 @@ namespace Partio.Core.Models
     /// </summary>
     public class EmbeddingConfiguration
     {
+        private string _EmbeddingEndpointId = string.Empty;
         private string? _Model = null;
         private bool _L2Normalization = false;
 
         /// <summary>
+        /// Embedding endpoint ID (required — previously came from URL path).
+        /// </summary>
+        public string EmbeddingEndpointId
+        {
+            get => _EmbeddingEndpointId;
+            set => _EmbeddingEndpointId = value ?? throw new ArgumentNullException(nameof(EmbeddingEndpointId));
+        }
+
+        /// <summary>
         /// Embedding model name (e.g. "all-minilm", "text-embedding-3-small").
-        /// Optional when the endpoint is specified in the URL path.
+        /// Optional override for the model configured on the endpoint.
         /// </summary>
         public string? Model
         {

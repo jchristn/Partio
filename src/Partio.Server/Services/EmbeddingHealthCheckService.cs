@@ -250,14 +250,21 @@ namespace Partio.Server.Services
                 {
                     success = await PerformCheckAsync(endpoint, token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
                     break;
+                }
+                catch (OperationCanceledException)
+                {
+                    success = false;
+                    errorMessage = "health check timed out after " + endpoint.HealthCheckTimeoutMs + "ms";
+                    _Logging.Debug(_Header + "timeout for endpoint " + endpoint.Id + " (" + endpoint.Model + "): " + errorMessage);
                 }
                 catch (Exception ex)
                 {
                     success = false;
                     errorMessage = ex.Message;
+                    _Logging.Debug(_Header + "error for endpoint " + endpoint.Id + " (" + endpoint.Model + "): " + errorMessage);
                 }
 
                 UpdateState(state, success, errorMessage, endpoint);
@@ -274,6 +281,8 @@ namespace Partio.Server.Services
                 ? HttpMethod.Head
                 : HttpMethod.Get;
 
+            _Logging.Debug(_Header + "sending " + method + " " + url + " for endpoint " + endpoint.Id + " (" + endpoint.Model + ")");
+
             HttpRequestMessage request = new HttpRequestMessage(method, url);
 
             if (endpoint.HealthCheckUseAuth && !string.IsNullOrEmpty(endpoint.ApiKey))
@@ -285,7 +294,12 @@ namespace Partio.Server.Services
             timeoutCts.CancelAfter(endpoint.HealthCheckTimeoutMs);
 
             HttpResponseMessage response = await _HttpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
-            return (int)response.StatusCode == endpoint.HealthCheckExpectedStatusCode;
+            int statusCode = (int)response.StatusCode;
+            bool success = statusCode == endpoint.HealthCheckExpectedStatusCode;
+
+            _Logging.Debug(_Header + "received " + statusCode + " from " + url + " for endpoint " + endpoint.Id + " (" + endpoint.Model + "), success: " + success);
+
+            return success;
         }
 
         private void UpdateState(EndpointHealthState state, bool success, string? errorMessage, EmbeddingEndpoint endpoint)

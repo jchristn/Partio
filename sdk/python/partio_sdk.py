@@ -62,11 +62,11 @@ class PartioClient:
         return self._request("GET", "/v1.0/whoami")
 
     # Process
-    def process(self, endpoint_id, request):
-        return self._request("POST", f"/v1.0/endpoints/{endpoint_id}/process", request)
+    def process(self, request):
+        return self._request("POST", "/v1.0/process", request)
 
-    def process_batch(self, endpoint_id, requests_list):
-        return self._request("POST", f"/v1.0/endpoints/{endpoint_id}/process/batch", requests_list)
+    def process_batch(self, requests_list):
+        return self._request("POST", "/v1.0/process/batch", requests_list)
 
     # Tenants
     def create_tenant(self, data):
@@ -130,32 +130,61 @@ class PartioClient:
 
     # Embedding Endpoints
     def create_endpoint(self, data):
-        return self._request("PUT", "/v1.0/endpoints", data)
+        return self._request("PUT", "/v1.0/endpoints/embedding", data)
 
     def get_endpoint(self, endpoint_id):
-        return self._request("GET", f"/v1.0/endpoints/{endpoint_id}")
+        return self._request("GET", f"/v1.0/endpoints/embedding/{endpoint_id}")
 
     def update_endpoint(self, endpoint_id, data):
-        return self._request("PUT", f"/v1.0/endpoints/{endpoint_id}", data)
+        return self._request("PUT", f"/v1.0/endpoints/embedding/{endpoint_id}", data)
 
     def delete_endpoint(self, endpoint_id):
-        return self._request("DELETE", f"/v1.0/endpoints/{endpoint_id}")
+        return self._request("DELETE", f"/v1.0/endpoints/embedding/{endpoint_id}")
 
     def endpoint_exists(self, endpoint_id):
-        response = self.session.head(f"{self.endpoint}/v1.0/endpoints/{endpoint_id}")
+        response = self.session.head(f"{self.endpoint}/v1.0/endpoints/embedding/{endpoint_id}")
         return response.status_code == 200
 
     def enumerate_endpoints(self, req=None):
-        return self._request("POST", "/v1.0/endpoints/enumerate", req or {})
+        return self._request("POST", "/v1.0/endpoints/embedding/enumerate", req or {})
 
-    # Endpoint Health
+    # Embedding Endpoint Health
     def get_endpoint_health(self, endpoint_id):
-        """Get health status for a specific endpoint."""
-        return self._request("GET", f"/v1.0/endpoints/{endpoint_id}/health")
+        """Get health status for a specific embedding endpoint."""
+        return self._request("GET", f"/v1.0/endpoints/embedding/{endpoint_id}/health")
 
     def get_all_endpoint_health(self):
-        """Get health status for all monitored endpoints."""
-        return self._request("GET", "/v1.0/endpoints/health")
+        """Get health status for all monitored embedding endpoints."""
+        return self._request("GET", "/v1.0/endpoints/embedding/health")
+
+    # Completion Endpoints
+    def create_completion_endpoint(self, data):
+        return self._request("PUT", "/v1.0/endpoints/completion", data)
+
+    def get_completion_endpoint(self, endpoint_id):
+        return self._request("GET", f"/v1.0/endpoints/completion/{endpoint_id}")
+
+    def update_completion_endpoint(self, endpoint_id, data):
+        return self._request("PUT", f"/v1.0/endpoints/completion/{endpoint_id}", data)
+
+    def delete_completion_endpoint(self, endpoint_id):
+        return self._request("DELETE", f"/v1.0/endpoints/completion/{endpoint_id}")
+
+    def completion_endpoint_exists(self, endpoint_id):
+        response = self.session.head(f"{self.endpoint}/v1.0/endpoints/completion/{endpoint_id}")
+        return response.status_code == 200
+
+    def enumerate_completion_endpoints(self, req=None):
+        return self._request("POST", "/v1.0/endpoints/completion/enumerate", req or {})
+
+    # Completion Endpoint Health
+    def get_completion_endpoint_health(self, endpoint_id):
+        """Get health status for a specific completion endpoint."""
+        return self._request("GET", f"/v1.0/endpoints/completion/{endpoint_id}/health")
+
+    def get_all_completion_endpoint_health(self):
+        """Get health status for all monitored completion endpoints."""
+        return self._request("GET", "/v1.0/endpoints/completion/health")
 
     # Request History
     def get_request_history(self, entry_id):
@@ -165,10 +194,7 @@ class PartioClient:
         """Get request/response body detail for a request history entry.
 
         Returns a dict with keys: RequestHeaders, RequestBody, ResponseHeaders,
-        ResponseBody, and EmbeddingCalls. The EmbeddingCalls field is a list of
-        upstream embedding HTTP call details (each with Url, Method, RequestHeaders,
-        RequestBody, StatusCode, ResponseHeaders, ResponseBody, ResponseTimeMs,
-        Success, Error, TimestampUtc). It is present only for process requests.
+        ResponseBody, EmbeddingCalls, and CompletionCalls.
         """
         return self._request("GET", f"/v1.0/requests/{entry_id}/detail")
 

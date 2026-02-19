@@ -7,6 +7,7 @@ import TenantsView from './components/TenantsView';
 import UsersView from './components/UsersView';
 import CredentialsView from './components/CredentialsView';
 import EmbeddingEndpointsView from './components/EmbeddingEndpointsView';
+import CompletionEndpointsView from './components/CompletionEndpointsView';
 import RequestHistoryView from './components/RequestHistoryView';
 import ChunkEmbedView from './components/ChunkEmbedView';
 
@@ -26,7 +27,9 @@ export default function App() {
           <Route path="tenants" element={<TenantsView />} />
           <Route path="users" element={<UsersView />} />
           <Route path="credentials" element={<CredentialsView />} />
-          <Route path="endpoints" element={<EmbeddingEndpointsView />} />
+          <Route path="endpoints" element={<Navigate to="/endpoints/embeddings" replace />} />
+          <Route path="endpoints/embeddings" element={<EmbeddingEndpointsView />} />
+          <Route path="endpoints/inference" element={<CompletionEndpointsView />} />
           <Route path="history" element={<RequestHistoryView />} />
           <Route path="process" element={<ChunkEmbedView />} />
         </Route>
