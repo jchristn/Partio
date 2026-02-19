@@ -61,13 +61,15 @@ namespace Partio.Core.ThirdParty
         /// <param name="maxTokens">Maximum tokens to generate.</param>
         /// <param name="timeoutMs">Timeout in milliseconds.</param>
         /// <param name="token">Cancellation token.</param>
+        /// <param name="systemPrompt">Optional system prompt for instruction separation.</param>
         /// <returns>The completion text, or null on failure.</returns>
         public abstract Task<string?> GenerateCompletionAsync(
             string prompt,
             string model,
             int maxTokens,
             int timeoutMs,
-            CancellationToken token = default);
+            CancellationToken token = default,
+            string? systemPrompt = null);
 
         /// <summary>
         /// Send an HTTP POST to an upstream endpoint and record the call details.

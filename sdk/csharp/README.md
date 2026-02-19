@@ -39,7 +39,7 @@ csharp/
 using Partio.Sdk;
 using Partio.Sdk.Models;
 
-using var client = new PartioClient("http://localhost:8000", "your-access-key");
+using var client = new PartioClient("http://localhost:8400", "your-access-key");
 
 // Process a semantic cell
 var result = await client.ProcessAsync(new SemanticCellRequest
@@ -63,16 +63,16 @@ Using the launcher scripts:
 
 ```bash
 # Windows
-go.bat http://localhost:8000 partioadmin
+go.bat http://localhost:8400 partioadmin
 
 # Linux / macOS
-./go.sh http://localhost:8000 partioadmin
+./go.sh http://localhost:8400 partioadmin
 ```
 
 Or directly with `dotnet`:
 
 ```bash
-dotnet run --project Partio.Sdk.TestHarness -- http://localhost:8000 partioadmin
+dotnet run --project Partio.Sdk.TestHarness -- http://localhost:8400 partioadmin
 ```
 
 ### Test Output
@@ -81,7 +81,7 @@ The harness prints one line per test with pass/fail status and elapsed time, fol
 
 ```
 Partio C# SDK Test Harness
-Endpoint: http://localhost:8000
+Endpoint: http://localhost:8400
 Admin Key: partioadmin
 
   PASS  Health Check (12ms)

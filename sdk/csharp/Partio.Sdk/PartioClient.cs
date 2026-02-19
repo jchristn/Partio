@@ -18,7 +18,7 @@ namespace Partio.Sdk
         /// <summary>
         /// Initialize a new PartioClient.
         /// </summary>
-        /// <param name="endpoint">Base URL of the Partio server (e.g. http://localhost:8000).</param>
+        /// <param name="endpoint">Base URL of the Partio server (e.g. http://localhost:8400).</param>
         /// <param name="accessKey">Bearer token or admin API key.</param>
         public PartioClient(string endpoint, string accessKey)
         {

@@ -32,7 +32,7 @@ const STRATEGY_LABELS = {
   WholeTable: 'Whole Table'
 };
 
-const DEFAULT_SUMMARIZATION_PROMPT = 'Please summarize the following content in no more than {tokens} tokens.\n\nContent:\n{content}\n\nContext:\n{context}';
+const DEFAULT_SUMMARIZATION_PROMPT = 'Summarize the following content in at most {tokens} tokens.\n\nContent:\n{content}\n\nContext:\n{context}';
 
 function renderCellTree(cell, depth, copiedChunk, setCopiedChunk, expandedEmbeddings, setExpandedEmbeddings, keyPrefix) {
   const isSummary = cell.Type === 'Summary';
@@ -286,54 +286,6 @@ export default function ChunkEmbedView() {
             </div>
           )}
 
-          <div className="form-group">
-            <label>Chunking Strategy</label>
-            <select value={form.Strategy} onChange={e => update('Strategy', e.target.value)}>
-              {availableStrategies.map(key => (
-                <option key={key} value={key}>{STRATEGY_LABELS[key]}</option>
-              ))}
-            </select>
-          </div>
-
-          {form.Strategy === 'RowGroupWithHeaders' && (
-            <div className="form-group">
-              <label>Row Group Size</label>
-              <input type="number" min="1" value={form.RowGroupSize} onChange={e => update('RowGroupSize', e.target.value)} />
-            </div>
-          )}
-
-          <div className="form-row">
-            <div className="form-group"><label>Token Count</label><input type="number" value={form.FixedTokenCount} onChange={e => update('FixedTokenCount', e.target.value)} /></div>
-            <div className="form-group"><label>Overlap</label><input type="number" value={form.OverlapCount} onChange={e => update('OverlapCount', e.target.value)} /></div>
-          </div>
-
-          <div className="form-group">
-            <label>Overlap Strategy</label>
-            <select value={form.OverlapStrategy} onChange={e => update('OverlapStrategy', e.target.value)}>
-              <option value="SlidingWindow">Sliding Window</option>
-              <option value="SentenceBoundaryAware">Sentence Boundary Aware</option>
-              <option value="SemanticBoundaryAware">Semantic Boundary Aware</option>
-            </select>
-          </div>
-
-          <div className="form-group"><label>Context Prefix</label><input value={form.ContextPrefix} onChange={e => update('ContextPrefix', e.target.value)} placeholder="Optional prefix prepended to each chunk" /></div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>Embedding Endpoint</label>
-              <select value={form.EndpointId} onChange={e => update('EndpointId', e.target.value)} disabled={endpointsLoading}>
-                <option value="">{endpointsLoading ? 'Loading...' : '-- Select endpoint --'}</option>
-                {endpoints.map(ep => (
-                  <option key={ep.Id} value={ep.Id}>{ep.Model} ({ep.Id})</option>
-                ))}
-              </select>
-            </div>
-            <div className="checkbox-group">
-              <input type="checkbox" checked={form.L2Normalization} onChange={e => update('L2Normalization', e.target.checked)} id="l2norm" />
-              <label htmlFor="l2norm">L2 Normalize</label>
-            </div>
-          </div>
-
           {/* Summarization Section */}
           <div className="form-section-divider" />
           <div className="checkbox-group" style={{ marginBottom: 8 }}>
@@ -395,6 +347,56 @@ export default function ChunkEmbedView() {
               </div>
             </div>
           )}
+
+          {/* Chunking Strategy Section */}
+          <div className="form-section-divider" />
+          <div className="form-group">
+            <label>Chunking Strategy</label>
+            <select value={form.Strategy} onChange={e => update('Strategy', e.target.value)}>
+              {availableStrategies.map(key => (
+                <option key={key} value={key}>{STRATEGY_LABELS[key]}</option>
+              ))}
+            </select>
+          </div>
+
+          {form.Strategy === 'RowGroupWithHeaders' && (
+            <div className="form-group">
+              <label>Row Group Size</label>
+              <input type="number" min="1" value={form.RowGroupSize} onChange={e => update('RowGroupSize', e.target.value)} />
+            </div>
+          )}
+
+          <div className="form-row">
+            <div className="form-group"><label>Token Count</label><input type="number" value={form.FixedTokenCount} onChange={e => update('FixedTokenCount', e.target.value)} /></div>
+            <div className="form-group"><label>Overlap</label><input type="number" value={form.OverlapCount} onChange={e => update('OverlapCount', e.target.value)} /></div>
+          </div>
+
+          <div className="form-group">
+            <label>Overlap Strategy</label>
+            <select value={form.OverlapStrategy} onChange={e => update('OverlapStrategy', e.target.value)}>
+              <option value="SlidingWindow">Sliding Window</option>
+              <option value="SentenceBoundaryAware">Sentence Boundary Aware</option>
+              <option value="SemanticBoundaryAware">Semantic Boundary Aware</option>
+            </select>
+          </div>
+
+          <div className="form-group"><label>Context Prefix</label><input value={form.ContextPrefix} onChange={e => update('ContextPrefix', e.target.value)} placeholder="Optional prefix prepended to each chunk" /></div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Embedding Endpoint</label>
+              <select value={form.EndpointId} onChange={e => update('EndpointId', e.target.value)} disabled={endpointsLoading}>
+                <option value="">{endpointsLoading ? 'Loading...' : '-- Select endpoint --'}</option>
+                {endpoints.map(ep => (
+                  <option key={ep.Id} value={ep.Id}>{ep.Model} ({ep.Id})</option>
+                ))}
+              </select>
+            </div>
+            <div className="checkbox-group">
+              <input type="checkbox" checked={form.L2Normalization} onChange={e => update('L2Normalization', e.target.checked)} id="l2norm" />
+              <label htmlFor="l2norm">L2 Normalize</label>
+            </div>
+          </div>
 
           <div className="form-group"><label>Labels</label><TagInput value={form.Labels} onChange={v => update('Labels', v)} /></div>
           <div className="form-group"><label>Tags</label><KeyValueEditor value={form.Tags} onChange={v => update('Tags', v)} /></div>

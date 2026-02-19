@@ -41,7 +41,7 @@ pip install -r requirements.txt
 ```python
 from partio_sdk import PartioClient
 
-with PartioClient("http://localhost:8000", "your-access-key") as client:
+with PartioClient("http://localhost:8400", "your-access-key") as client:
     result = client.process({
         "Type": "Text",
         "Text": "Hello, world!",
@@ -60,16 +60,16 @@ Using the launcher scripts:
 
 ```bash
 # Windows
-go.bat http://localhost:8000 partioadmin
+go.bat http://localhost:8400 partioadmin
 
 # Linux / macOS
-./go.sh http://localhost:8000 partioadmin
+./go.sh http://localhost:8400 partioadmin
 ```
 
 Or directly with Python:
 
 ```bash
-python test_harness.py http://localhost:8000 partioadmin
+python test_harness.py http://localhost:8400 partioadmin
 ```
 
 ### Test Output
@@ -78,7 +78,7 @@ The harness prints one line per test with pass/fail status and elapsed time, fol
 
 ```
 Partio Python SDK Test Harness
-Endpoint: http://localhost:8000
+Endpoint: http://localhost:8400
 Admin Key: partioadmin
 
   PASS  Health Check (12ms)

@@ -22,16 +22,21 @@ namespace Partio.Core.Models
         /// Default summarization prompt template.
         /// Supports {tokens}, {content}, and {context} placeholders.
         /// </summary>
+        /// <summary>
+        /// System prompt sent as a separate system message to the completion API.
+        /// This is more effective than embedding instructions in the user prompt for small models.
+        /// </summary>
+        public static readonly string DefaultSystemPrompt =
+            "You are a summarization engine. Output ONLY the summary text. " +
+            "Never start with preamble such as \"Here's a summary\", \"Sure\", \"Summary:\", or similar. " +
+            "Never end with follow-up offers or commentary. " +
+            "Start directly with the first substantive word. " +
+            "If the content cannot be summarized, output exactly: None";
+
         public static readonly string DefaultPrompt =
-            "You must follow these rules exactly:\n" +
-            "1. If the content cannot be summarized (empty, insufficient, non-text, or meaningless), output exactly: None\n" +
-            "2. If the content can be summarized, output ONLY the summary text\n" +
-            "3. Never include prefixes like 'Summary:', 'Summary text:', or any introductory phrases\n" +
-            "4. Never explain why you cannot summarize, in these cases just output exactly: None\n" +
-            "5. Maximum length: {tokens} tokens\n\n" +
-            "Content to summarize:\n{content}\n\n" +
-            "Context information:\n{context}\n\n" +
-            "Output:";
+            "Summarize the following content in at most {tokens} tokens.\n\n" +
+            "Content:\n{content}\n\n" +
+            "Context:\n{context}";
 
         /// <summary>
         /// Completion endpoint ID (required — must reference a valid, active completion endpoint).

@@ -417,6 +417,53 @@ export default function RequestHistoryView() {
                 ))}
               </div>
             )}
+
+            {!detailLoading && !detailError && detailData && detailData.CompletionCalls && detailData.CompletionCalls.length > 0 && (
+              <div className="detail-section">
+                <h3>Upstream Inference Calls</h3>
+                {detailData.CompletionCalls.map((call, idx) => (
+                  <div key={idx} className="embedding-call-group">
+                    <div className="embedding-call-header">
+                      <span className="embedding-call-index">#{idx + 1}</span>
+                      {call.StatusCode != null && (
+                        <span className={`http-status ${statusClass(call.StatusCode)}`}>{call.StatusCode}</span>
+                      )}
+                      <span className="embedding-call-method">{call.Method || 'POST'}</span>
+                      <code className="embedding-call-url">{call.Url || '-'}</code>
+                      {call.ResponseTimeMs != null && (
+                        <span className="embedding-call-time">{call.ResponseTimeMs} ms</span>
+                      )}
+                      {!call.Success && (
+                        <span className="embedding-call-failed">FAILED</span>
+                      )}
+                    </div>
+                    {call.Error && (
+                      <div className="embedding-call-error">{call.Error}</div>
+                    )}
+                    <CollapsibleSection
+                      title="Request Headers"
+                      content={formatHeaders(call.RequestHeaders)}
+                      defaultExpanded={false}
+                    />
+                    <CollapsibleSection
+                      title="Request Body"
+                      content={typeof call.RequestBody === 'string' ? call.RequestBody : call.RequestBody != null ? JSON.stringify(call.RequestBody) : null}
+                      defaultExpanded={false}
+                    />
+                    <CollapsibleSection
+                      title="Response Headers"
+                      content={formatHeaders(call.ResponseHeaders)}
+                      defaultExpanded={false}
+                    />
+                    <CollapsibleSection
+                      title="Response Body"
+                      content={typeof call.ResponseBody === 'string' ? call.ResponseBody : call.ResponseBody != null ? JSON.stringify(call.ResponseBody) : null}
+                      defaultExpanded={false}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Modal>
       )}

@@ -33,18 +33,22 @@ namespace Partio.Core.ThirdParty
             string model,
             int maxTokens,
             int timeoutMs,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            string? systemPrompt = null)
         {
             string url = _Endpoint.TrimEnd('/') + "/v1/chat/completions";
+
+            List<Dictionary<string, string>> messages = new List<Dictionary<string, string>>();
+            if (!string.IsNullOrEmpty(systemPrompt))
+            {
+                messages.Add(new Dictionary<string, string> { { "role", "system" }, { "content", systemPrompt } });
+            }
+            messages.Add(new Dictionary<string, string> { { "role", "user" }, { "content", prompt } });
 
             Dictionary<string, object> requestBody = new Dictionary<string, object>
             {
                 { "model", model },
-                { "messages", new List<Dictionary<string, string>>
-                    {
-                        new Dictionary<string, string> { { "role", "user" }, { "content", prompt } }
-                    }
-                },
+                { "messages", messages },
                 { "max_tokens", maxTokens }
             };
 

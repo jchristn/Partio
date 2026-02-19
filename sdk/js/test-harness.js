@@ -4,7 +4,7 @@
 
 import { PartioClient, PartioError } from './partio-sdk.js';
 
-const endpoint = process.argv[2] || 'http://localhost:8000';
+const endpoint = process.argv[2] || 'http://localhost:8400';
 const adminKey = process.argv[3] || 'partioadmin';
 
 console.log('Partio JavaScript SDK Test Harness');

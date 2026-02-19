@@ -6,7 +6,7 @@ namespace Partio.Sdk.TestHarness
 
     class Program
     {
-        private static string _Endpoint = "http://localhost:8000";
+        private static string _Endpoint = "http://localhost:8400";
         private static string _AdminKey = "partioadmin";
         private static string _TestToken = "default";
         private static int _Passed = 0;

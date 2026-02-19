@@ -34,7 +34,7 @@ js/
 ```javascript
 import { PartioClient } from './partio-sdk.js';
 
-const client = new PartioClient('http://localhost:8000', 'your-access-key');
+const client = new PartioClient('http://localhost:8400', 'your-access-key');
 
 const result = await client.process({
   Type: 'Text',
@@ -55,16 +55,16 @@ Using the launcher scripts:
 
 ```bash
 # Windows
-go.bat http://localhost:8000 partioadmin
+go.bat http://localhost:8400 partioadmin
 
 # Linux / macOS
-./go.sh http://localhost:8000 partioadmin
+./go.sh http://localhost:8400 partioadmin
 ```
 
 Or directly with Node.js:
 
 ```bash
-node test-harness.js http://localhost:8000 partioadmin
+node test-harness.js http://localhost:8400 partioadmin
 ```
 
 ### Test Output
@@ -73,7 +73,7 @@ The harness prints one line per test with pass/fail status and elapsed time, fol
 
 ```
 Partio JavaScript SDK Test Harness
-Endpoint: http://localhost:8000
+Endpoint: http://localhost:8400
 Admin Key: partioadmin
 
   PASS  Health Check (12ms)

@@ -33,7 +33,8 @@ namespace Partio.Core.ThirdParty
             string model,
             int maxTokens,
             int timeoutMs,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            string? systemPrompt = null)
         {
             string url = _Endpoint.TrimEnd('/') + "/api/generate";
 
@@ -44,6 +45,11 @@ namespace Partio.Core.ThirdParty
                 { "stream", false },
                 { "options", new Dictionary<string, object> { { "num_predict", maxTokens } } }
             };
+
+            if (!string.IsNullOrEmpty(systemPrompt))
+            {
+                requestBody["system"] = systemPrompt;
+            }
 
             string json = _Serializer.SerializeJson(requestBody, false);
             StringContent content = new StringContent(json, Encoding.UTF8, "application/json");

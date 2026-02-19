@@ -70,6 +70,7 @@ namespace Partio.Server.Services
         /// <param name="requestHeaders">Request headers dictionary.</param>
         /// <param name="responseHeaders">Response headers dictionary.</param>
         /// <param name="embeddingCalls">Details of upstream embedding HTTP calls, if any.</param>
+        /// <param name="completionCalls">Details of upstream completion/inference HTTP calls, if any.</param>
         public async Task UpdateWithResponseAsync(
             RequestHistoryEntry entry,
             int statusCode,
@@ -78,7 +79,8 @@ namespace Partio.Server.Services
             string? responseBody,
             Dictionary<string, string>? requestHeaders = null,
             Dictionary<string, string>? responseHeaders = null,
-            List<EmbeddingCallDetail>? embeddingCalls = null)
+            List<EmbeddingCallDetail>? embeddingCalls = null,
+            List<CompletionCallDetail>? completionCalls = null)
         {
             entry.HttpStatus = statusCode;
             entry.ResponseTimeMs = responseTimeMs;
@@ -110,6 +112,17 @@ namespace Partio.Server.Services
                 }
             }
 
+            if (completionCalls != null)
+            {
+                foreach (CompletionCallDetail call in completionCalls)
+                {
+                    if (!string.IsNullOrEmpty(call.RequestBody) && call.RequestBody.Length > _Settings.RequestHistory.MaxRequestBodyBytes)
+                        call.RequestBody = call.RequestBody.Substring(0, _Settings.RequestHistory.MaxRequestBodyBytes);
+                    if (!string.IsNullOrEmpty(call.ResponseBody) && call.ResponseBody.Length > _Settings.RequestHistory.MaxResponseBodyBytes)
+                        call.ResponseBody = call.ResponseBody.Substring(0, _Settings.RequestHistory.MaxResponseBodyBytes);
+                }
+            }
+
             // Persist bodies to filesystem
             string objectKey = Guid.NewGuid().ToString();
             entry.ObjectKey = objectKey;
@@ -120,7 +133,8 @@ namespace Partio.Server.Services
                 { "RequestBody", requestBody },
                 { "ResponseHeaders", responseHeaders },
                 { "ResponseBody", responseBody },
-                { "EmbeddingCalls", embeddingCalls }
+                { "EmbeddingCalls", embeddingCalls },
+                { "CompletionCalls", completionCalls }
             };
 
             string json = _Serializer.SerializeJson(detail, true);

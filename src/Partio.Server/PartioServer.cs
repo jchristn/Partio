@@ -855,7 +855,7 @@ namespace Partio.Server
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, cellResult.EmbeddingCalls).ConfigureAwait(false);
+                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, cellResult.EmbeddingCalls, cellResult.CompletionCalls).ConfigureAwait(false);
                 }
 
                 return cellResult.Response;
@@ -870,7 +870,7 @@ namespace Partio.Server
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null).ConfigureAwait(false);
+                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
                 }
                 throw;
             }
@@ -910,11 +910,13 @@ namespace Partio.Server
 
                 List<SemanticCellResponse> responses = new List<SemanticCellResponse>();
                 List<EmbeddingCallDetail> allEmbeddingCalls = new List<EmbeddingCallDetail>();
+                List<CompletionCallDetail> allCompletionCalls = new List<CompletionCallDetail>();
                 foreach (SemanticCellRequest cellReq in cellReqs)
                 {
                     ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
                     responses.Add(cellResult.Response);
                     allEmbeddingCalls.AddRange(cellResult.EmbeddingCalls);
+                    allCompletionCalls.AddRange(cellResult.CompletionCalls);
                 }
 
                 if (recordHistory && historyEntry != null && sw != null)
@@ -925,7 +927,7 @@ namespace Partio.Server
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, allEmbeddingCalls).ConfigureAwait(false);
+                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, allEmbeddingCalls, allCompletionCalls).ConfigureAwait(false);
                 }
 
                 return responses;
@@ -940,7 +942,7 @@ namespace Partio.Server
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null).ConfigureAwait(false);
+                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
                 }
                 throw;
             }

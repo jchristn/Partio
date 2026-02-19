@@ -1,5 +1,6 @@
 namespace Partio.Core.Summarization
 {
+    using System.Text.RegularExpressions;
     using Partio.Core.Enums;
     using Partio.Core.Models;
     using Partio.Core.ThirdParty;
@@ -351,13 +352,24 @@ namespace Partio.Core.Summarization
                         model,
                         config.MaxSummaryTokens,
                         config.TimeoutMs,
-                        token).ConfigureAwait(false);
+                        token,
+                        SummarizationConfiguration.DefaultSystemPrompt).ConfigureAwait(false);
 
                     // Check for valid response
                     if (!string.IsNullOrWhiteSpace(summary) &&
                         !summary.Equals("None", StringComparison.OrdinalIgnoreCase) &&
                         !summary.Equals("\"None\"", StringComparison.OrdinalIgnoreCase))
                     {
+                        summary = CleanSummaryText(summary);
+
+                        // Re-check after cleaning
+                        if (string.IsNullOrWhiteSpace(summary) ||
+                            summary.Equals("None", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _Logging.Debug(_Header + "cell " + cell.GUID + " summary was empty after cleaning, skipping");
+                            return;
+                        }
+
                         // Create summary child cell
                         SemanticCellRequest summaryCell = new SemanticCellRequest();
                         summaryCell.GUID = Guid.NewGuid();
@@ -497,6 +509,45 @@ namespace Partio.Core.Summarization
                     GetCellsByDepthLevelRecursive(child, depth + 1, levels);
                 }
             }
+        }
+
+        /// <summary>
+        /// Strip preamble and trailing filler commonly added by LLMs.
+        /// </summary>
+        private static string CleanSummaryText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+
+            string cleaned = text.Trim();
+
+            // Strip leading preamble patterns (case-insensitive).
+            // Matches lines like:
+            //   "Here's a summary of the provided content, within the 1024 token limit:"
+            //   "Here is a summary:"
+            //   "Summary:"
+            //   "Below is a summary of the text:"
+            //   "Sure! Here's a summary:"
+            //   "Certainly, here is a summary of the content:"
+            cleaned = Regex.Replace(
+                cleaned,
+                @"^(?:(?:sure[!,.]?\s*|certainly[!,.]?\s*|okay[!,.]?\s*)?(?:here(?:'s| is) (?:a |the )?summary(?:\s+of\s+[^:\n]*)?(?:,\s*[^:\n]*)?|summary(?:\s+(?:text|of\s+[^:\n]*))?)\s*:\s*)",
+                "",
+                RegexOptions.IgnoreCase).TrimStart();
+
+            // Strip trailing meta-commentary (e.g., "[References 1 & 2 are cited...]", "Let me know if...")
+            cleaned = Regex.Replace(
+                cleaned,
+                @"\s*\[(?:References?|Note|Source)[^\]]*\]\s*$",
+                "",
+                RegexOptions.IgnoreCase).TrimEnd();
+
+            cleaned = Regex.Replace(
+                cleaned,
+                @"\s*(?:Let me know if .*|I hope (?:this|that) .*|Feel free to .*|If you (?:need|want|have) .*)\s*$",
+                "",
+                RegexOptions.IgnoreCase).TrimEnd();
+
+            return cleaned;
         }
 
         #endregion

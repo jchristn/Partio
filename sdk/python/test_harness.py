@@ -6,7 +6,7 @@ from partio_sdk import PartioClient, PartioError
 
 
 def main():
-    endpoint = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
+    endpoint = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8400"
     admin_key = sys.argv[2] if len(sys.argv) > 2 else "partioadmin"
 
     print("Partio Python SDK Test Harness")
