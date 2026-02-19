@@ -87,6 +87,36 @@ namespace Partio.Core.Database.Sqlite.Queries
             );";
 
         /// <summary>
+        /// Creates the completion_endpoints table for storing completion/inference API configurations.
+        /// References tenants(id) via tenant_id.
+        /// </summary>
+        public static readonly string CreateCompletionEndpointsTable =
+            @"CREATE TABLE IF NOT EXISTS completion_endpoints (
+                id VARCHAR(48) PRIMARY KEY,
+                tenant_id VARCHAR(48) NOT NULL,       -- references tenants(id)
+                name VARCHAR(256) NULL,
+                endpoint VARCHAR(512) NOT NULL,
+                api_format VARCHAR(32) NOT NULL,
+                api_key VARCHAR(512) NULL,
+                model VARCHAR(256) NOT NULL,
+                active BOOLEAN NOT NULL DEFAULT 1,
+                enable_request_history BOOLEAN NOT NULL DEFAULT 1,
+                health_check_enabled BOOLEAN NOT NULL DEFAULT 1,
+                health_check_url VARCHAR(512) NULL,
+                health_check_method INTEGER NOT NULL DEFAULT 0,
+                health_check_interval_ms INTEGER NOT NULL DEFAULT 5000,
+                health_check_timeout_ms INTEGER NOT NULL DEFAULT 2000,
+                health_check_expected_status INTEGER NOT NULL DEFAULT 200,
+                healthy_threshold INTEGER NOT NULL DEFAULT 2,
+                unhealthy_threshold INTEGER NOT NULL DEFAULT 2,
+                health_check_use_auth BOOLEAN NOT NULL DEFAULT 0,
+                labels_json TEXT NULL,
+                tags_json TEXT NULL,
+                created_utc TEXT NOT NULL,
+                last_update_utc TEXT NOT NULL
+            );";
+
+        /// <summary>
         /// Creates the request_history table for storing HTTP request audit logs.
         /// References tenants(id) via tenant_id, users(id) via user_id, and credentials(id) via credential_id.
         /// </summary>
@@ -117,6 +147,7 @@ namespace Partio.Core.Database.Sqlite.Queries
             CreateUsersTable,
             CreateCredentialsTable,
             CreateEmbeddingEndpointsTable,
+            CreateCompletionEndpointsTable,
             CreateRequestHistoryTable
         };
     }

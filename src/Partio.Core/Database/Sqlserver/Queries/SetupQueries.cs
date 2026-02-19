@@ -99,6 +99,39 @@ namespace Partio.Core.Database.Sqlserver.Queries
             END;";
 
         /// <summary>
+        /// Creates the completion_endpoints table for storing completion/inference API configurations.
+        /// References tenants(id) via tenant_id.
+        /// </summary>
+        public static readonly string CreateCompletionEndpointsTable =
+            @"IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'completion_endpoints')
+            BEGIN
+                CREATE TABLE completion_endpoints (
+                    id NVARCHAR(48) PRIMARY KEY,
+                    tenant_id NVARCHAR(48) NOT NULL,       -- references tenants(id)
+                    name NVARCHAR(256) NULL,
+                    endpoint NVARCHAR(512) NOT NULL,
+                    api_format NVARCHAR(32) NOT NULL,
+                    api_key NVARCHAR(512) NULL,
+                    model NVARCHAR(256) NOT NULL,
+                    active BIT NOT NULL DEFAULT 1,
+                    enable_request_history BIT NOT NULL DEFAULT 0,
+                    health_check_enabled BIT NOT NULL DEFAULT 0,
+                    health_check_url NVARCHAR(512) NULL,
+                    health_check_method INT NOT NULL DEFAULT 0,
+                    health_check_interval_ms INT NOT NULL DEFAULT 5000,
+                    health_check_timeout_ms INT NOT NULL DEFAULT 2000,
+                    health_check_expected_status INT NOT NULL DEFAULT 200,
+                    healthy_threshold INT NOT NULL DEFAULT 2,
+                    unhealthy_threshold INT NOT NULL DEFAULT 2,
+                    health_check_use_auth BIT NOT NULL DEFAULT 0,
+                    labels_json NVARCHAR(MAX) NULL,
+                    tags_json NVARCHAR(MAX) NULL,
+                    created_utc NVARCHAR(64) NOT NULL,
+                    last_update_utc NVARCHAR(64) NOT NULL
+                );
+            END;";
+
+        /// <summary>
         /// Creates the request_history table for storing HTTP request audit logs.
         /// References tenants(id) via tenant_id, users(id) via user_id, and credentials(id) via credential_id.
         /// </summary>
@@ -132,6 +165,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
             CreateUsersTable,
             CreateCredentialsTable,
             CreateEmbeddingEndpointsTable,
+            CreateCompletionEndpointsTable,
             CreateRequestHistoryTable
         };
     }

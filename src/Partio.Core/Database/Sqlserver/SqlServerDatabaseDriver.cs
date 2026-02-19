@@ -69,6 +69,7 @@ namespace Partio.Core.Database.Sqlserver
             User = new UserMethods(this, _Logging);
             Credential = new CredentialMethods(this, _Logging);
             EmbeddingEndpoint = new EmbeddingEndpointMethods(this, _Logging);
+            CompletionEndpoint = new CompletionEndpointMethods(this, _Logging);
             RequestHistory = new RequestHistoryMethods(this, _Logging);
 
             _Logging.Info(_Header + "SQL Server database initialized successfully");

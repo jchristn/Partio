@@ -4,7 +4,7 @@
 
 import { PartioClient, PartioError } from './partio-sdk.js';
 
-const endpoint = process.argv[2] || 'http://localhost:8000';
+const endpoint = process.argv[2] || 'http://localhost:8400';
 const adminKey = process.argv[3] || 'partioadmin';
 
 console.log('Partio JavaScript SDK Test Harness');
@@ -23,6 +23,7 @@ let testTenantId = null;
 let testUserId = null;
 let testCredId = null;
 let testEpId = null;
+let testCepId = null;
 
 async function runTest(name, fn) {
   const start = Date.now();
@@ -88,6 +89,15 @@ await runTest('Read User', async () => {
   if (!user || user.Email !== 'test@test.com') throw new Error('Mismatch');
 });
 
+await runTest('Update User', async () => {
+  const updated = await client.updateUser(testUserId, { Email: 'updated@test.com', TenantId: testTenantId });
+  if (!updated) throw new Error('Update failed');
+});
+
+await runTest('User Exists (HEAD)', async () => {
+  if (!await client.userExists(testUserId)) throw new Error('Should exist');
+});
+
 await runTest('Enumerate Users', async () => {
   const result = await client.enumerateUsers();
   if (!result || !result.Data || result.Data.length === 0) throw new Error('No users');
@@ -103,6 +113,10 @@ await runTest('Create Credential', async () => {
 await runTest('Read Credential', async () => {
   const cred = await client.getCredential(testCredId);
   if (!cred || cred.Name !== 'Test Key') throw new Error('Mismatch');
+});
+
+await runTest('Credential Exists (HEAD)', async () => {
+  if (!await client.credentialExists(testCredId)) throw new Error('Should exist');
 });
 
 await runTest('Enumerate Credentials', async () => {
@@ -122,8 +136,43 @@ await runTest('Read Endpoint', async () => {
   if (!ep || ep.Model !== 'test-model') throw new Error('Mismatch');
 });
 
+await runTest('Update Endpoint', async () => {
+  const updated = await client.updateEndpoint(testEpId, { TenantId: testTenantId, Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  if (!updated) throw new Error('Update failed');
+});
+
+await runTest('Endpoint Exists (HEAD)', async () => {
+  if (!await client.endpointExists(testEpId)) throw new Error('Should exist');
+});
+
 await runTest('Enumerate Endpoints', async () => {
   const result = await client.enumerateEndpoints();
+  if (!result || !result.Data || result.Data.length === 0) throw new Error('No endpoints');
+});
+
+// Completion Endpoint CRUD
+await runTest('Create Completion Endpoint', async () => {
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  if (!cep || !cep.Id) throw new Error('No response');
+  testCepId = cep.Id;
+});
+
+await runTest('Read Completion Endpoint', async () => {
+  const cep = await client.getCompletionEndpoint(testCepId);
+  if (!cep || cep.Model !== 'test-model') throw new Error('Mismatch');
+});
+
+await runTest('Update Completion Endpoint', async () => {
+  const updated = await client.updateCompletionEndpoint(testCepId, { TenantId: testTenantId, Name: 'Updated Inference', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  if (!updated) throw new Error('Update failed');
+});
+
+await runTest('Completion Endpoint Exists (HEAD)', async () => {
+  if (!await client.completionEndpointExists(testCepId)) throw new Error('Should exist');
+});
+
+await runTest('Enumerate Completion Endpoints', async () => {
+  const result = await client.enumerateCompletionEndpoints();
   if (!result || !result.Data || result.Data.length === 0) throw new Error('No endpoints');
 });
 
@@ -139,11 +188,11 @@ await runTest('Process Single Cell', async () => {
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
-  const result = await client.process(activeEp.Id, {
+  const result = await client.process({
     Type: 'Text',
     Text: 'Partio is a multi-tenant embedding platform.',
     ChunkingConfiguration: { Strategy: 'FixedTokenCount', FixedTokenCount: 256 },
-    EmbeddingConfiguration: { L2Normalization: false },
+    EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id },
     Labels: ['test'],
     Tags: { source: 'sdk-test' }
   });
@@ -162,11 +211,11 @@ await runTest('Process Table (Row)', async () => {
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
-  const result = await client.process(activeEp.Id, {
+  const result = await client.process({
     Type: 'Table',
     Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama']],
     ChunkingConfiguration: { Strategy: 'Row' },
-    EmbeddingConfiguration: { L2Normalization: false }
+    EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
   });
   if (!result || !result.Chunks || result.Chunks.length !== 2) throw new Error('Expected 2 chunks');
 });
@@ -176,11 +225,11 @@ await runTest('Process Table (RowWithHeaders)', async () => {
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
-  const result = await client.process(activeEp.Id, {
+  const result = await client.process({
     Type: 'Table',
     Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama']],
     ChunkingConfiguration: { Strategy: 'RowWithHeaders' },
-    EmbeddingConfiguration: { L2Normalization: false }
+    EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
   });
   if (!result || !result.Chunks || result.Chunks.length !== 2) throw new Error('Expected 2 chunks');
 });
@@ -190,11 +239,11 @@ await runTest('Process Table (RowGroupWithHeaders)', async () => {
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
-  const result = await client.process(activeEp.Id, {
+  const result = await client.process({
     Type: 'Table',
     Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama'], ['3', 'donald', 'trump']],
     ChunkingConfiguration: { Strategy: 'RowGroupWithHeaders', RowGroupSize: 2 },
-    EmbeddingConfiguration: { L2Normalization: false }
+    EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
   });
   if (!result || !result.Chunks || result.Chunks.length !== 2) throw new Error('Expected 2 chunks (groups of 2)');
 });
@@ -204,11 +253,11 @@ await runTest('Process Table (KeyValuePairs)', async () => {
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
-  const result = await client.process(activeEp.Id, {
+  const result = await client.process({
     Type: 'Table',
     Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush']],
     ChunkingConfiguration: { Strategy: 'KeyValuePairs' },
-    EmbeddingConfiguration: { L2Normalization: false }
+    EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
   });
   if (!result || !result.Chunks || result.Chunks.length !== 1) throw new Error('Expected 1 chunk');
 });
@@ -218,11 +267,11 @@ await runTest('Process Table (WholeTable)', async () => {
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
-  const result = await client.process(activeEp.Id, {
+  const result = await client.process({
     Type: 'Table',
     Table: [['id', 'firstname', 'lastname'], ['1', 'george', 'bush'], ['2', 'barack', 'obama']],
     ChunkingConfiguration: { Strategy: 'WholeTable' },
-    EmbeddingConfiguration: { L2Normalization: false }
+    EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
   });
   if (!result || !result.Chunks || result.Chunks.length !== 1) throw new Error('Expected 1 chunk');
 });
@@ -232,7 +281,7 @@ await runTest('Process Text (RegexBased)', async () => {
   const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
-  const result = await client.process(activeEp.Id, {
+  const result = await client.process({
     Type: 'Text',
     Text: '# Intro\nSome text.\n\n# Body\nMore text.\n\n# End\nFinal text.',
     ChunkingConfiguration: {
@@ -240,7 +289,7 @@ await runTest('Process Text (RegexBased)', async () => {
       RegexPattern: '(?=^#{1,3}\\s)',
       FixedTokenCount: 512
     },
-    EmbeddingConfiguration: { L2Normalization: false }
+    EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
   });
   if (!result || !result.Chunks || result.Chunks.length === 0) throw new Error('No chunks');
 });
@@ -251,11 +300,11 @@ await runTest('Regex Strategy Missing Pattern (400)', async () => {
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
   try {
-    await client.process(activeEp.Id, {
+    await client.process({
       Type: 'Text',
       Text: 'Some text here.',
       ChunkingConfiguration: { Strategy: 'RegexBased' },
-      EmbeddingConfiguration: { L2Normalization: false }
+      EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
     });
     throw new Error('Expected 400');
   } catch (ex) {
@@ -269,11 +318,11 @@ await runTest('Table Strategy on Text (400)', async () => {
   if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
 
   try {
-    await client.process(activeEp.Id, {
+    await client.process({
       Type: 'Text',
       Text: 'This is text, not a table.',
       ChunkingConfiguration: { Strategy: 'Row' },
-      EmbeddingConfiguration: { L2Normalization: false }
+      EmbeddingConfiguration: { L2Normalization: false, EmbeddingEndpointId: activeEp.Id }
     });
     throw new Error('Expected 400');
   } catch (ex) {
@@ -302,6 +351,11 @@ await runTest('Non-existent Resource (404)', async () => {
 });
 
 // Cleanup
+await runTest('Delete Completion Endpoint', async () => {
+  await client.deleteCompletionEndpoint(testCepId);
+  if (await client.completionEndpointExists(testCepId)) throw new Error('Still exists');
+});
+
 await runTest('Delete Endpoint', async () => {
   await client.deleteEndpoint(testEpId);
   if (await client.endpointExists(testEpId)) throw new Error('Still exists');

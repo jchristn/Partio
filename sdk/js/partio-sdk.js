@@ -51,8 +51,8 @@ export class PartioClient {
   async whoami() { return this._request('GET', '/v1.0/whoami'); }
 
   // Process
-  async process(endpointId, request) { return this._request('POST', `/v1.0/endpoints/${endpointId}/process`, request); }
-  async processBatch(endpointId, requests) { return this._request('POST', `/v1.0/endpoints/${endpointId}/process/batch`, requests); }
+  async process(request) { return this._request('POST', '/v1.0/process', request); }
+  async processBatch(requests) { return this._request('POST', '/v1.0/process/batch', requests); }
 
   // Tenants
   async createTenant(data) { return this._request('PUT', '/v1.0/tenants', data); }
@@ -103,32 +103,47 @@ export class PartioClient {
   async enumerateCredentials(req = {}) { return this._request('POST', '/v1.0/credentials/enumerate', req); }
 
   // Embedding Endpoints
-  async createEndpoint(data) { return this._request('PUT', '/v1.0/endpoints', data); }
-  async getEndpoint(id) { return this._request('GET', `/v1.0/endpoints/${id}`); }
-  async updateEndpoint(id, data) { return this._request('PUT', `/v1.0/endpoints/${id}`, data); }
-  async deleteEndpoint(id) { return this._request('DELETE', `/v1.0/endpoints/${id}`); }
+  async createEndpoint(data) { return this._request('PUT', '/v1.0/endpoints/embedding', data); }
+  async getEndpoint(id) { return this._request('GET', `/v1.0/endpoints/embedding/${id}`); }
+  async updateEndpoint(id, data) { return this._request('PUT', `/v1.0/endpoints/embedding/${id}`, data); }
+  async deleteEndpoint(id) { return this._request('DELETE', `/v1.0/endpoints/embedding/${id}`); }
   async endpointExists(id) {
     try {
-      const res = await fetch(`${this.endpoint}/v1.0/endpoints/${id}`, {
+      const res = await fetch(`${this.endpoint}/v1.0/endpoints/embedding/${id}`, {
         method: 'HEAD',
         headers: { 'Authorization': `Bearer ${this.accessKey}` }
       });
       return res.ok;
     } catch { return false; }
   }
-  async enumerateEndpoints(req = {}) { return this._request('POST', '/v1.0/endpoints/enumerate', req); }
+  async enumerateEndpoints(req = {}) { return this._request('POST', '/v1.0/endpoints/embedding/enumerate', req); }
 
-  // Endpoint Health
-  async getEndpointHealth(id) { return this._request('GET', `/v1.0/endpoints/${id}/health`); }
-  async getAllEndpointHealth() { return this._request('GET', '/v1.0/endpoints/health'); }
+  // Embedding Endpoint Health
+  async getEndpointHealth(id) { return this._request('GET', `/v1.0/endpoints/embedding/${id}/health`); }
+  async getAllEndpointHealth() { return this._request('GET', '/v1.0/endpoints/embedding/health'); }
+
+  // Completion Endpoints
+  async createCompletionEndpoint(data) { return this._request('PUT', '/v1.0/endpoints/completion', data); }
+  async getCompletionEndpoint(id) { return this._request('GET', `/v1.0/endpoints/completion/${id}`); }
+  async updateCompletionEndpoint(id, data) { return this._request('PUT', `/v1.0/endpoints/completion/${id}`, data); }
+  async deleteCompletionEndpoint(id) { return this._request('DELETE', `/v1.0/endpoints/completion/${id}`); }
+  async completionEndpointExists(id) {
+    try {
+      const res = await fetch(`${this.endpoint}/v1.0/endpoints/completion/${id}`, {
+        method: 'HEAD',
+        headers: { 'Authorization': `Bearer ${this.accessKey}` }
+      });
+      return res.ok;
+    } catch { return false; }
+  }
+  async enumerateCompletionEndpoints(req = {}) { return this._request('POST', '/v1.0/endpoints/completion/enumerate', req); }
+
+  // Completion Endpoint Health
+  async getCompletionEndpointHealth(id) { return this._request('GET', `/v1.0/endpoints/completion/${id}/health`); }
+  async getAllCompletionEndpointHealth() { return this._request('GET', '/v1.0/endpoints/completion/health'); }
 
   // Request History
   async getRequestHistory(id) { return this._request('GET', `/v1.0/requests/${id}`); }
-  /**
-   * Get request/response body detail for a request history entry.
-   * @param {string} id - Request history entry ID.
-   * @returns {Promise<{RequestHeaders?: Object, RequestBody?: string, ResponseHeaders?: Object, ResponseBody?: string, EmbeddingCalls?: Array<{Url?: string, Method?: string, RequestHeaders?: Object, RequestBody?: string, StatusCode?: number, ResponseHeaders?: Object, ResponseBody?: string, ResponseTimeMs?: number, Success: boolean, Error?: string, TimestampUtc: string}>}>}
-   */
   async getRequestHistoryDetail(id) { return this._request('GET', `/v1.0/requests/${id}/detail`); }
   async deleteRequestHistory(id) { return this._request('DELETE', `/v1.0/requests/${id}`); }
   async enumerateRequestHistory(req = {}) { return this._request('POST', '/v1.0/requests/enumerate', req); }

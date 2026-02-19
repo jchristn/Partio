@@ -93,6 +93,54 @@
   color: var(--text-primary);
 }
 
+.form-section-divider {
+  border-top: 1px solid var(--border-color);
+  margin: 16px 0;
+}
+
+.summarization-config {
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  background: var(--bg-color);
+}
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+  width: auto;
+}
+
+.chunk-result-summary {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+}
+
+.summary-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--primary-color);
+  color: #fff;
+  margin-right: 6px;
+}
+
 @media (max-width: 900px) {
   .chunk-embed-layout {
     grid-template-columns: 1fr;

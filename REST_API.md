@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.1.0" }
+{ "Status": "Healthy", "Version": "0.2.0" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.1.0" }
+{ "Status": "Healthy", "Version": "0.2.0" }
 ```
 
 ---
@@ -48,11 +48,8 @@ Returns the role and tenant of the authenticated caller.
 
 ## Process (Chunk & Embed)
 
-### POST /v1.0/endpoints/{id}/process
-Process a single semantic cell using the specified embedding endpoint. Requires bearer token authentication.
-
-**Path Parameters**:
-- `id` — Embedding endpoint ID (e.g. `ep_xxxx`). The endpoint must belong to the caller's tenant (non-admin) and be active.
+### POST /v1.0/process
+Process a single semantic cell. Requires bearer token authentication.
 
 **Request Body**: `SemanticCellRequest`
 
@@ -71,12 +68,39 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "ContextPrefix": "doc-123 "
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": true
     },
     "Labels": ["label1"],
     "Tags": { "key": "value" }
 }
 ```
+
+#### Text with Summarization
+```json
+{
+    "Type": "Text",
+    "Text": "Your long text content here...",
+    "ChunkingConfiguration": {
+        "Strategy": "SentenceBased"
+    },
+    "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx"
+    },
+    "SummarizationConfiguration": {
+        "CompletionEndpointId": "cep_xxxx",
+        "Order": "TopDown",
+        "MaxSummaryTokens": 1024,
+        "MinCellLength": 100,
+        "MaxParallelTasks": 4,
+        "MaxRetries": 10,
+        "MaxRetriesPerSummary": 2,
+        "TimeoutMs": 30000
+    }
+}
+```
+
+When `SummarizationConfiguration` is present, Partio generates summary child cells using the specified completion endpoint before chunking and embedding. The `CompletionEndpointId` is required; all other fields have defaults.
 
 #### Unordered List
 ```json
@@ -87,6 +111,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "Strategy": "WholeList"
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -101,6 +126,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "Strategy": "ListEntry"
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -119,6 +145,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "Strategy": "RowWithHeaders"
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -134,6 +161,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "FixedTokenCount": 256
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -149,6 +177,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "FixedTokenCount": 256
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -164,6 +193,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "FixedTokenCount": 256
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -182,6 +212,7 @@ The `Type` field determines which content field is used. Supported types: `Text`
         "Strategy": "Row"
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -204,6 +235,7 @@ Each data row becomes a chunk of space-separated values: `"Alice 30 New York"`.
         "RowGroupSize": 2
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -224,6 +256,7 @@ Groups of `RowGroupSize` rows with headers prepended as a markdown table. Defaul
         "Strategy": "KeyValuePairs"
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -244,6 +277,7 @@ Each data row becomes: `"Name: Alice, Age: 30, City: New York"`.
         "Strategy": "WholeTable"
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -262,6 +296,7 @@ Entire table serialized as a single markdown table chunk.
         "FixedTokenCount": 512
     },
     "EmbeddingConfiguration": {
+        "EmbeddingEndpointId": "eep_xxxx",
         "L2Normalization": false
     }
 }
@@ -272,9 +307,14 @@ Split at boundaries defined by the `RegexPattern`. Text is split using `Regex.Sp
 **Response**: `200 OK` — `SemanticCellResponse`
 ```json
 {
+    "GUID": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    "ParentGUID": null,
+    "Type": "Text",
     "Text": "Your text content here...",
+    "Children": [],
     "Chunks": [
         {
+            "CellGUID": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
             "Text": "Your text content here...",
             "Labels": ["label1"],
             "Tags": { "key": "value" },
@@ -285,7 +325,7 @@ Split at boundaries defined by the `RegexPattern`. Text is split using `Regex.Sp
 ```
 
 **Errors**:
-- `404 Not Found` — Endpoint ID not found or does not belong to the caller's tenant
+- `404 Not Found` — EmbeddingEndpointId not found or does not belong to the caller's tenant
 - `400 Bad Request` — Endpoint is inactive, request body is missing/invalid, or strategy is incompatible with atom type
 
 #### Strategy-to-Type Validation
@@ -336,11 +376,15 @@ Example error response for using `Row` strategy on a `Text` type:
 | `RowGroupSize` | int | `5` | Rows per group (for RowGroupWithHeaders). Minimum: 1 |
 | `RegexPattern` | string? | `null` | Regular expression split pattern (required for `RegexBased` strategy). Text is split at every match of this pattern. |
 
-### POST /v1.0/endpoints/{id}/process/batch
-Process multiple semantic cells using the specified embedding endpoint.
+#### EmbeddingConfiguration Properties
 
-**Path Parameters**:
-- `id` — Embedding endpoint ID
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `EmbeddingEndpointId` | string | *(required)* | The embedding endpoint ID to use for generating embeddings (e.g. `eep_xxxx`). The endpoint must belong to the caller's tenant (non-admin) and be active. |
+| `L2Normalization` | bool | `false` | Whether to L2-normalize the embedding vectors |
+
+### POST /v1.0/process/batch
+Process multiple semantic cells.
 
 **Request Body**: `List<SemanticCellRequest>`
 
@@ -493,7 +537,7 @@ List credentials with pagination.
 
 ## Embedding Endpoints (Admin)
 
-### PUT /v1.0/endpoints
+### PUT /v1.0/endpoints/embedding
 Create an embedding endpoint.
 
 **Request Body**:
@@ -540,35 +584,35 @@ Health check defaults are applied automatically based on `ApiFormat` when creati
 
 **Response**: `201 Created` — `EmbeddingEndpoint`
 
-### GET /v1.0/endpoints/{id}
+### GET /v1.0/endpoints/embedding/{id}
 Read an embedding endpoint.
 
 **Response**: `200 OK` — `EmbeddingEndpoint`
 
-### PUT /v1.0/endpoints/{id}
+### PUT /v1.0/endpoints/embedding/{id}
 Update an embedding endpoint.
 
 **Response**: `200 OK` — `EmbeddingEndpoint`
 
-### DELETE /v1.0/endpoints/{id}
+### DELETE /v1.0/endpoints/embedding/{id}
 Delete an embedding endpoint.
 
 **Response**: `204 No Content`
 
-### HEAD /v1.0/endpoints/{id}
-Check if an endpoint exists.
+### HEAD /v1.0/endpoints/embedding/{id}
+Check if an embedding endpoint exists.
 
 **Response**: `200 OK` or `404 Not Found`
 
-### POST /v1.0/endpoints/enumerate
-List endpoints with pagination.
+### POST /v1.0/endpoints/embedding/enumerate
+List embedding endpoints with pagination.
 
 ---
 
-## Endpoint Health (Admin)
+## Embedding Endpoint Health (Admin)
 
-### GET /v1.0/endpoints/{id}/health
-Get the health status for a specific monitored endpoint.
+### GET /v1.0/endpoints/embedding/{id}/health
+Get the health status for a specific monitored embedding endpoint.
 
 **Path Parameters**:
 - `id` — Embedding endpoint ID
@@ -576,7 +620,7 @@ Get the health status for a specific monitored endpoint.
 **Response**: `200 OK` — `EndpointHealthStatus`
 ```json
 {
-    "EndpointId": "ep_xxxx",
+    "EndpointId": "eep_xxxx",
     "EndpointName": "all-minilm",
     "TenantId": "ten_xxxx",
     "IsHealthy": true,
@@ -602,8 +646,69 @@ Get the health status for a specific monitored endpoint.
 **Errors**:
 - `404 Not Found` — No health state exists (health check not enabled or endpoint not found)
 
-### GET /v1.0/endpoints/health
-Get health status for all monitored endpoints. Non-admin callers see only their tenant's endpoints.
+### GET /v1.0/endpoints/embedding/health
+Get health status for all monitored embedding endpoints. Non-admin callers see only their tenant's endpoints.
+
+**Response**: `200 OK` — `List<EndpointHealthStatus>`
+
+---
+
+## Completion Endpoints (Admin)
+
+### PUT /v1.0/endpoints/completion
+Create a completion endpoint.
+
+**Request Body**:
+```json
+{
+    "TenantId": "ten_...",
+    "Name": "My Inference Endpoint",
+    "Model": "llama3",
+    "Endpoint": "http://localhost:11434",
+    "ApiFormat": "Ollama",
+    "ApiKey": null,
+    "Active": true,
+    "EnableRequestHistory": true,
+    "HealthCheckEnabled": false
+}
+```
+
+**Response**: `201 Created` — `CompletionEndpoint`
+
+### GET /v1.0/endpoints/completion/{id}
+Read a completion endpoint.
+
+**Response**: `200 OK` — `CompletionEndpoint`
+
+### PUT /v1.0/endpoints/completion/{id}
+Update a completion endpoint.
+
+**Response**: `200 OK` — `CompletionEndpoint`
+
+### DELETE /v1.0/endpoints/completion/{id}
+Delete a completion endpoint.
+
+**Response**: `204 No Content`
+
+### HEAD /v1.0/endpoints/completion/{id}
+Check if a completion endpoint exists.
+
+**Response**: `200 OK` or `404 Not Found`
+
+### POST /v1.0/endpoints/completion/enumerate
+List completion endpoints with pagination.
+
+---
+
+## Completion Endpoint Health (Admin)
+
+### GET /v1.0/endpoints/completion/{id}/health
+Get the health status for a specific completion endpoint.
+
+**Response**: `200 OK` — `EndpointHealthStatus`
+
+### GET /v1.0/endpoints/completion/health
+Get health status for all monitored completion endpoints.
 
 **Response**: `200 OK` — `List<EndpointHealthStatus>`
 
@@ -628,8 +733,9 @@ Read request/response body detail from filesystem.
 | `ResponseHeaders` | object? | Outer response headers (key-value pairs) |
 | `ResponseBody` | string? | Outer response body (may be truncated) |
 | `EmbeddingCalls` | array? | Upstream embedding HTTP call details (present only for process requests) |
+| `CompletionCalls` | array? | Upstream completion/inference HTTP call details (present only for requests that use summarization or other completion features) |
 
-Each item in the `EmbeddingCalls` array:
+Each item in the `EmbeddingCalls` or `CompletionCalls` array:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -652,6 +758,34 @@ Delete a request history entry.
 
 ### POST /v1.0/requests/enumerate
 List request history with pagination.
+
+---
+
+## Summarization
+
+Summarization is an optional step in the processing pipeline that runs **before** chunking and embedding. When a `SummarizationConfiguration` is provided inline on the `SemanticCellRequest`, the server uses a completion endpoint to generate summaries of the input content. The resulting summary cells have `Type = "Summary"`.
+
+### Strategies
+
+- **TopDown** — Summarizes the entire content in a single pass, producing one summary from the full input.
+- **BottomUp** — Splits the content into smaller pieces first, summarizes each piece individually, then optionally combines the summaries.
+
+### Prompt Template
+
+The summarization prompt is configurable via a template string. The following tokens are available for substitution:
+
+| Token | Description |
+|-------|-------------|
+| `{tokens}` | The target token count for the summary |
+| `{content}` | The content to be summarized |
+| `{context}` | Additional context provided by the caller |
+
+### Retry Semantics
+
+Summarization supports two levels of retry control:
+
+- **`MaxRetriesPerSummary`** — Maximum number of retries for each individual summary cell. If a single cell fails repeatedly, it is skipped after this many attempts.
+- **`MaxRetries`** — Global maximum number of total retries across the entire summarization operation. Once this limit is reached, the operation fails regardless of per-cell limits.
 
 ---
 

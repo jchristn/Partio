@@ -6,7 +6,7 @@ from partio_sdk import PartioClient, PartioError
 
 
 def main():
-    endpoint = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
+    endpoint = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8400"
     admin_key = sys.argv[2] if len(sys.argv) > 2 else "partioadmin"
 
     print("Partio Python SDK Test Harness")
@@ -23,6 +23,7 @@ def main():
     test_user_id = None
     test_cred_id = None
     test_ep_id = None
+    test_cep_id = None
 
     with PartioClient(endpoint, admin_key) as client:
 
@@ -91,6 +92,15 @@ def main():
             assert user and user["Email"] == "test@test.com"
         run_test("Read User", test_read_user)
 
+        def test_update_user():
+            updated = client.update_user(test_user_id, {"Email": "updated@test.com", "TenantId": test_tenant_id})
+            assert updated is not None
+        run_test("Update User", test_update_user)
+
+        def test_user_exists():
+            assert client.user_exists(test_user_id)
+        run_test("User Exists (HEAD)", test_user_exists)
+
         def test_enumerate_users():
             result = client.enumerate_users()
             assert result and len(result.get("Data", [])) > 0
@@ -108,6 +118,10 @@ def main():
             cred = client.get_credential(test_cred_id)
             assert cred and cred["Name"] == "Test Key"
         run_test("Read Credential", test_read_credential)
+
+        def test_credential_exists():
+            assert client.credential_exists(test_cred_id)
+        run_test("Credential Exists (HEAD)", test_credential_exists)
 
         def test_enumerate_credentials():
             result = client.enumerate_credentials()
@@ -127,10 +141,46 @@ def main():
             assert ep and ep["Model"] == "test-model"
         run_test("Read Endpoint", test_read_endpoint)
 
+        def test_update_endpoint():
+            updated = client.update_endpoint(test_ep_id, {"TenantId": test_tenant_id, "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            assert updated is not None
+        run_test("Update Endpoint", test_update_endpoint)
+
+        def test_endpoint_exists():
+            assert client.endpoint_exists(test_ep_id)
+        run_test("Endpoint Exists (HEAD)", test_endpoint_exists)
+
         def test_enumerate_endpoints():
             result = client.enumerate_endpoints()
             assert result and len(result.get("Data", [])) > 0
         run_test("Enumerate Endpoints", test_enumerate_endpoints)
+
+        # Completion Endpoint CRUD
+        def test_create_completion_endpoint():
+            nonlocal test_cep_id
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Test Inference", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            assert cep and "Id" in cep
+            test_cep_id = cep["Id"]
+        run_test("Create Completion Endpoint", test_create_completion_endpoint)
+
+        def test_read_completion_endpoint():
+            cep = client.get_completion_endpoint(test_cep_id)
+            assert cep and cep["Model"] == "test-model"
+        run_test("Read Completion Endpoint", test_read_completion_endpoint)
+
+        def test_update_completion_endpoint():
+            updated = client.update_completion_endpoint(test_cep_id, {"TenantId": test_tenant_id, "Name": "Updated Inference", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            assert updated is not None
+        run_test("Update Completion Endpoint", test_update_completion_endpoint)
+
+        def test_completion_endpoint_exists():
+            assert client.completion_endpoint_exists(test_cep_id)
+        run_test("Completion Endpoint Exists (HEAD)", test_completion_endpoint_exists)
+
+        def test_enumerate_completion_endpoints():
+            result = client.enumerate_completion_endpoints()
+            assert result and len(result.get("Data", [])) > 0
+        run_test("Enumerate Completion Endpoints", test_enumerate_completion_endpoints)
 
         # Request History
         def test_enumerate_history():
@@ -150,11 +200,11 @@ def main():
             if not active_ep:
                 raise Exception("SKIP: no active embedding endpoint")
 
-            result = client.process(active_ep["Id"], {
+            result = client.process({
                 "Type": "Text",
                 "Text": "Partio is a multi-tenant embedding platform.",
                 "ChunkingConfiguration": {"Strategy": "FixedTokenCount", "FixedTokenCount": 256},
-                "EmbeddingConfiguration": {"L2Normalization": False},
+                "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]},
                 "Labels": ["test"],
                 "Tags": {"source": "sdk-test"}
             })
@@ -179,11 +229,11 @@ def main():
             if not active_ep:
                 raise Exception("SKIP: no active embedding endpoint")
 
-            result = client.process(active_ep["Id"], {
+            result = client.process({
                 "Type": "Table",
                 "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"]],
                 "ChunkingConfiguration": {"Strategy": "Row"},
-                "EmbeddingConfiguration": {"L2Normalization": False}
+                "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
             })
             assert result is not None, "No response"
             assert result.get("Chunks") and len(result["Chunks"]) == 2, "Expected 2 chunks"
@@ -201,11 +251,11 @@ def main():
             if not active_ep:
                 raise Exception("SKIP: no active embedding endpoint")
 
-            result = client.process(active_ep["Id"], {
+            result = client.process({
                 "Type": "Table",
                 "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"]],
                 "ChunkingConfiguration": {"Strategy": "RowWithHeaders"},
-                "EmbeddingConfiguration": {"L2Normalization": False}
+                "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
             })
             assert result is not None, "No response"
             assert result.get("Chunks") and len(result["Chunks"]) == 2, "Expected 2 chunks"
@@ -223,11 +273,11 @@ def main():
             if not active_ep:
                 raise Exception("SKIP: no active embedding endpoint")
 
-            result = client.process(active_ep["Id"], {
+            result = client.process({
                 "Type": "Table",
                 "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"], ["3", "donald", "trump"]],
                 "ChunkingConfiguration": {"Strategy": "RowGroupWithHeaders", "RowGroupSize": 2},
-                "EmbeddingConfiguration": {"L2Normalization": False}
+                "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
             })
             assert result is not None, "No response"
             assert result.get("Chunks") and len(result["Chunks"]) == 2, "Expected 2 chunks (groups of 2)"
@@ -245,11 +295,11 @@ def main():
             if not active_ep:
                 raise Exception("SKIP: no active embedding endpoint")
 
-            result = client.process(active_ep["Id"], {
+            result = client.process({
                 "Type": "Table",
                 "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"]],
                 "ChunkingConfiguration": {"Strategy": "KeyValuePairs"},
-                "EmbeddingConfiguration": {"L2Normalization": False}
+                "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
             })
             assert result is not None, "No response"
             assert result.get("Chunks") and len(result["Chunks"]) == 1, "Expected 1 chunk"
@@ -267,11 +317,11 @@ def main():
             if not active_ep:
                 raise Exception("SKIP: no active embedding endpoint")
 
-            result = client.process(active_ep["Id"], {
+            result = client.process({
                 "Type": "Table",
                 "Table": [["id", "firstname", "lastname"], ["1", "george", "bush"], ["2", "barack", "obama"]],
                 "ChunkingConfiguration": {"Strategy": "WholeTable"},
-                "EmbeddingConfiguration": {"L2Normalization": False}
+                "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
             })
             assert result is not None, "No response"
             assert result.get("Chunks") and len(result["Chunks"]) == 1, "Expected 1 chunk"
@@ -289,7 +339,7 @@ def main():
             if not active_ep:
                 raise Exception("SKIP: no active embedding endpoint")
 
-            result = client.process(active_ep["Id"], {
+            result = client.process({
                 "Type": "Text",
                 "Text": "# Intro\nSome text.\n\n# Body\nMore text.\n\n# End\nFinal text.",
                 "ChunkingConfiguration": {
@@ -297,7 +347,7 @@ def main():
                     "RegexPattern": r"(?=^#{1,3}\s)",
                     "FixedTokenCount": 512
                 },
-                "EmbeddingConfiguration": {"L2Normalization": False}
+                "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
             })
             assert result is not None, "No response"
             assert result.get("Chunks") and len(result["Chunks"]) > 0, "No chunks"
@@ -316,11 +366,11 @@ def main():
                 raise Exception("SKIP: no active embedding endpoint")
 
             try:
-                client.process(active_ep["Id"], {
+                client.process({
                     "Type": "Text",
                     "Text": "Some text here.",
                     "ChunkingConfiguration": {"Strategy": "RegexBased"},
-                    "EmbeddingConfiguration": {"L2Normalization": False}
+                    "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
                 })
                 raise AssertionError("Expected 400")
             except PartioError as e:
@@ -340,11 +390,11 @@ def main():
                 raise Exception("SKIP: no active embedding endpoint")
 
             try:
-                client.process(active_ep["Id"], {
+                client.process({
                     "Type": "Text",
                     "Text": "This is text, not a table.",
                     "ChunkingConfiguration": {"Strategy": "Row"},
-                    "EmbeddingConfiguration": {"L2Normalization": False}
+                    "EmbeddingConfiguration": {"L2Normalization": False, "EmbeddingEndpointId": active_ep["Id"]}
                 })
                 raise AssertionError("Expected 400")
             except PartioError as e:
@@ -370,6 +420,11 @@ def main():
         run_test("Non-existent Resource (404)", test_not_found)
 
         # Cleanup
+        def test_delete_completion_endpoint():
+            client.delete_completion_endpoint(test_cep_id)
+            assert not client.completion_endpoint_exists(test_cep_id)
+        run_test("Delete Completion Endpoint", test_delete_completion_endpoint)
+
         def test_delete_endpoint():
             client.delete_endpoint(test_ep_id)
             assert not client.endpoint_exists(test_ep_id)

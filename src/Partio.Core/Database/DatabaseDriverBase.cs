@@ -46,6 +46,11 @@ namespace Partio.Core.Database
         public IEmbeddingEndpointMethods EmbeddingEndpoint { get; protected set; } = null!;
 
         /// <summary>
+        /// Completion endpoint database methods.
+        /// </summary>
+        public ICompletionEndpointMethods CompletionEndpoint { get; protected set; } = null!;
+
+        /// <summary>
         /// Request history database methods.
         /// </summary>
         public IRequestHistoryMethods RequestHistory { get; protected set; } = null!;

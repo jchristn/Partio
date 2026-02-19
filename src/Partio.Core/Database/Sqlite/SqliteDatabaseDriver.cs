@@ -56,6 +56,7 @@ namespace Partio.Core.Database.Sqlite
             User = new UserMethods(this, _Logging);
             Credential = new CredentialMethods(this, _Logging);
             EmbeddingEndpoint = new EmbeddingEndpointMethods(this, _Logging);
+            CompletionEndpoint = new Implementations.CompletionEndpointMethods(this, _Logging);
             RequestHistory = new RequestHistoryMethods(this, _Logging);
 
             _Logging.Info(_Header + "SQLite database initialized successfully");

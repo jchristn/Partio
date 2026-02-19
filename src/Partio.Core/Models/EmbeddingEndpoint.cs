@@ -22,17 +22,17 @@ namespace Partio.Core.Models
         private bool _HealthCheckEnabled = false;
         private string? _HealthCheckUrl = null;
         private HealthCheckMethodEnum _HealthCheckMethod = HealthCheckMethodEnum.GET;
-        private int _HealthCheckIntervalMs = 0;
-        private int _HealthCheckTimeoutMs = 0;
-        private int _HealthCheckExpectedStatusCode = 0;
-        private int _HealthyThreshold = 0;
-        private int _UnhealthyThreshold = 0;
+        private int _HealthCheckIntervalMs = 5000;
+        private int _HealthCheckTimeoutMs = 2000;
+        private int _HealthCheckExpectedStatusCode = 200;
+        private int _HealthyThreshold = 2;
+        private int _UnhealthyThreshold = 2;
         private bool _HealthCheckUseAuth = false;
         private DateTime _CreatedUtc = DateTime.UtcNow;
         private DateTime _LastUpdateUtc = DateTime.UtcNow;
 
         /// <summary>
-        /// K-sortable unique identifier with prefix 'ep_'.
+        /// K-sortable unique identifier with prefix 'eep_'.
         /// </summary>
         /// <remarks>48 characters.</remarks>
         public string Id

@@ -38,12 +38,21 @@ namespace Partio.Core
         }
 
         /// <summary>
-        /// Generate a new embedding endpoint ID with prefix 'ep_'.
+        /// Generate a new embedding endpoint ID with prefix 'eep_'.
         /// </summary>
         /// <returns>A k-sortable unique ID.</returns>
         public static string NewEmbeddingEndpointId()
         {
             return _Generator.Generate(Constants.EmbeddingEndpointIdPrefix, 48);
+        }
+
+        /// <summary>
+        /// Generate a new completion endpoint ID with prefix 'cep_'.
+        /// </summary>
+        /// <returns>A k-sortable unique ID.</returns>
+        public static string NewCompletionEndpointId()
+        {
+            return _Generator.Generate(Constants.CompletionEndpointIdPrefix, 48);
         }
 
         /// <summary>

@@ -23,7 +23,7 @@ namespace Partio.Core
         /// <summary>
         /// Current version string.
         /// </summary>
-        public static readonly string Version = "0.1.0";
+        public static readonly string Version = "0.2.0";
 
         /// <summary>
         /// Settings filename.
@@ -78,7 +78,12 @@ namespace Partio.Core
         /// <summary>
         /// ID prefix for embedding endpoints.
         /// </summary>
-        public static readonly string EmbeddingEndpointIdPrefix = "ep_";
+        public static readonly string EmbeddingEndpointIdPrefix = "eep_";
+
+        /// <summary>
+        /// ID prefix for completion endpoints.
+        /// </summary>
+        public static readonly string CompletionEndpointIdPrefix = "cep_";
 
         /// <summary>
         /// ID prefix for request history entries.

@@ -12,6 +12,7 @@ namespace Partio.Core.Settings
         private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
         private List<string> _AdminApiKeys = new List<string> { "partioadmin" };
         private List<DefaultEmbeddingEndpoint> _DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>();
+        private List<DefaultInferenceEndpoint> _DefaultInferenceEndpoints = new List<DefaultInferenceEndpoint>();
 
         /// <summary>
         /// REST server settings.
@@ -75,6 +76,15 @@ namespace Partio.Core.Settings
         {
             get => _DefaultEmbeddingEndpoints;
             set => _DefaultEmbeddingEndpoints = value ?? new List<DefaultEmbeddingEndpoint>();
+        }
+
+        /// <summary>
+        /// Default inference (completion) endpoints seeded for new tenants.
+        /// </summary>
+        public List<DefaultInferenceEndpoint> DefaultInferenceEndpoints
+        {
+            get => _DefaultInferenceEndpoints;
+            set => _DefaultInferenceEndpoints = value ?? new List<DefaultInferenceEndpoint>();
         }
     }
 }

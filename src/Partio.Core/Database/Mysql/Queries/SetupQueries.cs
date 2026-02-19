@@ -87,6 +87,36 @@ namespace Partio.Core.Database.Mysql.Queries
             );";
 
         /// <summary>
+        /// Creates the completion_endpoints table for storing completion/inference API configurations.
+        /// References tenants(id) via tenant_id.
+        /// </summary>
+        public static readonly string CreateCompletionEndpointsTable =
+            @"CREATE TABLE IF NOT EXISTS completion_endpoints (
+                id VARCHAR(48) PRIMARY KEY,
+                tenant_id VARCHAR(48) NOT NULL,
+                name VARCHAR(256) NULL,
+                endpoint VARCHAR(512) NOT NULL,
+                api_format VARCHAR(32) NOT NULL,
+                api_key VARCHAR(512) NULL,
+                model VARCHAR(256) NOT NULL,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                enable_request_history TINYINT(1) NOT NULL DEFAULT 1,
+                health_check_enabled TINYINT(1) NOT NULL DEFAULT 1,
+                health_check_url VARCHAR(512) NULL,
+                health_check_method INT NOT NULL DEFAULT 0,
+                health_check_interval_ms INT NOT NULL DEFAULT 5000,
+                health_check_timeout_ms INT NOT NULL DEFAULT 2000,
+                health_check_expected_status INT NOT NULL DEFAULT 200,
+                healthy_threshold INT NOT NULL DEFAULT 2,
+                unhealthy_threshold INT NOT NULL DEFAULT 2,
+                health_check_use_auth TINYINT(1) NOT NULL DEFAULT 0,
+                labels_json TEXT NULL,
+                tags_json TEXT NULL,
+                created_utc TEXT NOT NULL,
+                last_update_utc TEXT NOT NULL
+            );";
+
+        /// <summary>
         /// Creates the request_history table for storing HTTP request audit logs.
         /// References tenants(id) via tenant_id, users(id) via user_id, and credentials(id) via credential_id.
         /// </summary>
@@ -117,6 +147,7 @@ namespace Partio.Core.Database.Mysql.Queries
             CreateUsersTable,
             CreateCredentialsTable,
             CreateEmbeddingEndpointsTable,
+            CreateCompletionEndpointsTable,
             CreateRequestHistoryTable
         };
     }

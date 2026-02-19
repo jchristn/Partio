@@ -6,7 +6,11 @@ const adminLinks = [
   { to: '/tenants', label: 'Tenants' },
   { to: '/users', label: 'Users' },
   { to: '/credentials', label: 'Credentials' },
-  { to: '/endpoints', label: 'Endpoints' },
+];
+
+const endpointLinks = [
+  { to: '/endpoints/embeddings', label: 'Embeddings' },
+  { to: '/endpoints/inference', label: 'Inference' },
 ];
 
 const processingLinks = [
@@ -23,6 +27,13 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         <div className="nav-section-header">Administration</div>
         {adminLinks.map(link => (
+          <NavLink key={link.to} to={link.to} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            {link.label}
+          </NavLink>
+        ))}
+        <div className="nav-divider" />
+        <div className="nav-section-header">Endpoints</div>
+        {endpointLinks.map(link => (
           <NavLink key={link.to} to={link.to} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             {link.label}
           </NavLink>

@@ -7,6 +7,9 @@ namespace Partio.Core.Models
     /// </summary>
     public class SemanticCellRequest
     {
+        private Guid _GUID = Guid.NewGuid();
+        private Guid? _ParentGUID = null;
+        private List<SemanticCellRequest>? _Children = null;
         private AtomTypeEnum _Type = AtomTypeEnum.Text;
         private string? _Text = null;
         private List<string>? _UnorderedList = null;
@@ -15,8 +18,36 @@ namespace Partio.Core.Models
         private byte[]? _Binary = null;
         private ChunkingConfiguration _ChunkingConfiguration = new ChunkingConfiguration();
         private EmbeddingConfiguration _EmbeddingConfiguration = new EmbeddingConfiguration();
+        private SummarizationConfiguration? _SummarizationConfiguration = null;
         private List<string>? _Labels = null;
         private Dictionary<string, string>? _Tags = null;
+
+        /// <summary>
+        /// Unique identifier for this cell (auto-generated if not supplied).
+        /// </summary>
+        public Guid GUID
+        {
+            get => _GUID;
+            set => _GUID = value;
+        }
+
+        /// <summary>
+        /// Parent cell GUID (null for root-level cells).
+        /// </summary>
+        public Guid? ParentGUID
+        {
+            get => _ParentGUID;
+            set => _ParentGUID = value;
+        }
+
+        /// <summary>
+        /// Child cells forming a hierarchy.
+        /// </summary>
+        public List<SemanticCellRequest>? Children
+        {
+            get => _Children;
+            set => _Children = value;
+        }
 
         /// <summary>
         /// Type of the semantic atom.
@@ -88,6 +119,15 @@ namespace Partio.Core.Models
         {
             get => _EmbeddingConfiguration;
             set => _EmbeddingConfiguration = value ?? throw new ArgumentNullException(nameof(EmbeddingConfiguration));
+        }
+
+        /// <summary>
+        /// Summarization configuration (null = skip summarization).
+        /// </summary>
+        public SummarizationConfiguration? SummarizationConfiguration
+        {
+            get => _SummarizationConfiguration;
+            set => _SummarizationConfiguration = value;
         }
 
         /// <summary>

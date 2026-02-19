@@ -9,14 +9,14 @@
   <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--dashboard-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Dashboard">
 </p>
 
-Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lists, tables, images, code, and more) with a chunking and embedding configuration, and returns chunked text with computed embeddings. Partio lets you define endpoints (provider + model + chunking policy) and call them consistently across tenants and applications, so you can focus on building your product instead of managing chunking and embedding infrastructure.
+Partio is a multi-tenant RESTful platform that accepts semantic cells (text, lists, tables, images, code, and more) with a chunking and embedding configuration, and returns chunked text with computed embeddings. Partio also supports optional LLM-powered summarization of cells before chunking and embedding. Partio lets you define endpoints (provider + model + chunking policy) and call them consistently across tenants and applications, so you can focus on building your product instead of managing chunking and embedding infrastructure.
 
 ### Quick Example
 
 Send a semantic cell with a chunking config:
 
 ```bash
-curl -X POST http://localhost:8400/v1.0/endpoints/ep_abc123/process \
+curl -X POST http://localhost:8400/v1.0/process \
   -H "Authorization: Bearer partioadmin" \
   -H "Content-Type: application/json" \
   -d '{
@@ -24,6 +24,9 @@ curl -X POST http://localhost:8400/v1.0/endpoints/ep_abc123/process \
     "Text": "Partio centralizes your chunking and embedding workflow. It accepts semantic cells and returns chunks with embeddings.",
     "ChunkingConfiguration": {
       "Strategy": "SentenceBased"
+    },
+    "EmbeddingConfiguration": {
+      "EmbeddingEndpointId": "eep_abc123"
     }
   }'
 ```
@@ -94,6 +97,8 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Bearer token authentication** with global admin API keys and tenant-scoped credentials
 - **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return 502)
 - **Batch processing** for submitting multiple semantic cells in a single request
+- **Optional summarization** with LLM-powered cell summarization before chunking and embedding, supporting top-down and bottom-up strategies
+- **Completion endpoint management** for configuring LLM inference endpoints (Ollama, OpenAI) with health checks
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history
 - **SDKs** for C#, Python, and JavaScript
 - **Docker images** with multi-architecture support (amd64/arm64)
@@ -190,15 +195,15 @@ All endpoints use JSON and require an `Authorization: Bearer {token}` header unl
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `POST` | `/v1.0/endpoints/{id}/process` | Process a single semantic cell |
-| `POST` | `/v1.0/endpoints/{id}/process/batch` | Process multiple semantic cells |
+| `POST` | `/v1.0/process` | Process a single semantic cell |
+| `POST` | `/v1.0/process/batch` | Process multiple semantic cells |
 
 ### Endpoint Health
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| `GET` | `/v1.0/endpoints/{id}/health` | Yes | Health status for one endpoint |
-| `GET` | `/v1.0/endpoints/health` | Yes | Health status for all endpoints |
+| `GET` | `/v1.0/endpoints/embedding/{id}/health` | Yes | Health status for one endpoint |
+| `GET` | `/v1.0/endpoints/embedding/health` | Yes | Health status for all endpoints |
 
 ### Administration (CRUD + Enumerate)
 
@@ -209,13 +214,14 @@ Each admin resource supports `PUT` (create), `GET` (read), `PUT /{id}` (update),
 | Tenants | `/v1.0/tenants` | `ten_` |
 | Users | `/v1.0/users` | `usr_` |
 | Credentials | `/v1.0/credentials` | `cred_` |
-| Endpoints | `/v1.0/endpoints` | `ep_` |
+| Endpoints | `/v1.0/endpoints/embedding` | `eep_` |
+| Completion Endpoints | `/v1.0/endpoints/completion` | `cep_` |
 | Request History | `/v1.0/requests` | `req_` |
 
 ### Example: Process a Text Cell
 
 ```bash
-curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process \
+curl -X POST http://localhost:8400/v1.0/process \
   -H "Authorization: Bearer partioadmin" \
   -H "Content-Type: application/json" \
   -d '{
@@ -226,6 +232,7 @@ curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process \
       "FixedTokenCount": 256
     },
     "EmbeddingConfiguration": {
+      "EmbeddingEndpointId": "eep_YOUR_ENDPOINT_ID",
       "L2Normalization": false
     }
   }'
@@ -234,7 +241,7 @@ curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process \
 ### Example: Batch Processing
 
 ```bash
-curl -X POST http://localhost:8400/v1.0/endpoints/ep_YOUR_ENDPOINT_ID/process/batch \
+curl -X POST http://localhost:8400/v1.0/process/batch \
   -H "Authorization: Bearer partioadmin" \
   -H "Content-Type: application/json" \
   -d '[
@@ -337,10 +344,11 @@ using Partio.Sdk.Models;
 
 using PartioClient client = new PartioClient("http://localhost:8400", "partioadmin");
 
-SemanticCellResponse? response = await client.ProcessAsync("ep_YOUR_ENDPOINT_ID", new SemanticCellRequest
+SemanticCellResponse? response = await client.ProcessAsync(new SemanticCellRequest
 {
     Type = "Text",
-    Text = "Hello world"
+    Text = "Hello world",
+    EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = "eep_YOUR_ENDPOINT_ID" }
 });
 ```
 
@@ -350,10 +358,11 @@ SemanticCellResponse? response = await client.ProcessAsync("ep_YOUR_ENDPOINT_ID"
 from partio_sdk import PartioClient
 
 with PartioClient("http://localhost:8400", "partioadmin") as client:
-    result = client.process("ep_YOUR_ENDPOINT_ID", {
+    result = client.process({
         "Type": "Text",
         "Text": "Hello world",
-        "ChunkingConfiguration": {"Strategy": "FixedTokenCount", "FixedTokenCount": 256}
+        "ChunkingConfiguration": {"Strategy": "FixedTokenCount", "FixedTokenCount": 256},
+        "EmbeddingConfiguration": {"EmbeddingEndpointId": "eep_YOUR_ENDPOINT_ID"}
     })
 ```
 
@@ -363,10 +372,11 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
 import { PartioClient } from './partio-sdk.js';
 
 const client = new PartioClient('http://localhost:8400', 'partioadmin');
-const result = await client.process('ep_YOUR_ENDPOINT_ID', {
+const result = await client.process({
   Type: 'Text',
   Text: 'Hello world',
-  ChunkingConfiguration: { Strategy: 'FixedTokenCount', FixedTokenCount: 256 }
+  ChunkingConfiguration: { Strategy: 'FixedTokenCount', FixedTokenCount: 256 },
+  EmbeddingConfiguration: { EmbeddingEndpointId: 'eep_YOUR_ENDPOINT_ID' }
 });
 ```
 
@@ -471,7 +481,7 @@ Have a question, found a bug, or want to request a feature?
 - **Questions and discussions**: [Start a discussion](https://github.com/jchristn/partio/discussions)
 
 When filing an issue, please include:
-1. The Partio version (`v0.1.0`, or the Docker image tag)
+1. The Partio version (`v0.2.0`, or the Docker image tag)
 2. Steps to reproduce the problem
 3. The request/response (redact any credentials)
 4. Relevant log output from `./logs/`
