@@ -6,7 +6,8 @@ import './Login.css';
 export default function Login() {
   const { login, error, theme } = useApp();
   const navigate = useNavigate();
-  const [serverUrl, setServerUrl] = useState('http://localhost:8400');
+  const defaultServerUrl = window.__PARTIO_ENV__?.PARTIO_SERVER_URL || 'http://localhost:8400';
+  const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [token, setToken] = useState('partioadmin');
   const [loading, setLoading] = useState(false);
 

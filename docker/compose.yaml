@@ -17,6 +17,8 @@ services:
     container_name: partio-dashboard
     ports:
       - "8401:8401"
+    environment:
+      - PARTIO_SERVER_URL=http://localhost:8400
     restart: unless-stopped
 
   ollama:
