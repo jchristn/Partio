@@ -23,6 +23,7 @@
   padding: 8px 0;
   display: flex;
   flex-direction: column;
+  flex-grow: 1;
 }
 
 .nav-section-header {
@@ -57,4 +58,27 @@
   background: var(--sidebar-active);
   color: white;
   font-weight: 600;
+}
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  gap: 8px;
+}
+
+.sidebar-footer-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.sidebar-footer-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.08);
 }

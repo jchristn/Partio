@@ -1,0 +1,159 @@
+/* Spotlight overlay - transparent hole via box-shadow */
+.tour-spotlight {
+  position: fixed;
+  z-index: 1100;
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  transition: top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease;
+  pointer-events: none;
+}
+
+/* Tooltip card */
+.tour-tooltip {
+  position: fixed;
+  z-index: 1101;
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 20px;
+  width: 320px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  animation: tour-fade-in 0.25s ease;
+}
+
+@keyframes tour-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tour-tooltip-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.tour-tooltip-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 16px;
+  white-space: pre-line;
+}
+
+.tour-tooltip-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tour-tooltip-counter {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tour-tooltip-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.tour-tooltip-buttons button {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.tour-btn-skip {
+  background: none;
+  color: var(--text-secondary);
+  border: none;
+}
+
+.tour-btn-skip:hover {
+  color: var(--text-primary);
+  background: var(--bg-color);
+}
+
+.tour-btn-prev {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.tour-btn-prev:hover {
+  background: var(--bg-color);
+}
+
+.tour-btn-next {
+  background: var(--primary-color);
+  color: white;
+  border: none;
+}
+
+.tour-btn-next:hover {
+  background: var(--primary-hover);
+}
+
+/* Arrow indicators */
+.tour-arrow {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--card-bg);
+  transform: rotate(45deg);
+}
+
+.tour-arrow-left {
+  left: -5px;
+  top: 24px;
+}
+
+.tour-arrow-top {
+  top: -5px;
+  left: 24px;
+}
+
+/* Welcome modal (step 0) */
+.tour-welcome-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100;
+  animation: tour-fade-in 0.25s ease;
+}
+
+.tour-welcome-modal {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 32px;
+  width: 480px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.tour-welcome-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.tour-welcome-modal .tour-tooltip-title {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+
+.tour-welcome-modal .tour-tooltip-desc {
+  text-align: left;
+}
+
+.tour-welcome-modal .tour-tooltip-footer {
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
