@@ -25,6 +25,9 @@ services:
     image: ollama/ollama:latest
     container_name: partio-ollama
     network_mode: "service:partio-server"
+    environment:
+      OLLAMA_NUM_PARALLEL: "4"
+      OLLAMA_MAX_LOADED_MODELS: "4"
     volumes:
       - ollama-models:/root/.ollama
     restart: unless-stopped
