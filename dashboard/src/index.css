@@ -120,6 +120,30 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-input-wrapper input {
+  padding-right: 36px;
+}
+.password-toggle-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+.password-toggle-btn:hover {
+  opacity: 1;
+}
+
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
