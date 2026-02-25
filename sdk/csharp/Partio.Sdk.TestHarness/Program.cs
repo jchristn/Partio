@@ -141,7 +141,7 @@ namespace Partio.Sdk.TestHarness
                 string testEpId = "";
                 await RunTest("Create Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Test Embedding", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
                     if (ep == null) throw new Exception("No response");
                     testEpId = ep.Id;
                 });
@@ -154,7 +154,7 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Update Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? updated = await admin.UpdateEndpointAsync(testEpId, new EmbeddingEndpoint { TenantId = testTenantId, Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    EmbeddingEndpoint? updated = await admin.UpdateEndpointAsync(testEpId, new EmbeddingEndpoint { TenantId = testTenantId, Name = "Updated Embedding", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
                     if (updated == null) throw new Exception("Update failed");
                 });
 

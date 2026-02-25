@@ -10,6 +10,9 @@ namespace Partio.Sdk.Models
         [JsonPropertyName("TenantId")]
         public string TenantId { get; set; } = string.Empty;
 
+        [JsonPropertyName("Name")]
+        public string? Name { get; set; }
+
         [JsonPropertyName("Model")]
         public string Model { get; set; } = string.Empty;
 

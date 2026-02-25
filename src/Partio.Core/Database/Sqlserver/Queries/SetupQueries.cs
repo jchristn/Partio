@@ -76,6 +76,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                 CREATE TABLE embedding_endpoints (
                     id NVARCHAR(48) PRIMARY KEY,
                     tenant_id NVARCHAR(48) NOT NULL,       -- references tenants(id)
+                    name NVARCHAR(256) NULL,
                     model NVARCHAR(256) NOT NULL,
                     endpoint NVARCHAR(512) NOT NULL,
                     api_format NVARCHAR(32) NOT NULL,
@@ -154,6 +155,15 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     created_utc NVARCHAR(64) NOT NULL,
                     completed_utc NVARCHAR(64) NULL
                 );
+            END;";
+
+        /// <summary>
+        /// Migration: add name column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddName =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'name')
+            BEGIN
+                ALTER TABLE embedding_endpoints ADD name NVARCHAR(256) NULL;
             END;";
 
         /// <summary>

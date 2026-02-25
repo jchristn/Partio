@@ -7,8 +7,8 @@ namespace Partio.Core.Settings
     /// </summary>
     public class DefaultInferenceEndpoint
     {
-        private string _Name = "Default Inference";
-        private string _Model = "llama3";
+        private string _Name = "gemma3:4b";
+        private string _Model = "gemma3:4b";
         private string _Endpoint = "http://localhost:11434";
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
         private string? _ApiKey = null;

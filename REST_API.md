@@ -544,6 +544,7 @@ Create an embedding endpoint.
 ```json
 {
     "TenantId": "ten_...",
+    "Name": "My Embedding Endpoint",
     "Model": "all-minilm",
     "Endpoint": "http://localhost:11434",
     "ApiFormat": "Ollama",

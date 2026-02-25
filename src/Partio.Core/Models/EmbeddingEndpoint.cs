@@ -11,6 +11,7 @@ namespace Partio.Core.Models
     {
         private string _Id = IdGenerator.NewEmbeddingEndpointId();
         private string _TenantId = string.Empty;
+        private string? _Name = null;
         private string _Model = string.Empty;
         private string _Endpoint = string.Empty;
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
@@ -48,6 +49,15 @@ namespace Partio.Core.Models
         {
             get => _TenantId;
             set => _TenantId = value ?? throw new ArgumentNullException(nameof(TenantId));
+        }
+
+        /// <summary>
+        /// Human-readable name for the endpoint.
+        /// </summary>
+        public string? Name
+        {
+            get => _Name;
+            set => _Name = value;
         }
 
         /// <summary>
@@ -240,6 +250,7 @@ namespace Partio.Core.Models
             EmbeddingEndpoint ep = new EmbeddingEndpoint();
             ep.Id = row["id"].ToString() ?? string.Empty;
             ep.TenantId = row["tenant_id"].ToString() ?? string.Empty;
+            ep.Name = row["name"] == DBNull.Value ? null : row["name"].ToString();
             ep.Model = row["model"].ToString() ?? string.Empty;
             ep.Endpoint = row["endpoint"].ToString() ?? string.Empty;
             ep.ApiFormat = Enum.Parse<ApiFormatEnum>(row["api_format"].ToString() ?? "Ollama");

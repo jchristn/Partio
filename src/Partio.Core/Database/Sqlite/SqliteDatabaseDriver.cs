@@ -52,6 +52,10 @@ namespace Partio.Core.Database.Sqlite
                 await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
             }
 
+            // Migration: add name column to embedding_endpoints
+            try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddName, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
+
             Tenant = new TenantMethods(this, _Logging);
             User = new UserMethods(this, _Logging);
             Credential = new CredentialMethods(this, _Logging);

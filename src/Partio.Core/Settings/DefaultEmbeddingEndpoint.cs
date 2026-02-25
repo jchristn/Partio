@@ -7,10 +7,20 @@ namespace Partio.Core.Settings
     /// </summary>
     public class DefaultEmbeddingEndpoint
     {
+        private string? _Name = "all-minilm";
         private string _Model = "all-minilm";
         private string _Endpoint = "http://localhost:11434";
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
         private string? _ApiKey = null;
+
+        /// <summary>
+        /// Human-readable name for the endpoint.
+        /// </summary>
+        public string? Name
+        {
+            get => _Name;
+            set => _Name = value;
+        }
 
         /// <summary>
         /// Embedding model name.

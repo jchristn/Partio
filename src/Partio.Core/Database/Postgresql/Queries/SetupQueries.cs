@@ -65,6 +65,7 @@ namespace Partio.Core.Database.Postgresql.Queries
             @"CREATE TABLE IF NOT EXISTS embedding_endpoints (
                 id VARCHAR(48) PRIMARY KEY,
                 tenant_id VARCHAR(48) NOT NULL,       -- references tenants(id)
+                name VARCHAR(256) NULL,
                 model VARCHAR(256) NOT NULL,
                 endpoint VARCHAR(512) NOT NULL,
                 api_format VARCHAR(32) NOT NULL,
@@ -137,6 +138,12 @@ namespace Partio.Core.Database.Postgresql.Queries
                 created_utc TEXT NOT NULL,
                 completed_utc TEXT NULL
             );";
+
+        /// <summary>
+        /// Migration: add name column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddName =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN IF NOT EXISTS name VARCHAR(256) NULL;";
 
         /// <summary>
         /// All table creation queries in dependency order.

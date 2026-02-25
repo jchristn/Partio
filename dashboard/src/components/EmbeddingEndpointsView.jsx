@@ -202,7 +202,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false, ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false, ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -252,7 +252,7 @@ export default function EmbeddingEndpointsView() {
     setEditing(null);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const defaults = getHealthCheckDefaults('Ollama', '');
-    setForm({ TenantId: tenantId, Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false, HealthCheckEnabled: false, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false, HealthCheckEnabled: false, ...defaults });
     setHealthFieldsEdited(false);
     setShowModal(true);
   };
@@ -261,6 +261,7 @@ export default function EmbeddingEndpointsView() {
     setEditing(item);
     setForm({
       TenantId: item.TenantId,
+      Name: item.Name || '',
       Model: item.Model,
       Endpoint: item.Endpoint,
       ApiFormat: item.ApiFormat,
@@ -302,6 +303,7 @@ export default function EmbeddingEndpointsView() {
     try {
       const payload = {
         TenantId: form.TenantId,
+        Name: form.Name || null,
         Model: form.Model,
         Endpoint: form.Endpoint,
         ApiFormat: form.ApiFormat,
@@ -356,6 +358,11 @@ export default function EmbeddingEndpointsView() {
       tooltip: 'Unique endpoint identifier (click to copy)',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
+    },
+    {
+      key: 'Name',
+      label: 'Name',
+      tooltip: 'Human-readable name for this endpoint'
     },
     {
       key: 'Model',
@@ -475,9 +482,15 @@ export default function EmbeddingEndpointsView() {
             </div>
             <div className="endpoint-form-row">
               <div className="form-group">
+                <FieldLabel text="Name" tooltip="Human-readable name for this endpoint. Optional but recommended for easy identification." />
+                <input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} placeholder="e.g. Default Embedding" />
+              </div>
+              <div className="form-group">
                 <FieldLabel text="Model" tooltip="Embedding model name served by this endpoint. Example: all-minilm, text-embedding-3-small" />
                 <input value={form.Model} onChange={e => setForm({ ...form, Model: e.target.value })} placeholder="e.g. all-minilm" />
               </div>
+            </div>
+            <div className="endpoint-form-row">
               <div className="form-group">
                 <FieldLabel text="API Key" tooltip="Authentication key for the embedding API. Required for OpenAI, optional for Ollama." />
                 <input type="password" value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder="Optional" />

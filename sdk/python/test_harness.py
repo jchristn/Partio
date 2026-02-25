@@ -131,7 +131,7 @@ def main():
         # Endpoint CRUD
         def test_create_endpoint():
             nonlocal test_ep_id
-            ep = client.create_endpoint({"TenantId": test_tenant_id, "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "Test Embedding", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
             assert ep and "Id" in ep
             test_ep_id = ep["Id"]
         run_test("Create Endpoint", test_create_endpoint)
@@ -142,7 +142,7 @@ def main():
         run_test("Read Endpoint", test_read_endpoint)
 
         def test_update_endpoint():
-            updated = client.update_endpoint(test_ep_id, {"TenantId": test_tenant_id, "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            updated = client.update_endpoint(test_ep_id, {"TenantId": test_tenant_id, "Name": "Updated Embedding", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
             assert updated is not None
         run_test("Update Endpoint", test_update_endpoint)
 

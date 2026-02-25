@@ -610,7 +610,7 @@ namespace Partio.Server
             ServerSettings defaults = new ServerSettings();
             defaults.DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>
             {
-                new DefaultEmbeddingEndpoint { Model = "all-minilm", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
+                new DefaultEmbeddingEndpoint { Name = "Default Embedding", Model = "all-minilm", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
             };
             defaults.DefaultInferenceEndpoints = new List<DefaultInferenceEndpoint>
             {
@@ -699,6 +699,7 @@ namespace Partio.Server
                 EmbeddingEndpoint ep = new EmbeddingEndpoint();
                 ep.Id = "default";
                 ep.TenantId = "default";
+                ep.Name = defaultEp.Name;
                 ep.Model = defaultEp.Model;
                 ep.Endpoint = defaultEp.Endpoint;
                 ep.ApiFormat = defaultEp.ApiFormat;
@@ -1279,6 +1280,7 @@ namespace Partio.Server
             {
                 EmbeddingEndpoint ep = new EmbeddingEndpoint();
                 ep.TenantId = created.Id;
+                ep.Name = defaultEp.Name;
                 ep.Model = defaultEp.Model;
                 ep.Endpoint = defaultEp.Endpoint;
                 ep.ApiFormat = defaultEp.ApiFormat;

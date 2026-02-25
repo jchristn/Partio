@@ -1289,7 +1289,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"HealthCheckEnabled\": false,\n    \"HealthCheckUrl\": null,\n    \"HealthCheckMethod\": \"GET\",\n    \"HealthCheckIntervalMs\": 5000,\n    \"HealthCheckTimeoutMs\": 2000,\n    \"HealthCheckExpectedStatusCode\": 200,\n    \"HealthyThreshold\": 3,\n    \"UnhealthyThreshold\": 3,\n    \"HealthCheckUseAuth\": false,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Test Embedding\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"HealthCheckEnabled\": false,\n    \"HealthCheckUrl\": null,\n    \"HealthCheckMethod\": \"GET\",\n    \"HealthCheckIntervalMs\": 5000,\n    \"HealthCheckTimeoutMs\": 2000,\n    \"HealthCheckExpectedStatusCode\": 200,\n    \"HealthyThreshold\": 3,\n    \"UnhealthyThreshold\": 3,\n    \"HealthCheckUseAuth\": false,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
@@ -1350,7 +1350,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"Id\": \"{{endpointId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"updated\": \"true\"\n    }\n}"
+							"raw": "{\n    \"Id\": \"{{endpointId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Updated Embedding\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"updated\": \"true\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}",

@@ -126,7 +126,7 @@ await runTest('Enumerate Credentials', async () => {
 
 // Endpoint CRUD
 await runTest('Create Endpoint', async () => {
-  const ep = await client.createEndpoint({ TenantId: testTenantId, Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'Test Embedding', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
   if (!ep || !ep.Id) throw new Error('No response');
   testEpId = ep.Id;
 });
@@ -137,7 +137,7 @@ await runTest('Read Endpoint', async () => {
 });
 
 await runTest('Update Endpoint', async () => {
-  const updated = await client.updateEndpoint(testEpId, { TenantId: testTenantId, Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  const updated = await client.updateEndpoint(testEpId, { TenantId: testTenantId, Name: 'Updated Embedding', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
   if (!updated) throw new Error('Update failed');
 });
 

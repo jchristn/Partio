@@ -39,12 +39,13 @@ namespace Partio.Core.Database.Mysql.Implementations
             string tagsJson = serializer.SerializeJson(endpoint.Tags, false);
 
             string query =
-                "INSERT INTO embedding_endpoints (id, tenant_id, model, endpoint, api_format, api_key, active, enable_request_history, " +
+                "INSERT INTO embedding_endpoints (id, tenant_id, name, model, endpoint, api_format, api_key, active, enable_request_history, " +
                 "health_check_enabled, health_check_url, health_check_method, health_check_interval_ms, health_check_timeout_ms, " +
                 "health_check_expected_status, healthy_threshold, unhealthy_threshold, health_check_use_auth, " +
                 "labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
                 "'" + _Driver.Sanitize(endpoint.Id) + "', " +
                 "'" + _Driver.Sanitize(endpoint.TenantId) + "', " +
+                _Driver.FormatNullableString(endpoint.Name) + ", " +
                 "'" + _Driver.Sanitize(endpoint.Model) + "', " +
                 "'" + _Driver.Sanitize(endpoint.Endpoint) + "', " +
                 "'" + _Driver.Sanitize(endpoint.ApiFormat.ToString()) + "', " +
@@ -125,6 +126,7 @@ namespace Partio.Core.Database.Mysql.Implementations
             string query =
                 "UPDATE embedding_endpoints SET " +
                 "tenant_id = '" + _Driver.Sanitize(endpoint.TenantId) + "', " +
+                "name = " + _Driver.FormatNullableString(endpoint.Name) + ", " +
                 "model = '" + _Driver.Sanitize(endpoint.Model) + "', " +
                 "endpoint = '" + _Driver.Sanitize(endpoint.Endpoint) + "', " +
                 "api_format = '" + _Driver.Sanitize(endpoint.ApiFormat.ToString()) + "', " +
@@ -195,7 +197,7 @@ namespace Partio.Core.Database.Mysql.Implementations
             conditions.Add("tenant_id = '" + _Driver.Sanitize(tenantId) + "'");
 
             if (!string.IsNullOrEmpty(request.NameFilter))
-                conditions.Add("model LIKE '%" + _Driver.Sanitize(request.NameFilter) + "%'");
+                conditions.Add("name LIKE '%" + _Driver.Sanitize(request.NameFilter) + "%'");
 
             if (!string.IsNullOrEmpty(request.LabelFilter))
                 conditions.Add("labels_json LIKE '%\"" + _Driver.Sanitize(request.LabelFilter) + "\"%'");
@@ -224,10 +226,10 @@ namespace Partio.Core.Database.Mysql.Implementations
                     orderByClause = "ORDER BY created_utc DESC";
                     break;
                 case EnumerationOrderEnum.NameAscending:
-                    orderByClause = "ORDER BY model ASC";
+                    orderByClause = "ORDER BY name ASC";
                     break;
                 case EnumerationOrderEnum.NameDescending:
-                    orderByClause = "ORDER BY model DESC";
+                    orderByClause = "ORDER BY name DESC";
                     break;
                 default:
                     orderByClause = "ORDER BY created_utc DESC";
