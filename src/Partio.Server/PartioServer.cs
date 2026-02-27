@@ -610,11 +610,11 @@ namespace Partio.Server
             ServerSettings defaults = new ServerSettings();
             defaults.DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>
             {
-                new DefaultEmbeddingEndpoint { Name = "Default Embedding", Model = "all-minilm", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
+                new DefaultEmbeddingEndpoint { Name = "all-minilm", Model = "all-minilm", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
             };
             defaults.DefaultInferenceEndpoints = new List<DefaultInferenceEndpoint>
             {
-                new DefaultInferenceEndpoint { Name = "Default Inference", Model = "gemma3:4b", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
+                new DefaultInferenceEndpoint { Name = "gemma3:4b", Model = "gemma3:4b", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
             };
 
             string defaultJson = _JsonSerializer.SerializeJson(defaults, true);
