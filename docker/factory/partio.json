@@ -1,0 +1,64 @@
+{
+    "Rest": {
+        "Hostname": "*",
+        "Port": 8400,
+        "Ssl": false
+    },
+    "Database": {
+        "Type": "Sqlite",
+        "Filename": "/app/data/partio.db",
+        "Hostname": null,
+        "Port": 0,
+        "DatabaseName": null,
+        "Username": null,
+        "Password": null,
+        "Instance": null,
+        "Schema": null,
+        "RequireEncryption": false,
+        "LogQueries": false
+    },
+    "Logging": {
+        "SyslogServers": [],
+        "ConsoleLogging": true,
+        "EnableColors": false,
+        "LogDirectory": "/app/logs/",
+        "LogFilename": "partio.log",
+        "FileLogging": true,
+        "IncludeDateInFilename": true,
+        "MinimumSeverity": 0
+    },
+    "Debug": {
+        "Authentication": false,
+        "Exceptions": true,
+        "Requests": false,
+        "DatabaseQueries": false
+    },
+    "RequestHistory": {
+        "Enabled": true,
+        "Directory": "/app/request-history/",
+        "RetentionDays": 7,
+        "CleanupIntervalMinutes": 60,
+        "MaxRequestBodyBytes": 65536,
+        "MaxResponseBodyBytes": 65536
+    },
+    "AdminApiKeys": [
+        "partioadmin"
+    ],
+    "DefaultEmbeddingEndpoints": [
+        {
+            "Name": "all-minilm",
+            "Model": "all-minilm",
+            "Endpoint": "http://localhost:11434",
+            "ApiFormat": "Ollama",
+            "ApiKey": null
+        }
+    ],
+    "DefaultInferenceEndpoints": [
+        {
+            "Name": "gemma3:4b",
+            "Model": "gemma3:4b",
+            "Endpoint": "http://localhost:11434",
+            "ApiFormat": "Ollama"
+        }
+    ]
+}

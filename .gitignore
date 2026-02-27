@@ -35,3 +35,7 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# Docker directory exceptions
+!docker/**/*.db
+!docker/**/partio.json
