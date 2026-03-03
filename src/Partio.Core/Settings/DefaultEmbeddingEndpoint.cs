@@ -7,8 +7,8 @@ namespace Partio.Core.Settings
     /// </summary>
     public class DefaultEmbeddingEndpoint
     {
-        private string? _Name = "all-minilm";
-        private string _Model = "all-minilm";
+        private string? _Name = "nomic-embed-text";
+        private string _Model = "nomic-embed-text";
         private string _Endpoint = "http://localhost:11434";
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
         private string? _ApiKey = null;

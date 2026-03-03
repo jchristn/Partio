@@ -19,7 +19,7 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
-        /// Embedding model name (e.g. "all-minilm", "text-embedding-3-small").
+        /// Embedding model name (e.g. "nomic-embed-text", "text-embedding-3-small").
         /// Optional override for the model configured on the endpoint.
         /// </summary>
         public string? Model

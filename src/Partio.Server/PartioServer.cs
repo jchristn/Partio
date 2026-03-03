@@ -610,7 +610,7 @@ namespace Partio.Server
             ServerSettings defaults = new ServerSettings();
             defaults.DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>
             {
-                new DefaultEmbeddingEndpoint { Name = "all-minilm", Model = "all-minilm", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
+                new DefaultEmbeddingEndpoint { Name = "nomic-embed-text", Model = "nomic-embed-text", Endpoint = "http://localhost:11434", ApiFormat = ApiFormatEnum.Ollama },
             };
             defaults.DefaultInferenceEndpoints = new List<DefaultInferenceEndpoint>
             {

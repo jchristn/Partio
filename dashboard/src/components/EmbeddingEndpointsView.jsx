@@ -489,8 +489,8 @@ export default function EmbeddingEndpointsView() {
                 <input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} placeholder="e.g. Default Embedding" />
               </div>
               <div className="form-group">
-                <FieldLabel text="Model" tooltip="Embedding model name served by this endpoint. Example: all-minilm, text-embedding-3-small" />
-                <input value={form.Model} onChange={e => setForm({ ...form, Model: e.target.value })} placeholder="e.g. all-minilm" />
+                <FieldLabel text="Model" tooltip="Embedding model name served by this endpoint. Example: nomic-embed-text, text-embedding-3-small" />
+                <input value={form.Model} onChange={e => setForm({ ...form, Model: e.target.value })} placeholder="e.g. nomic-embed-text" />
               </div>
             </div>
             <div className="endpoint-form-row">

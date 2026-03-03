@@ -41,13 +41,13 @@ Get back chunks with computed embeddings:
       "Text": "Partio centralizes your chunking and embedding workflow.",
       "Labels": [],
       "Tags": {},
-      "Embeddings": [0.0123, -0.0456, 0.0789, "... (384 floats for all-minilm)"]
+      "Embeddings": [0.0123, -0.0456, 0.0789, "... (768 floats for nomic-embed-text)"]
     },
     {
       "Text": "It accepts semantic cells and returns chunks with embeddings.",
       "Labels": [],
       "Tags": {},
-      "Embeddings": [0.0321, -0.0654, 0.0987, "... (384 floats for all-minilm)"]
+      "Embeddings": [0.0321, -0.0654, 0.0987, "... (768 floats for nomic-embed-text)"]
     }
   ]
 }
@@ -108,14 +108,14 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 
 ### Prerequisites
 
-Partio requires an embedding provider to generate embeddings. Out of the box, Partio is configured to use [Ollama](https://ollama.com/) with the `all-minilm` model.
+Partio requires an embedding provider to generate embeddings. Out of the box, Partio is configured to use [Ollama](https://ollama.com/) with the `nomic-embed-text` model.
 
 When using **Docker Compose** (recommended), Ollama is included automatically — just pull a model after starting the services (see below).
 
 When running **from source** or via **Docker (server only)**, install Ollama separately:
 
 1. [Install Ollama](https://ollama.com/download) and start it (default: `http://localhost:11434`)
-2. Pull an embedding model: `ollama pull all-minilm`
+2. Pull an embedding model: `ollama pull nomic-embed-text`
 
 ### Docker Compose (Recommended)
 
@@ -131,10 +131,10 @@ Pull the default embedding model:
 
 ```bash
 # Bash / macOS / Linux
-curl http://localhost:11434/api/pull -d '{"name": "all-minilm"}'
+curl http://localhost:11434/api/pull -d '{"name": "nomic-embed-text"}'
 
 # Windows Terminal (cmd)
-curl http://localhost:11434/api/pull -d "{\"name\": \"all-minilm\"}"
+curl http://localhost:11434/api/pull -d "{\"name\": \"nomic-embed-text\"}"
 ```
 
 | Component | URL | Docker Image |
@@ -317,7 +317,7 @@ Partio is configured via `partio.json`, created automatically on first run.
   "AdminApiKeys": ["partioadmin"],
   "DefaultEmbeddingEndpoints": [
     {
-      "Model": "all-minilm",
+      "Model": "nomic-embed-text",
       "Endpoint": "http://localhost:11434",
       "ApiFormat": "Ollama"
     }
@@ -433,10 +433,10 @@ Ensure you are passing the `Authorization: Bearer {token}` header. The default a
 ### Embedding requests fail or return errors
 
 - If using Docker Compose, make sure you pulled a model:
-  - Bash: `curl http://localhost:11434/api/pull -d '{"name": "all-minilm"}'`
-  - Windows cmd: `curl http://localhost:11434/api/pull -d "{\"name\": \"all-minilm\"}"`
+  - Bash: `curl http://localhost:11434/api/pull -d '{"name": "nomic-embed-text"}'`
+  - Windows cmd: `curl http://localhost:11434/api/pull -d "{\"name\": \"nomic-embed-text\"}"`
 - If running the server standalone in Docker with an external Ollama, `localhost` inside the container is not the host machine; use `host.docker.internal` or the container network address instead.
-- Verify the model name matches what your embedding provider expects (e.g. `all-minilm` for Ollama).
+- Verify the model name matches what your embedding provider expects (e.g. `nomic-embed-text` for Ollama).
 - Check that `ApiFormat` is set correctly (`Ollama` or `OpenAI`).
 
 ### Dashboard cannot connect to the server

@@ -61,7 +61,7 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
-        /// Embedding model name (e.g. "all-minilm", "text-embedding-3-small").
+        /// Embedding model name (e.g. "nomic-embed-text", "text-embedding-3-small").
         /// </summary>
         public string Model
         {

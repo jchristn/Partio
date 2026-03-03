@@ -46,8 +46,8 @@
     ],
     "DefaultEmbeddingEndpoints": [
         {
-            "Name": "all-minilm",
-            "Model": "all-minilm",
+            "Name": "nomic-embed-text",
+            "Model": "nomic-embed-text",
             "Endpoint": "http://localhost:11434",
             "ApiFormat": "Ollama",
             "ApiKey": null

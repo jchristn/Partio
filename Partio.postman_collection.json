@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "partio-api-collection",
 		"name": "Partio",
-		"description": "Complete API collection for Partio — a multi-tenant RESTful platform for semantic cell chunking, embedding, and summarization. Supports completion endpoints for LLM-powered summarization.\n\nVariables:\n- `baseUrl`: Server base URL (default: http://localhost:8400)\n- `bearerToken`: Admin API key or credential bearer token\n- `tenantId`: Target tenant ID\n- `userId`: Target user ID\n- `credentialId`: Target credential ID\n- `endpointId`: Target embedding endpoint ID\n- `completionEndpointId`: Completion endpoint ID\n- `completionEndpointUrl`: Base URL for completion API\n- `completionModel`: Model name for completion\n- `requestId`: Target request history entry ID\n- `embeddingModel`: Embedding model name (default: all-minilm)\n- `chunkStrategy`: Chunking strategy (default: FixedTokenCount)\n- `fixedTokenCount`: Token count per chunk (default: 256)\n- `maxResults`: Enumeration page size (default: 100)\n- `continuationToken`: Pagination continuation token",
+		"description": "Complete API collection for Partio — a multi-tenant RESTful platform for semantic cell chunking, embedding, and summarization. Supports completion endpoints for LLM-powered summarization.\n\nVariables:\n- `baseUrl`: Server base URL (default: http://localhost:8400)\n- `bearerToken`: Admin API key or credential bearer token\n- `tenantId`: Target tenant ID\n- `userId`: Target user ID\n- `credentialId`: Target credential ID\n- `endpointId`: Target embedding endpoint ID\n- `completionEndpointId`: Completion endpoint ID\n- `completionEndpointUrl`: Base URL for completion API\n- `completionModel`: Model name for completion\n- `requestId`: Target request history entry ID\n- `embeddingModel`: Embedding model name (default: nomic-embed-text)\n- `chunkStrategy`: Chunking strategy (default: FixedTokenCount)\n- `fixedTokenCount`: Token count per chunk (default: 256)\n- `maxResults`: Enumeration page size (default: 100)\n- `continuationToken`: Pagination continuation token",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"auth": {
@@ -53,7 +53,7 @@
 		},
 		{
 			"key": "embeddingModel",
-			"value": "all-minilm",
+			"value": "nomic-embed-text",
 			"type": "string"
 		},
 		{

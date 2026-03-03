@@ -545,7 +545,7 @@ Create an embedding endpoint.
 {
     "TenantId": "ten_...",
     "Name": "My Embedding Endpoint",
-    "Model": "all-minilm",
+    "Model": "nomic-embed-text",
     "Endpoint": "http://localhost:11434",
     "ApiFormat": "Ollama",
     "ApiKey": null,
@@ -622,7 +622,7 @@ Get the health status for a specific monitored embedding endpoint.
 ```json
 {
     "EndpointId": "eep_xxxx",
-    "EndpointName": "all-minilm",
+    "EndpointName": "nomic-embed-text",
     "TenantId": "ten_xxxx",
     "IsHealthy": true,
     "FirstCheckUtc": "2026-02-07T12:00:00Z",
