@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.0 — 2026-03-20
+
+### Added
+- **Dashboard view** — new top-level "Dashboard" nav item in the React dashboard with:
+  - Stacked bar chart showing request counts over time, broken out by success (HTTP 1xx-3xx) and failure (HTTP 4xx-5xx)
+  - Selectable request type filter: All Requests, Embeddings, or Inference
+  - Selectable timeframe: Last Hour (per-minute), Last 24 Hours (15-minute), Last 7 Days (hourly), Last 30 Days (4-hour)
+  - Optional endpoint URL substring filter
+  - Summary cards showing total successful, failed, and total request counts
+  - Quick actions section with shortcuts to Manage Embedding Endpoints, Manage Inference Endpoints, View Request History, and Endpoint Explorer
+- **Request statistics API** — `POST /v1.0/requests/statistics` endpoint returning aggregated request counts grouped by time bucket with success/failure breakdown
+  - Supported across all database providers: SQLite, PostgreSQL, MySQL, SQL Server
+- Dashboard is now the default landing page after login
+
 ## v0.2.0 — 2026-02-18
 
 ### Added

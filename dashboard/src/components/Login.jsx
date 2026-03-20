@@ -6,7 +6,7 @@ import './Login.css';
 export default function Login() {
   const { login, error, theme } = useApp();
   const navigate = useNavigate();
-  const defaultServerUrl = window.__PARTIO_ENV__?.PARTIO_SERVER_URL || 'http://localhost:8400';
+  const defaultServerUrl = window.__PARTIO_ENV__?.PARTIO_SERVER_URL || localStorage.getItem('partio_server_url') || 'http://localhost:8400';
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [token, setToken] = useState('partioadmin');
   const [loading, setLoading] = useState(false);
@@ -14,7 +14,9 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const success = await login(serverUrl.replace(/\/+$/, ''), token);
+    const trimmedUrl = serverUrl.replace(/\/+$/, '');
+    localStorage.setItem('partio_server_url', trimmedUrl);
+    const success = await login(trimmedUrl, token);
     setLoading(false);
     if (success) navigate('/');
   };

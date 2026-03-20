@@ -282,5 +282,42 @@ namespace Partio.Core.Database.Sqlite.Implementations
             DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
             return Convert.ToInt64(result.Rows[0]["cnt"]);
         }
+
+        /// <summary>
+        /// Get aggregated request statistics, scoped to a tenant.
+        /// </summary>
+        public async Task<RequestStatisticsResponse> GetStatisticsAsync(string tenantId, RequestStatisticsRequest request, CancellationToken token = default)
+        {
+            if (string.IsNullOrEmpty(tenantId)) throw new ArgumentNullException(nameof(tenantId));
+            if (request == null) throw new ArgumentNullException(nameof(request));
+
+            List<string> conditions = new List<string>();
+            conditions.Add("tenant_id = '" + _Driver.Sanitize(tenantId) + "'");
+            return await ExecuteStatisticsQueryAsync(conditions, request, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get aggregated request statistics (no tenant filter).
+        /// </summary>
+        public async Task<RequestStatisticsResponse> GetStatisticsAllAsync(RequestStatisticsRequest request, CancellationToken token = default)
+        {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            return await ExecuteStatisticsQueryAsync(new List<string>(), request, token).ConfigureAwait(false);
+        }
+
+        private async Task<RequestStatisticsResponse> ExecuteStatisticsQueryAsync(List<string> conditions, RequestStatisticsRequest request, CancellationToken token)
+        {
+            DateTime cutoff = StatisticsHelper.GetCutoff(request.Timeframe);
+
+            conditions.Add("created_utc >= '" + _Driver.FormatDateTime(cutoff) + "'");
+            StatisticsHelper.AddTypeConditions(conditions, request.RequestType);
+            StatisticsHelper.AddEndpointCondition(conditions, request.EndpointFilter, _Driver.Sanitize);
+
+            string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+            string query = "SELECT created_utc, http_status FROM request_history " + whereClause + " ORDER BY created_utc ASC;";
+
+            DataTable dataResult = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+            return StatisticsHelper.BuildFromRawData(dataResult, request.Timeframe);
+        }
     }
 }

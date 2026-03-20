@@ -82,6 +82,7 @@ export class PartioApi {
   getRequestHistoryDetail(id) { return this.request('GET', `/v1.0/requests/${id}/detail`); }
   deleteRequestHistory(id) { return this.request('DELETE', `/v1.0/requests/${id}`); }
   enumerateRequestHistory(req = {}) { return this.request('POST', '/v1.0/requests/enumerate', req); }
+  getRequestStatistics(req = {}) { return this.request('POST', '/v1.0/requests/statistics', req); }
 
   // Process
   process(data) { return this.request('POST', '/v1.0/process', data); }

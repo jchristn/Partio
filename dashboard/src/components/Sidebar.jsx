@@ -3,6 +3,10 @@ import { NavLink } from 'react-router-dom';
 import { useTour } from '../context/TourContext';
 import './Sidebar.css';
 
+const dashboardLinks = [
+  { to: '/dashboard', label: 'Dashboard', tourId: 'nav-dashboard' },
+];
+
 const adminLinks = [
   { to: '/tenants', label: 'Tenants', tourId: 'nav-tenants' },
   { to: '/users', label: 'Users', tourId: 'nav-users' },
@@ -29,6 +33,12 @@ export default function Sidebar() {
         <img src="/logo-light-text.png" alt="Partio" className="sidebar-logo" />
       </div>
       <nav className="sidebar-nav">
+        {dashboardLinks.map(link => (
+          <NavLink key={link.to} to={link.to} data-tour-id={link.tourId} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            {link.label}
+          </NavLink>
+        ))}
+        <div className="nav-divider" />
         <div className="nav-section-header" data-tour-id="nav-section-admin">Administration</div>
         {adminLinks.map(link => (
           <NavLink key={link.to} to={link.to} data-tour-id={link.tourId} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>

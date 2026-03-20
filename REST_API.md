@@ -832,6 +832,53 @@ Delete a request history entry.
 ### POST /v1.0/requests/enumerate
 List request history with pagination.
 
+### POST /v1.0/requests/statistics
+Get aggregated request statistics grouped by time bucket, broken out by success/failure.
+
+**Request Body**: `RequestStatisticsRequest`
+```json
+{
+    "RequestType": "Embedding",
+    "Timeframe": "Day",
+    "EndpointFilter": null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `RequestType` | string? | `"Embedding"`, `"Inference"`, or null for all requests. Embedding matches URLs containing `/process` or `/embedding`. Inference matches URLs containing `/completion`. |
+| `Timeframe` | string? | `"Hour"` (1-minute buckets, ~60 samples), `"Day"` (15-minute buckets, ~96 samples), `"Week"` (1-hour buckets, ~168 samples), or `"Month"` (4-hour buckets, ~180 samples). Defaults to `"Day"`. |
+| `EndpointFilter` | string? | Optional URL substring filter to narrow results to a specific endpoint. |
+
+**Response**: `200 OK` — `RequestStatisticsResponse`
+```json
+{
+    "Buckets": [
+        {
+            "TimeBucket": "2026-03-20T14",
+            "SuccessCount": 42,
+            "FailureCount": 3
+        },
+        {
+            "TimeBucket": "2026-03-20T15",
+            "SuccessCount": 38,
+            "FailureCount": 1
+        }
+    ],
+    "TotalSuccess": 80,
+    "TotalFailure": 4
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Buckets` | array | Time-bucketed request counts |
+| `Buckets[].TimeBucket` | string | ISO 8601 timestamp for the bucket start, always `"yyyy-MM-ddTHH:mm"` format (e.g. `"2026-03-20T14:30"`) |
+| `Buckets[].SuccessCount` | long | Requests with HTTP status 100-399 |
+| `Buckets[].FailureCount` | long | Requests with HTTP status 400+ or null status |
+| `TotalSuccess` | long | Total successful requests in the time range |
+| `TotalFailure` | long | Total failed requests in the time range |
+
 ---
 
 ## Summarization

@@ -1787,6 +1787,50 @@
 						},
 						"description": "Delete a request history entry."
 					}
+				},
+				{
+					"name": "Get Request Statistics",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has Buckets array', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Buckets).to.be.an('array');",
+									"});",
+									"pm.test('Response has totals', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('TotalSuccess');",
+									"    pm.expect(jsonData).to.have.property('TotalFailure');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"RequestType\": null,\n    \"Timeframe\": \"Day\",\n    \"EndpointFilter\": null\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/requests/statistics",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "requests", "statistics"]
+						},
+						"description": "Get aggregated request statistics grouped by time bucket, broken out by success/failure. Supports filtering by request type (Embedding/Inference), timeframe (Hour/Day/Week/Month), and endpoint URL substring."
+					}
 				}
 			]
 		},

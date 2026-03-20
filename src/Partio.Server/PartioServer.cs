@@ -568,6 +568,13 @@ namespace Partio.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Entry not found"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Post<RequestStatisticsRequest>("/v1.0/requests/statistics", GetRequestStatistics, api => api
+                .WithTag("Requests")
+                .WithSummary("Get request history statistics")
+                .WithDescription("Returns aggregated request counts grouped by time bucket, broken out by success/failure. Supports filtering by request type (Embedding/Inference), timeframe (Hour/Day/Week/Month), and endpoint URL.")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<RequestStatisticsRequest>("Statistics query options", false))
+                .WithResponse(200, OpenApiResponseMetadata.Json<RequestStatisticsResponse>("Aggregated request statistics"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
 
             #endregion
 
@@ -2019,6 +2026,27 @@ namespace Partio.Server
             await _Database.RequestHistory.DeleteByIdAsync(id).ConfigureAwait(false);
             req.Http.Response.StatusCode = 204;
             return null!;
+        }
+
+        private static async Task<object> GetRequestStatistics(AppRequest req)
+        {
+            RequireAdmin(req);
+            AuthContext auth = (AuthContext)req.Metadata;
+            RequestStatisticsRequest? statsReq = req.GetData<RequestStatisticsRequest>();
+            if (statsReq == null) statsReq = new RequestStatisticsRequest();
+
+            RequestStatisticsResponse result;
+            if (auth.IsGlobalAdmin)
+            {
+                result = await _Database.RequestHistory.GetStatisticsAllAsync(statsReq).ConfigureAwait(false);
+            }
+            else
+            {
+                string tenantId = auth.TenantId ?? "default";
+                result = await _Database.RequestHistory.GetStatisticsAsync(tenantId, statsReq).ConfigureAwait(false);
+            }
+
+            return result;
         }
 
         #endregion

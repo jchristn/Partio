@@ -33,5 +33,11 @@ namespace Partio.Core.Database.Interfaces
 
         /// <summary>Count request history entries in a tenant.</summary>
         Task<long> CountAsync(string tenantId, CancellationToken token = default);
+
+        /// <summary>Get aggregated request statistics, scoped to a tenant.</summary>
+        Task<RequestStatisticsResponse> GetStatisticsAsync(string tenantId, RequestStatisticsRequest request, CancellationToken token = default);
+
+        /// <summary>Get aggregated request statistics (no tenant filter).</summary>
+        Task<RequestStatisticsResponse> GetStatisticsAllAsync(RequestStatisticsRequest request, CancellationToken token = default);
     }
 }
