@@ -85,6 +85,13 @@ namespace Partio.Sdk
         public Task<List<SemanticCellResponse>?> ProcessBatchAsync(List<SemanticCellRequest> requests) =>
             MakeRequestAsync<List<SemanticCellResponse>>(HttpMethod.Post, "/v1.0/process/batch", requests);
 
+        // Explorer
+        public Task<EndpointExplorerEmbeddingResponse?> ExploreEmbeddingEndpointAsync(EndpointExplorerEmbeddingRequest request) =>
+            MakeRequestAsync<EndpointExplorerEmbeddingResponse>(HttpMethod.Post, "/v1.0/explorer/embedding", request);
+
+        public Task<EndpointExplorerCompletionResponse?> ExploreCompletionEndpointAsync(EndpointExplorerCompletionRequest request) =>
+            MakeRequestAsync<EndpointExplorerCompletionResponse>(HttpMethod.Post, "/v1.0/explorer/completion", request);
+
         // Tenants
         public Task<TenantMetadata?> CreateTenantAsync(TenantMetadata tenant) =>
             MakeRequestAsync<TenantMetadata>(HttpMethod.Put, "/v1.0/tenants", tenant);

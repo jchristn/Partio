@@ -54,6 +54,10 @@ export class PartioClient {
   async process(request) { return this._request('POST', '/v1.0/process', request); }
   async processBatch(requests) { return this._request('POST', '/v1.0/process/batch', requests); }
 
+  // Explorer
+  async exploreEmbeddingEndpoint(request) { return this._request('POST', '/v1.0/explorer/embedding', request); }
+  async exploreCompletionEndpoint(request) { return this._request('POST', '/v1.0/explorer/completion', request); }
+
   // Tenants
   async createTenant(data) { return this._request('PUT', '/v1.0/tenants', data); }
   async getTenant(id) { return this._request('GET', `/v1.0/tenants/${id}`); }

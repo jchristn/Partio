@@ -131,7 +131,10 @@ export default function UsersView() {
   return (
     <div>
       <div className="header-row">
-        <h2>Users</h2>
+        <div className="page-title-block">
+          <h2>Users</h2>
+          <p className="view-subtitle">Manage user accounts, tenant assignments, and role-based access across the workspace.</p>
+        </div>
         <div className="header-row-actions">
           <button className="refresh-btn" onClick={load} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -142,7 +145,7 @@ export default function UsersView() {
           <button className="primary" onClick={openCreate}>Create User</button>
         </div>
       </div>
-      <DataTable data={data} columns={columns} loading={loading} />
+      <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
         <Modal title={editing ? 'Edit User' : 'Create User'} onClose={() => setShowModal(false)}>
           {!editing && <div className="form-group"><label>Tenant</label><select value={form.TenantId} onChange={e => setForm({ ...form, TenantId: e.target.value })}>{tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}</select></div>}

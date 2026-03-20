@@ -178,7 +178,10 @@ export default function DataTable({
                 className={onRowClick ? 'clickable' : ''}
               >
                 {columns.map((col) => (
-                  <td key={col.key}>
+                  <td
+                    key={col.key}
+                    onClick={col.preventRowClick ? (e) => e.stopPropagation() : undefined}
+                  >
                     {col.render ? col.render(item) : item[col.key]}
                   </td>
                 ))}

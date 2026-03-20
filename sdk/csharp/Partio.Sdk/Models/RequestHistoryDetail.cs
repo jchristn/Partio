@@ -18,5 +18,8 @@ namespace Partio.Sdk.Models
 
         [JsonPropertyName("EmbeddingCalls")]
         public List<EmbeddingCallDetail>? EmbeddingCalls { get; set; }
+
+        [JsonPropertyName("CompletionCalls")]
+        public List<CompletionCallDetail>? CompletionCalls { get; set; }
     }
 }

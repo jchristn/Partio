@@ -53,8 +53,8 @@ function getHealthCheckDefaults(apiFormat, endpoint) {
     return {
       HealthCheckUrl: baseUrl ? baseUrl + '/v1beta/models' : '',
       HealthCheckMethod: 'GET',
-      HealthCheckIntervalMs: 30000,
-      HealthCheckTimeoutMs: 10000,
+      HealthCheckIntervalMs: 15000,
+      HealthCheckTimeoutMs: 5000,
       HealthCheckExpectedStatusCode: 200,
       HealthyThreshold: 2,
       UnhealthyThreshold: 2,
@@ -64,8 +64,8 @@ function getHealthCheckDefaults(apiFormat, endpoint) {
   return {
     HealthCheckUrl: baseUrl ? baseUrl + '/v1/models' : '',
     HealthCheckMethod: 'GET',
-    HealthCheckIntervalMs: 30000,
-    HealthCheckTimeoutMs: 10000,
+    HealthCheckIntervalMs: 15000,
+    HealthCheckTimeoutMs: 5000,
     HealthCheckExpectedStatusCode: 200,
     HealthyThreshold: 2,
     UnhealthyThreshold: 2,
@@ -449,6 +449,7 @@ export default function CompletionEndpointsView() {
       key: 'Health',
       label: 'Health',
       tooltip: 'Live health check status and recent history (click for details)',
+      preventRowClick: true,
       sortable: false,
       filterValue: (item) => {
         if (!item.HealthCheckEnabled) return 'N/A';
@@ -485,6 +486,7 @@ export default function CompletionEndpointsView() {
       label: 'Actions',
       tooltip: 'Edit, view JSON, or delete this endpoint',
       isAction: true,
+      preventRowClick: true,
       sortable: false,
       render: (item) => (
         <ActionMenu actions={[
@@ -501,7 +503,10 @@ export default function CompletionEndpointsView() {
   return (
     <div>
       <div className="header-row">
-        <h2>Inference Endpoints</h2>
+        <div className="page-title-block">
+          <h2>Inference Endpoints</h2>
+          <p className="view-subtitle">Configure completion and generation backends used for inference, summarization, and endpoint validation.</p>
+        </div>
         <div className="header-row-actions">
           <button className="refresh-btn" onClick={() => { load(); loadHealth(); }} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -512,7 +517,7 @@ export default function CompletionEndpointsView() {
           <button className="primary" onClick={openCreate}>Create Endpoint</button>
         </div>
       </div>
-      <DataTable data={data} columns={columns} loading={loading} />
+      <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
         <Modal title={editing ? 'Edit Inference Endpoint' : 'Create Inference Endpoint'} onClose={() => setShowModal(false)} className="modal-wide">
           {/* Connection Section */}

@@ -254,7 +254,12 @@ export default function ChunkEmbedView() {
 
   return (
     <div className="chunk-embed">
-      <div className="header-row"><h2>Process Cells</h2></div>
+      <div className="header-row">
+        <div className="page-title-block">
+          <h2>Process Cells</h2>
+          <p className="view-subtitle">Submit semantic cells for chunking, optional summarization, and embedding through the configured Partio pipeline.</p>
+        </div>
+      </div>
       <div className="chunk-embed-layout">
         <div className="chunk-embed-form card">
           <div className="form-group">

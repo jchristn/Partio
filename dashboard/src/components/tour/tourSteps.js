@@ -53,7 +53,13 @@ const tourSteps = [
   {
     target: 'nav-section-processing',
     title: 'Processing',
-    description: 'Submit data for processing and review the history of past requests.',
+    description: 'Validate configured endpoints through Partio, submit data for processing, and review the history of past requests.',
+    position: 'right',
+  },
+  {
+    target: 'nav-explorer',
+    title: 'Endpoint Explorer',
+    description: 'Run a request through a selected embedding or inference endpoint and inspect the upstream exchange captured by Partio.',
     position: 'right',
   },
   {

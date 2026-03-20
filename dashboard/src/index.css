@@ -177,8 +177,9 @@ input:focus, select:focus, textarea:focus {
 .header-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20px;
+  gap: 16px;
 }
 
 .header-row h2 {
@@ -186,10 +187,30 @@ input:focus, select:focus, textarea:focus {
   font-weight: 600;
 }
 
+.page-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.page-title-block h2 {
+  margin: 0;
+}
+
+.view-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 760px;
+}
+
 .header-row-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .refresh-btn {

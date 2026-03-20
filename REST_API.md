@@ -392,6 +392,76 @@ Process multiple semantic cells.
 
 ---
 
+## Explorer
+
+The explorer endpoints are intended for diagnostics from the dashboard or SDKs. They execute the selected configured endpoint through Partio's own backend client path and always return a structured result payload with `Success`, `StatusCode`, any `Error`, and the captured upstream call details.
+
+### POST /v1.0/explorer/embedding
+Exercise a configured embedding endpoint through Partio.
+
+**Request Body**:
+```json
+{
+    "EndpointId": "eep_xxxx",
+    "Input": "Partio explorer embedding test payload",
+    "L2Normalization": false
+}
+```
+
+**Response**: `200 OK` — `EndpointExplorerEmbeddingResponse`
+```json
+{
+    "Success": true,
+    "StatusCode": 200,
+    "Error": null,
+    "EndpointId": "eep_xxxx",
+    "Model": "nomic-embed-text",
+    "Input": "Partio explorer embedding test payload",
+    "Embedding": [0.0123, -0.0456, 0.0789],
+    "Dimensions": 768,
+    "ResponseTimeMs": 123,
+    "RequestHistoryId": "req_xxxx",
+    "EmbeddingCalls": []
+}
+```
+
+When the provider call fails, `Success` is `false`, `StatusCode` contains the mapped failure code, `Error` contains the error text, and `EmbeddingCalls` still contains any upstream request/response data captured before the failure.
+
+### POST /v1.0/explorer/completion
+Exercise a configured inference endpoint through Partio.
+
+**Request Body**:
+```json
+{
+    "EndpointId": "cep_xxxx",
+    "Prompt": "Explain what Partio does in one short paragraph.",
+    "SystemPrompt": "Be concise.",
+    "MaxTokens": 512,
+    "TimeoutMs": 60000
+}
+```
+
+**Response**: `200 OK` — `EndpointExplorerCompletionResponse`
+```json
+{
+    "Success": true,
+    "StatusCode": 200,
+    "Error": null,
+    "EndpointId": "cep_xxxx",
+    "Model": "gpt-4.1-mini",
+    "Prompt": "Explain what Partio does in one short paragraph.",
+    "SystemPrompt": "Be concise.",
+    "Output": "Partio is a multi-tenant service for chunking, embedding, and optional summarization.",
+    "ResponseTimeMs": 187,
+    "RequestHistoryId": "req_xxxx",
+    "CompletionCalls": []
+}
+```
+
+If the selected endpoint has `EnableRequestHistory = true` and request history is enabled globally, the explorer response also includes the created `RequestHistoryId`.
+
+---
+
 ## Tenants (Admin)
 
 ### PUT /v1.0/tenants
@@ -581,9 +651,9 @@ When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs 
 
 Health check defaults are applied automatically based on `ApiFormat` when creating or updating an endpoint:
 - **Ollama**: URL defaults to `{Endpoint}/api/tags`, 5s interval, 2s timeout, no auth
-- **OpenAI**: URL defaults to `{Endpoint}/v1/models`, 30s interval, 10s timeout, auth enabled
-- **vLLM**: URL defaults to `{Endpoint}/v1/models`, 30s interval, 10s timeout, auth enabled
-- **Gemini**: URL defaults to `{Endpoint}/v1beta/models`, 30s interval, 10s timeout, auth enabled
+- **OpenAI**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
+- **vLLM**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
+- **Gemini**: URL defaults to `{Endpoint}/v1beta/models`, 15s interval, 5s timeout, auth enabled
 
 **Response**: `201 Created` — `EmbeddingEndpoint`
 

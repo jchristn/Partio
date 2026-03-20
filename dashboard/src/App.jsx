@@ -10,6 +10,7 @@ import EmbeddingEndpointsView from './components/EmbeddingEndpointsView';
 import CompletionEndpointsView from './components/CompletionEndpointsView';
 import RequestHistoryView from './components/RequestHistoryView';
 import ChunkEmbedView from './components/ChunkEmbedView';
+import EndpointExplorerView from './components/EndpointExplorerView';
 
 function ProtectedRoute({ children }) {
   const { isConnected } = useApp();
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="endpoints" element={<Navigate to="/endpoints/embeddings" replace />} />
           <Route path="endpoints/embeddings" element={<EmbeddingEndpointsView />} />
           <Route path="endpoints/inference" element={<CompletionEndpointsView />} />
+          <Route path="explorer" element={<EndpointExplorerView />} />
           <Route path="history" element={<RequestHistoryView />} />
           <Route path="process" element={<ChunkEmbedView />} />
         </Route>

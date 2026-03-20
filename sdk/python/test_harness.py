@@ -135,7 +135,7 @@ def main():
         # Endpoint CRUD
         def test_create_endpoint():
             nonlocal test_ep_id
-            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "Test Embedding", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "Test Embedding", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False})
             assert ep and "Id" in ep
             test_ep_id = ep["Id"]
         run_test("Create Endpoint", test_create_endpoint)
@@ -146,7 +146,7 @@ def main():
         run_test("Read Endpoint", test_read_endpoint)
 
         def test_update_endpoint():
-            updated = client.update_endpoint(test_ep_id, {"TenantId": test_tenant_id, "Name": "Updated Embedding", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            updated = client.update_endpoint(test_ep_id, {"TenantId": test_tenant_id, "Name": "Updated Embedding", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False})
             assert updated is not None
         run_test("Update Endpoint", test_update_endpoint)
 
@@ -161,14 +161,14 @@ def main():
 
         def test_create_gemini_endpoint():
             nonlocal gemini_ep_id
-            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "Gemini Embedding", "Model": "gemini-embedding-001", "Endpoint": "https://generativelanguage.googleapis.com", "ApiFormat": "Gemini", "ApiKey": "test-api-key"})
+            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "Gemini Embedding", "Model": "gemini-embedding-001", "Endpoint": "https://generativelanguage.googleapis.com", "ApiFormat": "Gemini", "ApiKey": "test-api-key", "HealthCheckEnabled": False})
             assert ep and "Id" in ep
             gemini_ep_id = ep["Id"]
         run_test("Create Gemini Embedding Endpoint", test_create_gemini_endpoint)
 
         def test_create_vllm_endpoint():
             nonlocal vllm_ep_id
-            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "vLLM Embedding", "Model": "intfloat/e5-small-v2", "Endpoint": "http://localhost:8000", "ApiFormat": "vLLM"})
+            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "vLLM Embedding", "Model": "intfloat/e5-small-v2", "Endpoint": "http://localhost:8000", "ApiFormat": "vLLM", "HealthCheckEnabled": False})
             assert ep and "Id" in ep
             vllm_ep_id = ep["Id"]
         run_test("Create vLLM Embedding Endpoint", test_create_vllm_endpoint)
@@ -176,7 +176,7 @@ def main():
         # Completion Endpoint CRUD
         def test_create_completion_endpoint():
             nonlocal test_cep_id
-            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Test Inference", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Test Inference", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False})
             assert cep and "Id" in cep
             test_cep_id = cep["Id"]
         run_test("Create Completion Endpoint", test_create_completion_endpoint)
@@ -187,7 +187,7 @@ def main():
         run_test("Read Completion Endpoint", test_read_completion_endpoint)
 
         def test_update_completion_endpoint():
-            updated = client.update_completion_endpoint(test_cep_id, {"TenantId": test_tenant_id, "Name": "Updated Inference", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama"})
+            updated = client.update_completion_endpoint(test_cep_id, {"TenantId": test_tenant_id, "Name": "Updated Inference", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False})
             assert updated is not None
         run_test("Update Completion Endpoint", test_update_completion_endpoint)
 
@@ -202,14 +202,14 @@ def main():
 
         def test_create_gemini_completion_endpoint():
             nonlocal gemini_cep_id
-            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Gemini Inference", "Model": "gemini-2.5-flash", "Endpoint": "https://generativelanguage.googleapis.com", "ApiFormat": "Gemini", "ApiKey": "test-api-key"})
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Gemini Inference", "Model": "gemini-2.5-flash", "Endpoint": "https://generativelanguage.googleapis.com", "ApiFormat": "Gemini", "ApiKey": "test-api-key", "HealthCheckEnabled": False})
             assert cep and "Id" in cep
             gemini_cep_id = cep["Id"]
         run_test("Create Gemini Completion Endpoint", test_create_gemini_completion_endpoint)
 
         def test_create_vllm_completion_endpoint():
             nonlocal vllm_cep_id
-            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "vLLM Inference", "Model": "Qwen/Qwen2.5-7B-Instruct", "Endpoint": "http://localhost:8000", "ApiFormat": "vLLM"})
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "vLLM Inference", "Model": "Qwen/Qwen2.5-7B-Instruct", "Endpoint": "http://localhost:8000", "ApiFormat": "vLLM", "HealthCheckEnabled": False})
             assert cep and "Id" in cep
             vllm_cep_id = cep["Id"]
         run_test("Create vLLM Completion Endpoint", test_create_vllm_completion_endpoint)
@@ -219,6 +219,26 @@ def main():
             result = client.enumerate_request_history()
             assert result is not None
         run_test("Enumerate Request History", test_enumerate_history)
+
+        def test_explore_embedding_endpoint():
+            result = client.explore_embedding_endpoint({
+                "EndpointId": test_ep_id,
+                "Input": "Python SDK explorer embedding payload"
+            })
+            assert result is not None, "No response"
+            assert result.get("EndpointId") == test_ep_id, "Endpoint mismatch"
+            assert result.get("EmbeddingCalls") and len(result["EmbeddingCalls"]) > 0, "Expected upstream call details"
+        run_test("Explore Embedding Endpoint", test_explore_embedding_endpoint)
+
+        def test_explore_completion_endpoint():
+            result = client.explore_completion_endpoint({
+                "EndpointId": test_cep_id,
+                "Prompt": "Python SDK explorer completion payload"
+            })
+            assert result is not None, "No response"
+            assert result.get("EndpointId") == test_cep_id, "Endpoint mismatch"
+            assert result.get("CompletionCalls") and len(result["CompletionCalls"]) > 0, "Expected upstream call details"
+        run_test("Explore Completion Endpoint", test_explore_completion_endpoint)
 
         # Process Single Cell (requires an active embedding endpoint)
         def test_process_single_cell():

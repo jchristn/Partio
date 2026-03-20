@@ -143,7 +143,7 @@ namespace Partio.Sdk.TestHarness
                 string vllmEpId = "";
                 await RunTest("Create Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Test Embedding", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Test Embedding", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
                     if (ep == null) throw new Exception("No response");
                     testEpId = ep.Id;
                 });
@@ -156,7 +156,7 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Update Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? updated = await admin.UpdateEndpointAsync(testEpId, new EmbeddingEndpoint { TenantId = testTenantId, Name = "Updated Embedding", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    EmbeddingEndpoint? updated = await admin.UpdateEndpointAsync(testEpId, new EmbeddingEndpoint { TenantId = testTenantId, Name = "Updated Embedding", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
                     if (updated == null) throw new Exception("Update failed");
                 });
 
@@ -174,14 +174,14 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Create Gemini Embedding Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Gemini Embedding", Model = "gemini-embedding-001", Endpoint = "https://generativelanguage.googleapis.com", ApiFormat = "Gemini", ApiKey = "test-api-key" });
+                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Gemini Embedding", Model = "gemini-embedding-001", Endpoint = "https://generativelanguage.googleapis.com", ApiFormat = "Gemini", ApiKey = "test-api-key", HealthCheckEnabled = false });
                     if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No response");
                     geminiEpId = ep.Id;
                 });
 
                 await RunTest("Create vLLM Embedding Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "vLLM Embedding", Model = "intfloat/e5-small-v2", Endpoint = "http://localhost:8000", ApiFormat = "vLLM" });
+                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "vLLM Embedding", Model = "intfloat/e5-small-v2", Endpoint = "http://localhost:8000", ApiFormat = "vLLM", HealthCheckEnabled = false });
                     if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No response");
                     vllmEpId = ep.Id;
                 });
@@ -199,7 +199,7 @@ namespace Partio.Sdk.TestHarness
                 string vllmCepId = "";
                 await RunTest("Create Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
                     if (cep == null) throw new Exception("No response");
                     testCepId = cep.Id;
                 });
@@ -212,7 +212,7 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Update Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint { TenantId = testTenantId, Name = "Updated Inference", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
+                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint { TenantId = testTenantId, Name = "Updated Inference", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
                     if (updated == null) throw new Exception("Update failed");
                 });
 
@@ -230,16 +230,40 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Create Gemini Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Gemini Inference", Model = "gemini-2.5-flash", Endpoint = "https://generativelanguage.googleapis.com", ApiFormat = "Gemini", ApiKey = "test-api-key" });
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Gemini Inference", Model = "gemini-2.5-flash", Endpoint = "https://generativelanguage.googleapis.com", ApiFormat = "Gemini", ApiKey = "test-api-key", HealthCheckEnabled = false });
                     if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No response");
                     geminiCepId = cep.Id;
                 });
 
                 await RunTest("Create vLLM Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "vLLM Inference", Model = "Qwen/Qwen2.5-7B-Instruct", Endpoint = "http://localhost:8000", ApiFormat = "vLLM" });
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "vLLM Inference", Model = "Qwen/Qwen2.5-7B-Instruct", Endpoint = "http://localhost:8000", ApiFormat = "vLLM", HealthCheckEnabled = false });
                     if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No response");
                     vllmCepId = cep.Id;
+                });
+
+                await RunTest("Explore Embedding Endpoint", async () =>
+                {
+                    EndpointExplorerEmbeddingResponse? result = await admin.ExploreEmbeddingEndpointAsync(new EndpointExplorerEmbeddingRequest
+                    {
+                        EndpointId = testEpId,
+                        Input = "SDK embedding explorer test payload"
+                    });
+                    if (result == null) throw new Exception("No response");
+                    if (result.EndpointId != testEpId) throw new Exception("Endpoint mismatch");
+                    if (result.EmbeddingCalls == null || result.EmbeddingCalls.Count == 0) throw new Exception("Expected upstream call details");
+                });
+
+                await RunTest("Explore Completion Endpoint", async () =>
+                {
+                    EndpointExplorerCompletionResponse? result = await admin.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
+                    {
+                        EndpointId = testCepId,
+                        Prompt = "SDK completion explorer test payload"
+                    });
+                    if (result == null) throw new Exception("No response");
+                    if (result.EndpointId != testCepId) throw new Exception("Endpoint mismatch");
+                    if (result.CompletionCalls == null || result.CompletionCalls.Count == 0) throw new Exception("Expected upstream call details");
                 });
 
                 // Process Single Cell (requires an active embedding endpoint)

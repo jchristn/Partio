@@ -320,10 +320,10 @@ namespace Partio.Core.Models
             }
 
             if (ep.HealthCheckIntervalMs <= 0)
-                ep.HealthCheckIntervalMs = ep.ApiFormat == ApiFormatEnum.Ollama ? 5000 : 30000;
+                ep.HealthCheckIntervalMs = ep.ApiFormat == ApiFormatEnum.Ollama ? 5000 : 15000;
 
             if (ep.HealthCheckTimeoutMs <= 0)
-                ep.HealthCheckTimeoutMs = ep.ApiFormat == ApiFormatEnum.Ollama ? 2000 : 10000;
+                ep.HealthCheckTimeoutMs = ep.ApiFormat == ApiFormatEnum.Ollama ? 2000 : 5000;
 
             if (ep.HealthCheckExpectedStatusCode <= 0)
                 ep.HealthCheckExpectedStatusCode = 200;

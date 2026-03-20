@@ -99,6 +99,7 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Batch processing** for submitting multiple semantic cells in a single request
 - **Optional summarization** with LLM-powered cell summarization before chunking and embedding, supporting top-down and bottom-up strategies
 - **Completion endpoint management** for configuring LLM inference endpoints (Ollama, OpenAI, Gemini, vLLM) with health checks
+- **Endpoint Explorer** in the dashboard for exercising a specific embedding or inference endpoint through the Partio backend path and inspecting upstream call details
 - **PolyPrompt-backed provider runtime** so provider-specific embeddings and inference wiring is centralized in a dedicated library
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history
 - **SDKs** for C#, Python, and JavaScript
@@ -198,6 +199,13 @@ All endpoints use JSON and require an `Authorization: Bearer {token}` header unl
 |--------|-------|-------------|
 | `POST` | `/v1.0/process` | Process a single semantic cell |
 | `POST` | `/v1.0/process/batch` | Process multiple semantic cells |
+
+### Explorer
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `POST` | `/v1.0/explorer/embedding` | Exercise one embedding endpoint through Partio and inspect upstream call details |
+| `POST` | `/v1.0/explorer/completion` | Exercise one inference endpoint through Partio and inspect upstream call details |
 
 ### Endpoint Health
 
@@ -351,6 +359,12 @@ SemanticCellResponse? response = await client.ProcessAsync(new SemanticCellReque
     Text = "Hello world",
     EmbeddingConfiguration = new EmbeddingConfiguration { EmbeddingEndpointId = "eep_YOUR_ENDPOINT_ID" }
 });
+
+EndpointExplorerCompletionResponse? explorer = await client.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
+{
+    EndpointId = "cep_YOUR_ENDPOINT_ID",
+    Prompt = "Explain what Partio does in one short paragraph."
+});
 ```
 
 ### Python
@@ -365,6 +379,10 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
         "ChunkingConfiguration": {"Strategy": "FixedTokenCount", "FixedTokenCount": 256},
         "EmbeddingConfiguration": {"EmbeddingEndpointId": "eep_YOUR_ENDPOINT_ID"}
     })
+    explorer = client.explore_completion_endpoint({
+        "EndpointId": "cep_YOUR_ENDPOINT_ID",
+        "Prompt": "Explain what Partio does in one short paragraph."
+    })
 ```
 
 ### JavaScript
@@ -378,6 +396,11 @@ const result = await client.process({
   Text: 'Hello world',
   ChunkingConfiguration: { Strategy: 'FixedTokenCount', FixedTokenCount: 256 },
   EmbeddingConfiguration: { EmbeddingEndpointId: 'eep_YOUR_ENDPOINT_ID' }
+});
+
+const explorer = await client.exploreCompletionEndpoint({
+  EndpointId: 'cep_YOUR_ENDPOINT_ID',
+  Prompt: 'Explain what Partio does in one short paragraph.'
 });
 ```
 

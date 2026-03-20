@@ -14,6 +14,7 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Completion Endpoint CRUD (`createCompletionEndpoint`, `getCompletionEndpoint`, `updateCompletionEndpoint`, `deleteCompletionEndpoint`, `completionEndpointExists`, `enumerateCompletionEndpoints`)
 - Embedding & Completion Endpoint Health (`getEndpointHealth`, `getAllEndpointHealth`, `getCompletionEndpointHealth`, `getAllCompletionEndpointHealth`)
 - Semantic cell processing (`process`, `processBatch`)
+- Endpoint explorer (`exploreEmbeddingEndpoint`, `exploreCompletionEndpoint`)
 - Request history (`getRequestHistory`, `getRequestHistoryDetail`, `deleteRequestHistory`, `enumerateRequestHistory`)
 
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
@@ -47,6 +48,13 @@ const result = await client.process({
 });
 
 console.log(`Chunks: ${result.Chunks.length}`);
+
+const explorer = await client.exploreCompletionEndpoint({
+  EndpointId: 'cep_your_completion_endpoint_id',
+  Prompt: 'Explain what Partio does in one short paragraph.'
+});
+
+console.log(`Explorer success: ${explorer.Success}`);
 ```
 
 ## Running the Test Harness

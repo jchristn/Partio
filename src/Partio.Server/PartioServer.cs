@@ -114,6 +114,7 @@ namespace Partio.Server
                 {
                     new OpenApiTag("Health", "Health check endpoints"),
                     new OpenApiTag("Process", "Chunk and embed semantic cells"),
+                    new OpenApiTag("Explorer", "Exercise configured embedding and inference endpoints through Partio"),
                     new OpenApiTag("Tenants", "Tenant management (admin)"),
                     new OpenApiTag("Users", "User management (admin)"),
                     new OpenApiTag("Credentials", "Credential management (admin)"),
@@ -245,6 +246,22 @@ namespace Partio.Server
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request or inactive endpoint"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound("Embedding endpoint not found"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Post<EndpointExplorerEmbeddingRequest>("/v1.0/explorer/embedding", ExploreEmbeddingEndpoint, api => api
+                .WithTag("Explorer")
+                .WithSummary("Exercise an embedding endpoint through Partio")
+                .WithDescription("Sends sample embedding input through the configured Partio embedding path and returns the result together with captured upstream call details.")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EndpointExplorerEmbeddingRequest>("Embedding endpoint explorer request", true))
+                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointExplorerEmbeddingResponse>("Embedding explorer result"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
+                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            rest.Post<EndpointExplorerCompletionRequest>("/v1.0/explorer/completion", ExploreCompletionEndpoint, api => api
+                .WithTag("Explorer")
+                .WithSummary("Exercise an inference endpoint through Partio")
+                .WithDescription("Sends a prompt through the configured Partio inference path and returns the generated output together with captured upstream call details.")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EndpointExplorerCompletionRequest>("Inference endpoint explorer request", true))
+                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointExplorerCompletionResponse>("Inference explorer result"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
                 .WithSecurity("Bearer", Array.Empty<string>()), true);
 
             #endregion
@@ -969,6 +986,243 @@ namespace Partio.Server
                     "Endpoint " + endpoint.Id + " (" + endpoint.Model + ") is currently unhealthy");
 
             return endpoint;
+        }
+
+        private static async Task<CompletionEndpoint> ResolveCompletionEndpointFromBody(string id, AuthContext auth)
+        {
+            if (string.IsNullOrEmpty(id))
+                throw new ArgumentException("Completion endpoint ID is required.");
+
+            CompletionEndpoint? endpoint = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
+
+            if (endpoint == null || (!auth.IsGlobalAdmin && endpoint.TenantId != auth.TenantId))
+                throw new KeyNotFoundException("Completion endpoint not found: " + id);
+
+            if (!endpoint.Active)
+                throw new ArgumentException("Completion endpoint '" + id + "' is inactive.");
+
+            if (_CompletionHealthCheckService != null && !_CompletionHealthCheckService.IsHealthy(endpoint.Id))
+                throw new EndpointUnhealthyException(endpoint.Id,
+                    "Completion endpoint " + endpoint.Id + " (" + endpoint.Model + ") is currently unhealthy");
+
+            return endpoint;
+        }
+
+        private static async Task<object> ExploreEmbeddingEndpoint(AppRequest req)
+        {
+            EndpointExplorerEmbeddingResponse response = new EndpointExplorerEmbeddingResponse();
+            EndpointExplorerEmbeddingRequest? explorerReq = null;
+            RequestHistoryEntry? historyEntry = null;
+            Stopwatch sw = Stopwatch.StartNew();
+
+            try
+            {
+                AuthContext auth = (AuthContext)req.Metadata;
+                explorerReq = req.GetData<EndpointExplorerEmbeddingRequest>();
+                if (explorerReq == null) throw new ArgumentException("Request body is required.");
+                if (string.IsNullOrWhiteSpace(explorerReq.EndpointId)) throw new ArgumentException("EndpointId is required.");
+                if (string.IsNullOrWhiteSpace(explorerReq.Input)) throw new ArgumentException("Input is required.");
+
+                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(explorerReq.EndpointId, auth).ConfigureAwait(false);
+                response.EndpointId = endpoint.Id;
+                response.Model = endpoint.Model;
+                response.Input = explorerReq.Input;
+
+                bool recordHistory = _Settings.RequestHistory.Enabled
+                    && _RequestHistoryService != null
+                    && endpoint.EnableRequestHistory;
+
+                if (recordHistory)
+                {
+                    historyEntry = await _RequestHistoryService!.CreateEntryAsync(
+                        req.Http.Request.Method.ToString(),
+                        req.Http.Request.Url.RawWithQuery,
+                        req.Http.Request.Source.IpAddress,
+                        auth).ConfigureAwait(false);
+                    response.RequestHistoryId = historyEntry.Id;
+                }
+
+                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
+                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+
+                using EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
+
+                try
+                {
+                    List<float> embedding = await client.EmbedAsync(explorerReq.Input, endpoint.Model).ConfigureAwait(false);
+                    if (explorerReq.L2Normalization)
+                        embedding = client.NormalizeL2(embedding);
+
+                    sw.Stop();
+
+                    response.Success = true;
+                    response.StatusCode = 200;
+                    response.Embedding = embedding;
+                    response.Dimensions = embedding.Count;
+                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.EmbeddingCalls = client.CallDetails.ToList();
+
+                    if (recordHistory && historyEntry != null)
+                    {
+                        string requestJson = _Serializer.SerializeJson(explorerReq, false);
+                        string responseJson = _Serializer.SerializeJson(response, false);
+                        Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                        Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                            historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, response.EmbeddingCalls, null).ConfigureAwait(false);
+                    }
+
+                    return response;
+                }
+                catch (Exception ex)
+                {
+                    sw.Stop();
+
+                    response.Success = false;
+                    response.StatusCode = MapExceptionToStatusCode(ex);
+                    response.Error = ex.Message;
+                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.EmbeddingCalls = client.CallDetails.ToList();
+
+                    if (recordHistory && historyEntry != null)
+                    {
+                        string requestJson = _Serializer.SerializeJson(explorerReq, false);
+                        string responseJson = _Serializer.SerializeJson(response, false);
+                        Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                        Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                            historyEntry, response.StatusCode, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, response.EmbeddingCalls, null).ConfigureAwait(false);
+                    }
+
+                    return response;
+                }
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                response.Success = false;
+                response.StatusCode = MapExceptionToStatusCode(ex);
+                response.Error = ex.Message;
+                response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                if (explorerReq != null)
+                {
+                    response.EndpointId = explorerReq.EndpointId;
+                    response.Input = explorerReq.Input;
+                }
+                return response;
+            }
+        }
+
+        private static async Task<object> ExploreCompletionEndpoint(AppRequest req)
+        {
+            EndpointExplorerCompletionResponse response = new EndpointExplorerCompletionResponse();
+            EndpointExplorerCompletionRequest? explorerReq = null;
+            RequestHistoryEntry? historyEntry = null;
+            Stopwatch sw = Stopwatch.StartNew();
+
+            try
+            {
+                AuthContext auth = (AuthContext)req.Metadata;
+                explorerReq = req.GetData<EndpointExplorerCompletionRequest>();
+                if (explorerReq == null) throw new ArgumentException("Request body is required.");
+                if (string.IsNullOrWhiteSpace(explorerReq.EndpointId)) throw new ArgumentException("EndpointId is required.");
+                if (string.IsNullOrWhiteSpace(explorerReq.Prompt)) throw new ArgumentException("Prompt is required.");
+
+                CompletionEndpoint endpoint = await ResolveCompletionEndpointFromBody(explorerReq.EndpointId, auth).ConfigureAwait(false);
+                response.EndpointId = endpoint.Id;
+                response.Model = endpoint.Model;
+                response.Prompt = explorerReq.Prompt;
+                response.SystemPrompt = explorerReq.SystemPrompt;
+
+                bool recordHistory = _Settings.RequestHistory.Enabled
+                    && _RequestHistoryService != null
+                    && endpoint.EnableRequestHistory;
+
+                if (recordHistory)
+                {
+                    historyEntry = await _RequestHistoryService!.CreateEntryAsync(
+                        req.Http.Request.Method.ToString(),
+                        req.Http.Request.Url.RawWithQuery,
+                        req.Http.Request.Source.IpAddress,
+                        auth).ConfigureAwait(false);
+                    response.RequestHistoryId = historyEntry.Id;
+                }
+
+                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
+                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+
+                using CompletionClientBase client = CreateCompletionClient(endpoint);
+
+                try
+                {
+                    int maxTokens = explorerReq.MaxTokens > 0 ? explorerReq.MaxTokens : 512;
+                    int timeoutMs = explorerReq.TimeoutMs > 0 ? explorerReq.TimeoutMs : 60000;
+                    string? output = await client.GenerateCompletionAsync(
+                        explorerReq.Prompt,
+                        endpoint.Model,
+                        maxTokens,
+                        timeoutMs,
+                        default,
+                        explorerReq.SystemPrompt).ConfigureAwait(false);
+
+                    sw.Stop();
+
+                    response.Success = true;
+                    response.StatusCode = 200;
+                    response.Output = output;
+                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.CompletionCalls = client.CallDetails.ToList();
+
+                    if (recordHistory && historyEntry != null)
+                    {
+                        string requestJson = _Serializer.SerializeJson(explorerReq, false);
+                        string responseJson = _Serializer.SerializeJson(response, false);
+                        Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                        Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                            historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                    }
+
+                    return response;
+                }
+                catch (Exception ex)
+                {
+                    sw.Stop();
+
+                    response.Success = false;
+                    response.StatusCode = MapExceptionToStatusCode(ex);
+                    response.Error = ex.Message;
+                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.CompletionCalls = client.CallDetails.ToList();
+
+                    if (recordHistory && historyEntry != null)
+                    {
+                        string requestJson = _Serializer.SerializeJson(explorerReq, false);
+                        string responseJson = _Serializer.SerializeJson(response, false);
+                        Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                        Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                            historyEntry, response.StatusCode, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                    }
+
+                    return response;
+                }
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                response.Success = false;
+                response.StatusCode = MapExceptionToStatusCode(ex);
+                response.Error = ex.Message;
+                response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                if (explorerReq != null)
+                {
+                    response.EndpointId = explorerReq.EndpointId;
+                    response.Prompt = explorerReq.Prompt;
+                    response.SystemPrompt = explorerReq.SystemPrompt;
+                }
+                return response;
+            }
         }
 
         /// <summary>

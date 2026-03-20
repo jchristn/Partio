@@ -119,7 +119,10 @@ export default function TenantsView() {
   return (
     <div>
       <div className="header-row">
-        <h2>Tenants</h2>
+        <div className="page-title-block">
+          <h2>Tenants</h2>
+          <p className="view-subtitle">Create and manage isolated tenant workspaces, including their labels and metadata.</p>
+        </div>
         <div className="header-row-actions">
           <button className="refresh-btn" onClick={load} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -130,7 +133,7 @@ export default function TenantsView() {
           <button className="primary" onClick={openCreate}>Create Tenant</button>
         </div>
       </div>
-      <DataTable data={data} columns={columns} loading={loading} />
+      <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
         <Modal title={editing ? 'Edit Tenant' : 'Create Tenant'} onClose={() => setShowModal(false)}>
           <div className="form-group">

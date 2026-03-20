@@ -204,7 +204,8 @@ namespace Test.Automated
                         TenantId = testTenantId,
                         Model = "test-model",
                         Endpoint = "http://localhost:11434",
-                        ApiFormat = "Ollama"
+                        ApiFormat = "Ollama",
+                        HealthCheckEnabled = false
                     });
                     if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No endpoint returned");
                     testEpId = ep.Id;
@@ -224,7 +225,8 @@ namespace Test.Automated
                         TenantId = testTenantId,
                         Model = "test-model-v2",
                         Endpoint = "http://localhost:11434",
-                        ApiFormat = "Ollama"
+                        ApiFormat = "Ollama",
+                        HealthCheckEnabled = false
                     });
                     if (updated == null) throw new Exception("Update failed");
                 });
@@ -250,7 +252,8 @@ namespace Test.Automated
                         Model = "gemini-embedding-001",
                         Endpoint = "https://generativelanguage.googleapis.com",
                         ApiFormat = "Gemini",
-                        ApiKey = "test-api-key"
+                        ApiKey = "test-api-key",
+                        HealthCheckEnabled = false
                     });
                     if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No endpoint returned");
                     geminiEpId = ep.Id;
@@ -264,7 +267,8 @@ namespace Test.Automated
                         Name = "vLLM Embedding",
                         Model = "intfloat/e5-small-v2",
                         Endpoint = "http://localhost:8000",
-                        ApiFormat = "vLLM"
+                        ApiFormat = "vLLM",
+                        HealthCheckEnabled = false
                     });
                     if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No endpoint returned");
                     vllmEpId = ep.Id;
@@ -283,7 +287,8 @@ namespace Test.Automated
                         Name = "Test Inference",
                         Model = "test-model",
                         Endpoint = "http://localhost:11434",
-                        ApiFormat = "Ollama"
+                        ApiFormat = "Ollama",
+                        HealthCheckEnabled = false
                     });
                     if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
                     testCepId = cep.Id;
@@ -304,7 +309,8 @@ namespace Test.Automated
                         Name = "Updated Inference",
                         Model = "test-model-v2",
                         Endpoint = "http://localhost:11434",
-                        ApiFormat = "Ollama"
+                        ApiFormat = "Ollama",
+                        HealthCheckEnabled = false
                     });
                     if (updated == null) throw new Exception("Update failed");
                 });
@@ -330,7 +336,8 @@ namespace Test.Automated
                         Model = "gemini-2.5-flash",
                         Endpoint = "https://generativelanguage.googleapis.com",
                         ApiFormat = "Gemini",
-                        ApiKey = "test-api-key"
+                        ApiKey = "test-api-key",
+                        HealthCheckEnabled = false
                     });
                     if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
                     geminiCepId = cep.Id;
@@ -344,7 +351,8 @@ namespace Test.Automated
                         Name = "vLLM Inference",
                         Model = "Qwen/Qwen2.5-7B-Instruct",
                         Endpoint = "http://localhost:8000",
-                        ApiFormat = "vLLM"
+                        ApiFormat = "vLLM",
+                        HealthCheckEnabled = false
                     });
                     if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
                     vllmCepId = cep.Id;
@@ -356,6 +364,30 @@ namespace Test.Automated
                 {
                     EnumerationResult<RequestHistoryEntry>? result = await admin.EnumerateRequestHistoryAsync(new EnumerationRequest { MaxResults = 10 });
                     if (result == null) throw new Exception("No response");
+                });
+
+                await RunTest("Explore Embedding Endpoint", async () =>
+                {
+                    EndpointExplorerEmbeddingResponse? result = await admin.ExploreEmbeddingEndpointAsync(new EndpointExplorerEmbeddingRequest
+                    {
+                        EndpointId = testEpId,
+                        Input = "Explorer embedding test payload"
+                    });
+                    if (result == null) throw new Exception("No response");
+                    if (result.EndpointId != testEpId) throw new Exception("Endpoint mismatch");
+                    if (result.EmbeddingCalls == null || result.EmbeddingCalls.Count == 0) throw new Exception("Expected upstream call details");
+                });
+
+                await RunTest("Explore Completion Endpoint", async () =>
+                {
+                    EndpointExplorerCompletionResponse? result = await admin.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
+                    {
+                        EndpointId = testCepId,
+                        Prompt = "Explorer completion test payload"
+                    });
+                    if (result == null) throw new Exception("No response");
+                    if (result.EndpointId != testCepId) throw new Exception("Endpoint mismatch");
+                    if (result.CompletionCalls == null || result.CompletionCalls.Count == 0) throw new Exception("Expected upstream call details");
                 });
 
                 // ===== Process (RegexBased) =====

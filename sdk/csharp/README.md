@@ -14,6 +14,7 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 - Completion Endpoint CRUD (`CreateCompletionEndpointAsync`, `GetCompletionEndpointAsync`, `UpdateCompletionEndpointAsync`, `DeleteCompletionEndpointAsync`, `CompletionEndpointExistsAsync`, `EnumerateCompletionEndpointsAsync`)
 - Embedding & Completion Endpoint Health (`GetEndpointHealthAsync`, `GetAllEndpointHealthAsync`, `GetCompletionEndpointHealthAsync`, `GetAllCompletionEndpointHealthAsync`)
 - Semantic cell processing (`ProcessAsync`, `ProcessBatchAsync`)
+- Endpoint explorer (`ExploreEmbeddingEndpointAsync`, `ExploreCompletionEndpointAsync`)
 - Request history (`GetRequestHistoryAsync`, `GetRequestHistoryDetailAsync`, `DeleteRequestHistoryAsync`, `EnumerateRequestHistoryAsync`)
 
 Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
@@ -55,6 +56,14 @@ var result = await client.ProcessAsync(new SemanticCellRequest
 });
 
 Console.WriteLine($"Chunks: {result.Chunks.Count}");
+
+var explorer = await client.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
+{
+    EndpointId = "cep_your_completion_endpoint_id",
+    Prompt = "Explain what Partio does in one short paragraph."
+});
+
+Console.WriteLine($"Explorer success: {explorer?.Success}");
 ```
 
 ## Running the Test Harness

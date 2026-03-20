@@ -16,6 +16,7 @@ export default function CredentialsView() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ TenantId: 'default', UserId: 'default', Name: '' });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
@@ -49,6 +50,7 @@ export default function CredentialsView() {
   useEffect(() => { load(); loadTenants(); loadUsers(); }, [load, loadTenants, loadUsers]);
 
   const openCreate = () => {
+    setEditing(null);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const tenantUsers = users.filter(u => u.TenantId === tenantId);
     const userId = tenantUsers.length > 0 ? tenantUsers[0].Id : '';
@@ -56,9 +58,28 @@ export default function CredentialsView() {
     setShowModal(true);
   };
 
+  const openEdit = (item) => {
+    setEditing(item);
+    setForm({
+      TenantId: item.TenantId || '',
+      UserId: item.UserId || '',
+      Name: item.Name || ''
+    });
+    setShowModal(true);
+  };
+
   const handleSave = async () => {
     try {
-      await api.createCredential({ TenantId: form.TenantId, UserId: form.UserId, Name: form.Name });
+      if (editing) {
+        await api.updateCredential(editing.Id, {
+          ...editing,
+          TenantId: form.TenantId,
+          UserId: form.UserId,
+          Name: form.Name
+        });
+      } else {
+        await api.createCredential({ TenantId: form.TenantId, UserId: form.UserId, Name: form.Name });
+      }
       setShowModal(false);
       load();
     } catch (err) { setAlertModal({ isOpen: true, message: err.message, type: 'error' }); }
@@ -106,9 +127,11 @@ export default function CredentialsView() {
       key: 'actions',
       label: 'Actions',
       isAction: true,
+      preventRowClick: true,
       sortable: false,
       render: (item) => (
         <ActionMenu actions={[
+          { label: 'Edit', onClick: () => openEdit(item) },
           { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
           { divider: true },
           { label: 'Delete', danger: true, onClick: () => setDeleteModal({ isOpen: true, id: item.Id }) }
@@ -120,7 +143,10 @@ export default function CredentialsView() {
   return (
     <div>
       <div className="header-row">
-        <h2>Credentials</h2>
+        <div className="page-title-block">
+          <h2>Credentials</h2>
+          <p className="view-subtitle">Issue and review bearer tokens used by clients and services to authenticate with Partio.</p>
+        </div>
         <div className="header-row-actions">
           <button className="refresh-btn" onClick={load} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -131,10 +157,10 @@ export default function CredentialsView() {
           <button className="primary" onClick={openCreate}>Create Credential</button>
         </div>
       </div>
-      <DataTable data={data} columns={columns} loading={loading} />
+      <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
-        <Modal title="Create Credential" onClose={() => setShowModal(false)}>
-          <div className="form-group"><label>Tenant</label><select value={form.TenantId} onChange={e => { const tid = e.target.value; const tu = users.filter(u => u.TenantId === tid); setForm({ ...form, TenantId: tid, UserId: tu.length > 0 ? tu[0].Id : '' }); }}>{tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}</select></div>
+        <Modal title={editing ? 'Edit Credential' : 'Create Credential'} onClose={() => setShowModal(false)}>
+          <div className="form-group"><label>Tenant</label><select value={form.TenantId} onChange={e => { const tid = e.target.value; const tu = users.filter(u => u.TenantId === tid); setForm({ ...form, TenantId: tid, UserId: tu.some(u => u.Id === form.UserId) ? form.UserId : (tu.length > 0 ? tu[0].Id : '') }); }}>{tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}</select></div>
           <div className="form-group"><label>User</label><select value={form.UserId} onChange={e => setForm({ ...form, UserId: e.target.value })}>{users.filter(u => u.TenantId === form.TenantId).map(u => <option key={u.Id} value={u.Id}>{u.Email || u.Id}</option>)}</select></div>
           <div className="form-group"><label>Name</label><input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} /></div>
           <div className="btn-group" style={{ marginTop: 16 }}><button className="primary" onClick={handleSave}>Save</button><button className="secondary" onClick={() => setShowModal(false)}>Cancel</button></div>

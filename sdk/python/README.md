@@ -14,6 +14,7 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 - Completion Endpoint CRUD (`create_completion_endpoint`, `get_completion_endpoint`, `update_completion_endpoint`, `delete_completion_endpoint`, `completion_endpoint_exists`, `enumerate_completion_endpoints`)
 - Embedding & Completion Endpoint Health (`get_endpoint_health`, `get_all_endpoint_health`, `get_completion_endpoint_health`, `get_all_completion_endpoint_health`)
 - Semantic cell processing (`process`, `process_batch`)
+- Endpoint explorer (`explore_embedding_endpoint`, `explore_completion_endpoint`)
 - Request history (`get_request_history`, `get_request_history_detail`, `delete_request_history`, `enumerate_request_history`)
 
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
@@ -52,6 +53,12 @@ with PartioClient("http://localhost:8400", "your-access-key") as client:
         }
     })
     print(f"Chunks: {len(result['Chunks'])}")
+
+    explorer = client.explore_completion_endpoint({
+        "EndpointId": "cep_your_completion_endpoint_id",
+        "Prompt": "Explain what Partio does in one short paragraph."
+    })
+    print(f"Explorer success: {explorer['Success']}")
 ```
 
 ## Running the Test Harness

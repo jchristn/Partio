@@ -130,7 +130,7 @@ await runTest('Enumerate Credentials', async () => {
 
 // Endpoint CRUD
 await runTest('Create Endpoint', async () => {
-  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'Test Embedding', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'Test Embedding', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false });
   if (!ep || !ep.Id) throw new Error('No response');
   testEpId = ep.Id;
 });
@@ -141,7 +141,7 @@ await runTest('Read Endpoint', async () => {
 });
 
 await runTest('Update Endpoint', async () => {
-  const updated = await client.updateEndpoint(testEpId, { TenantId: testTenantId, Name: 'Updated Embedding', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  const updated = await client.updateEndpoint(testEpId, { TenantId: testTenantId, Name: 'Updated Embedding', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false });
   if (!updated) throw new Error('Update failed');
 });
 
@@ -155,20 +155,20 @@ await runTest('Enumerate Endpoints', async () => {
 });
 
 await runTest('Create Gemini Embedding Endpoint', async () => {
-  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'Gemini Embedding', Model: 'gemini-embedding-001', Endpoint: 'https://generativelanguage.googleapis.com', ApiFormat: 'Gemini', ApiKey: 'test-api-key' });
+  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'Gemini Embedding', Model: 'gemini-embedding-001', Endpoint: 'https://generativelanguage.googleapis.com', ApiFormat: 'Gemini', ApiKey: 'test-api-key', HealthCheckEnabled: false });
   if (!ep || !ep.Id) throw new Error('No response');
   geminiEpId = ep.Id;
 });
 
 await runTest('Create vLLM Embedding Endpoint', async () => {
-  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'vLLM Embedding', Model: 'intfloat/e5-small-v2', Endpoint: 'http://localhost:8000', ApiFormat: 'vLLM' });
+  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'vLLM Embedding', Model: 'intfloat/e5-small-v2', Endpoint: 'http://localhost:8000', ApiFormat: 'vLLM', HealthCheckEnabled: false });
   if (!ep || !ep.Id) throw new Error('No response');
   vllmEpId = ep.Id;
 });
 
 // Completion Endpoint CRUD
 await runTest('Create Completion Endpoint', async () => {
-  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false });
   if (!cep || !cep.Id) throw new Error('No response');
   testCepId = cep.Id;
 });
@@ -179,7 +179,7 @@ await runTest('Read Completion Endpoint', async () => {
 });
 
 await runTest('Update Completion Endpoint', async () => {
-  const updated = await client.updateCompletionEndpoint(testCepId, { TenantId: testTenantId, Name: 'Updated Inference', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
+  const updated = await client.updateCompletionEndpoint(testCepId, { TenantId: testTenantId, Name: 'Updated Inference', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false });
   if (!updated) throw new Error('Update failed');
 });
 
@@ -193,13 +193,13 @@ await runTest('Enumerate Completion Endpoints', async () => {
 });
 
 await runTest('Create Gemini Completion Endpoint', async () => {
-  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Gemini Inference', Model: 'gemini-2.5-flash', Endpoint: 'https://generativelanguage.googleapis.com', ApiFormat: 'Gemini', ApiKey: 'test-api-key' });
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Gemini Inference', Model: 'gemini-2.5-flash', Endpoint: 'https://generativelanguage.googleapis.com', ApiFormat: 'Gemini', ApiKey: 'test-api-key', HealthCheckEnabled: false });
   if (!cep || !cep.Id) throw new Error('No response');
   geminiCepId = cep.Id;
 });
 
 await runTest('Create vLLM Completion Endpoint', async () => {
-  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'vLLM Inference', Model: 'Qwen/Qwen2.5-7B-Instruct', Endpoint: 'http://localhost:8000', ApiFormat: 'vLLM' });
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'vLLM Inference', Model: 'Qwen/Qwen2.5-7B-Instruct', Endpoint: 'http://localhost:8000', ApiFormat: 'vLLM', HealthCheckEnabled: false });
   if (!cep || !cep.Id) throw new Error('No response');
   vllmCepId = cep.Id;
 });
@@ -208,6 +208,24 @@ await runTest('Create vLLM Completion Endpoint', async () => {
 await runTest('Enumerate Request History', async () => {
   const result = await client.enumerateRequestHistory();
   if (!result) throw new Error('No response');
+});
+
+await runTest('Explore Embedding Endpoint', async () => {
+  const result = await client.exploreEmbeddingEndpoint({
+    EndpointId: testEpId,
+    Input: 'JavaScript SDK explorer embedding payload'
+  });
+  if (!result || result.EndpointId !== testEpId) throw new Error('Endpoint mismatch');
+  if (!result.EmbeddingCalls || result.EmbeddingCalls.length === 0) throw new Error('Expected upstream call details');
+});
+
+await runTest('Explore Completion Endpoint', async () => {
+  const result = await client.exploreCompletionEndpoint({
+    EndpointId: testCepId,
+    Prompt: 'JavaScript SDK explorer completion payload'
+  });
+  if (!result || result.EndpointId !== testCepId) throw new Error('Endpoint mismatch');
+  if (!result.CompletionCalls || result.CompletionCalls.length === 0) throw new Error('Expected upstream call details');
 });
 
 // Process Single Cell (requires an active embedding endpoint)

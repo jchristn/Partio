@@ -219,6 +219,7 @@ export default function RequestHistoryView() {
       key: 'actions',
       label: 'Actions',
       isAction: true,
+      preventRowClick: true,
       sortable: false,
       render: (item) => (
         <ActionMenu actions={[
@@ -236,7 +237,10 @@ export default function RequestHistoryView() {
   return (
     <div>
       <div className="header-row">
-        <h2>Request History</h2>
+        <div className="page-title-block">
+          <h2>Request History</h2>
+          <p className="view-subtitle">Inspect prior requests, response payloads, and upstream provider exchanges recorded by Partio.</p>
+        </div>
         <div className="header-row-actions">
           <button className="refresh-btn" onClick={load} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -246,7 +250,7 @@ export default function RequestHistoryView() {
           </button>
         </div>
       </div>
-      <DataTable data={data} columns={columns} loading={loading} />
+      <DataTable data={data} columns={columns} loading={loading} onRowClick={viewDetail} />
 
       {detailOpen && detailItem && (
         <Modal title="Request Detail" onClose={() => setDetailModal({ isOpen: false, item: null, detail: null, endpoint: null, loading: false, error: null })} className="modal-extra-wide">

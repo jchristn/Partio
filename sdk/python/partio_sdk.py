@@ -68,6 +68,13 @@ class PartioClient:
     def process_batch(self, requests_list):
         return self._request("POST", "/v1.0/process/batch", requests_list)
 
+    # Explorer
+    def explore_embedding_endpoint(self, request):
+        return self._request("POST", "/v1.0/explorer/embedding", request)
+
+    def explore_completion_endpoint(self, request):
+        return self._request("POST", "/v1.0/explorer/completion", request)
+
     # Tenants
     def create_tenant(self, data):
         return self._request("PUT", "/v1.0/tenants", data)
