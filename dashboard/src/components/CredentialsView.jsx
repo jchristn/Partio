@@ -5,6 +5,9 @@ import Modal from './Modal';
 import CopyableId from './CopyableId';
 import ActionMenu from './ActionMenu';
 import DataTable from './DataTable';
+import FormFieldLabel from './FormFieldLabel';
+import Tooltip from './Tooltip';
+import TooltipIcon from './TooltipIcon';
 import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
@@ -17,7 +20,7 @@ export default function CredentialsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', UserId: 'default', Name: '' });
+  const [form, setForm] = useState({ TenantId: 'default', UserId: 'default', Name: '', Active: true });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -54,7 +57,7 @@ export default function CredentialsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const tenantUsers = users.filter(u => u.TenantId === tenantId);
     const userId = tenantUsers.length > 0 ? tenantUsers[0].Id : '';
-    setForm({ TenantId: tenantId, UserId: userId, Name: '' });
+    setForm({ TenantId: tenantId, UserId: userId, Name: '', Active: true });
     setShowModal(true);
   };
 
@@ -63,7 +66,8 @@ export default function CredentialsView() {
     setForm({
       TenantId: item.TenantId || '',
       UserId: item.UserId || '',
-      Name: item.Name || ''
+      Name: item.Name || '',
+      Active: item.Active !== false
     });
     setShowModal(true);
   };
@@ -75,10 +79,11 @@ export default function CredentialsView() {
           ...editing,
           TenantId: form.TenantId,
           UserId: form.UserId,
-          Name: form.Name
+          Name: form.Name,
+          Active: form.Active
         });
       } else {
-        await api.createCredential({ TenantId: form.TenantId, UserId: form.UserId, Name: form.Name });
+        await api.createCredential({ TenantId: form.TenantId, UserId: form.UserId, Name: form.Name, Active: form.Active });
       }
       setShowModal(false);
       load();
@@ -100,22 +105,26 @@ export default function CredentialsView() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique credential identifier used internally by Partio.',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Name',
       label: 'Name',
+      tooltip: 'Optional display name used to recognize this credential.',
       render: (item) => item.Name || '-'
     },
     {
       key: 'BearerToken',
       label: 'Bearer Token',
+      tooltip: 'The API token clients send in the Authorization header to authenticate with Partio.',
       render: (item) => <CopyableId value={item.BearerToken} />
     },
     {
       key: 'Active',
       label: 'Status',
+      tooltip: 'Whether this credential can currently be used to access Partio.',
       filterValue: (item) => item.Active ? 'Active' : 'Inactive',
       render: (item) => (
         <span className={`status-badge ${item.Active ? 'active' : 'inactive'}`}>
@@ -126,6 +135,7 @@ export default function CredentialsView() {
     {
       key: 'actions',
       label: 'Actions',
+      tooltip: 'Available actions for this credential, including edit, JSON view, and delete.',
       isAction: true,
       preventRowClick: true,
       sortable: false,
@@ -160,9 +170,35 @@ export default function CredentialsView() {
       <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
         <Modal title={editing ? 'Edit Credential' : 'Create Credential'} onClose={() => setShowModal(false)}>
-          <div className="form-group"><label>Tenant</label><select value={form.TenantId} onChange={e => { const tid = e.target.value; const tu = users.filter(u => u.TenantId === tid); setForm({ ...form, TenantId: tid, UserId: tu.some(u => u.Id === form.UserId) ? form.UserId : (tu.length > 0 ? tu[0].Id : '') }); }}>{tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}</select></div>
-          <div className="form-group"><label>User</label><select value={form.UserId} onChange={e => setForm({ ...form, UserId: e.target.value })}>{users.filter(u => u.TenantId === form.TenantId).map(u => <option key={u.Id} value={u.Id}>{u.Email || u.Id}</option>)}</select></div>
-          <div className="form-group"><label>Name</label><input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} /></div>
+          <div className="form-group">
+            <FormFieldLabel text="Tenant" tooltip="Tenant that owns this credential. Credentials are scoped to a tenant." />
+            <Tooltip content="Tenant that owns this credential. Credentials are scoped to a tenant." block>
+              <select value={form.TenantId} onChange={e => { const tid = e.target.value; const tu = users.filter(u => u.TenantId === tid); setForm({ ...form, TenantId: tid, UserId: tu.some(u => u.Id === form.UserId) ? form.UserId : (tu.length > 0 ? tu[0].Id : '') }); }}>
+                {tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}
+              </select>
+            </Tooltip>
+          </div>
+          <div className="form-group">
+            <FormFieldLabel text="User" tooltip="User account this credential belongs to. Tokens inherit that user and tenant context." />
+            <Tooltip content="User account this credential belongs to. Tokens inherit that user and tenant context." block>
+              <select value={form.UserId} onChange={e => setForm({ ...form, UserId: e.target.value })}>
+                {users.filter(u => u.TenantId === form.TenantId).map(u => <option key={u.Id} value={u.Id}>{u.Email || u.Id}</option>)}
+              </select>
+            </Tooltip>
+          </div>
+          <div className="form-group">
+            <FormFieldLabel text="Name" tooltip="Optional friendly name for the credential, such as SDK key, CI token, or local test app." />
+            <Tooltip content="Optional friendly name for the credential, such as SDK key, CI token, or local test app." block>
+              <input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} />
+            </Tooltip>
+          </div>
+          <div className="form-group">
+            <label className="checkbox-label">
+              <input type="checkbox" checked={form.Active} onChange={e => setForm({ ...form, Active: e.target.checked })} />
+              {' '}Active
+              <TooltipIcon content="Enable or disable this credential. Inactive tokens remain stored but should no longer authenticate requests." />
+            </label>
+          </div>
           <div className="btn-group" style={{ marginTop: 16 }}><button className="primary" onClick={handleSave}>Save</button><button className="secondary" onClick={() => setShowModal(false)}>Cancel</button></div>
         </Modal>
       )}

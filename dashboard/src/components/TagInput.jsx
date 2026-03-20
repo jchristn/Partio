@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import Tooltip from './Tooltip';
 import './TagInput.css';
 
-export default function TagInput({ value = [], onChange }) {
+export default function TagInput({ value = [], onChange, inputTooltip, addButtonTooltip, removeTooltip }) {
   const [input, setInput] = useState('');
 
   const addTag = () => {
@@ -26,13 +27,19 @@ export default function TagInput({ value = [], onChange }) {
         {value.map(tag => (
           <span key={tag} className="tag-chip">
             {tag}
-            <button className="tag-remove" onClick={() => removeTag(tag)}>&times;</button>
+            <Tooltip content={removeTooltip || `Remove label "${tag}" from this item.`}>
+              <button className="tag-remove" onClick={() => removeTag(tag)}>&times;</button>
+            </Tooltip>
           </span>
         ))}
       </div>
       <div className="tag-input-row">
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Add label..." />
-        <button className="secondary" onClick={addTag}>Add</button>
+        <Tooltip content={inputTooltip} block>
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Add label..." />
+        </Tooltip>
+        <Tooltip content={addButtonTooltip || 'Add the typed label to this item. Duplicate labels are ignored.'}>
+          <button className="secondary" onClick={addTag}>Add</button>
+        </Tooltip>
       </div>
     </div>
   );

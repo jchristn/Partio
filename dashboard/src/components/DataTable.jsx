@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import Tooltip from './Tooltip';
 
 export default function DataTable({
   data = [],
@@ -139,10 +140,11 @@ export default function DataTable({
                 onClick={() => !col.isAction && handleSort(col.key)}
                 className={col.sortable !== false && !col.isAction ? 'sortable' : ''}
                 style={col.width ? { width: col.width } : {}}
-                title={col.tooltip || ''}
               >
                 <div className="th-content">
-                  <span>{col.label}</span>
+                  <Tooltip content={col.tooltip || `${col.label} column`}>
+                    <span>{col.label}</span>
+                  </Tooltip>
                   {col.sortable !== false && !col.isAction && getSortIcon(col.key)}
                 </div>
               </th>
@@ -152,12 +154,20 @@ export default function DataTable({
             {columns.map((col) => (
               <th key={`filter-${col.key}`}>
                 {col.filterable !== false && !col.isAction && (
-                  <input
-                    type="text"
-                    placeholder="Filter..."
-                    value={filters[col.key] || ''}
-                    onChange={(e) => handleFilterChange(col.key, e.target.value)}
-                  />
+                  <Tooltip
+                    content={
+                      col.filterTooltip ||
+                      `Filter rows by ${col.label.toLowerCase()}. Enter partial text to narrow the table results.`
+                    }
+                    block
+                  >
+                    <input
+                      type="text"
+                      placeholder="Filter..."
+                      value={filters[col.key] || ''}
+                      onChange={(e) => handleFilterChange(col.key, e.target.value)}
+                    />
+                  </Tooltip>
                 )}
               </th>
             ))}
@@ -199,19 +209,21 @@ export default function DataTable({
           </div>
 
           <div className="pagination-controls">
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(0);
-                setPageInput('1');
-              }}
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+            <Tooltip content="Choose how many rows to show per page: 10, 25, 50, or 100." block>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(0);
+                  setPageInput('1');
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </Tooltip>
 
             <button onClick={() => goToPage(0)} disabled={currentPage === 0}>
               First
@@ -222,13 +234,15 @@ export default function DataTable({
 
             <span className="page-input-container">
               Page{' '}
-              <input
-                type="text"
-                value={pageInput}
-                onChange={handlePageInputChange}
-                onKeyDown={handlePageInputSubmit}
-                className="page-input"
-              />{' '}
+              <Tooltip content="Jump to a specific page number, then press Enter. Valid range is 1 through the last page." >
+                <input
+                  type="text"
+                  value={pageInput}
+                  onChange={handlePageInputChange}
+                  onKeyDown={handlePageInputSubmit}
+                  className="page-input"
+                />
+              </Tooltip>{' '}
               of {totalPages}
             </span>
 

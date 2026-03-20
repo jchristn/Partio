@@ -8,6 +8,9 @@ import DataTable from './DataTable';
 import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
+import FormFieldLabel from './FormFieldLabel';
+import Tooltip from './Tooltip';
+import TooltipIcon from './TooltipIcon';
 import './EmbeddingEndpointsView.css';
 
 function getApiFormatDefaults(apiFormat) {
@@ -223,23 +226,6 @@ function formatDuration(ms) {
   return `${minutes}m`;
 }
 
-function FieldLabel({ text, tooltip }) {
-  return (
-    <label>
-      {text}
-      {tooltip && (
-        <span className="field-tooltip" data-tooltip={tooltip}>
-          <svg className="field-tooltip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="8" cy="8" r="7" />
-            <line x1="8" y1="7" x2="8" y2="11" />
-            <circle cx="8" cy="5" r="0.5" fill="currentColor" stroke="none" />
-          </svg>
-        </span>
-      )}
-    </label>
-  );
-}
-
 const defaultHealthFields = {
   HealthCheckEnabled: true,
   HealthCheckUrl: '',
@@ -259,7 +245,7 @@ export default function CompletionEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: true, ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -310,7 +296,7 @@ export default function CompletionEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: true, HealthCheckEnabled: true, ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, HealthCheckEnabled: true, ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -326,6 +312,7 @@ export default function CompletionEndpointsView() {
       Endpoint: item.Endpoint,
       ApiFormat: item.ApiFormat,
       ApiKey: item.ApiKey || '',
+      Active: item.Active !== false,
       EnableRequestHistory: item.EnableRequestHistory || false,
       HealthCheckEnabled: item.HealthCheckEnabled || false,
       HealthCheckUrl: item.HealthCheckUrl || '',
@@ -363,6 +350,7 @@ export default function CompletionEndpointsView() {
         Endpoint: form.Endpoint,
         ApiFormat: form.ApiFormat,
         ApiKey: form.ApiKey || null,
+        Active: form.Active,
         EnableRequestHistory: form.EnableRequestHistory,
         HealthCheckEnabled: form.HealthCheckEnabled,
         HealthCheckUrl: form.HealthCheckUrl || null,
@@ -526,37 +514,47 @@ export default function CompletionEndpointsView() {
             <div className="endpoint-form-row">
               {!editing && (
                 <div className="form-group">
-                  <FieldLabel text="Tenant" tooltip="The tenant this endpoint belongs to. Each tenant has isolated data." />
-                  <select value={form.TenantId} onChange={e => setForm({ ...form, TenantId: e.target.value })}>
-                    {tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}
-                  </select>
+                  <FormFieldLabel text="Tenant" tooltip="The tenant this endpoint belongs to. Each tenant has isolated data." />
+                  <Tooltip content="The tenant this endpoint belongs to. Each tenant has isolated data." block>
+                    <select value={form.TenantId} onChange={e => setForm({ ...form, TenantId: e.target.value })}>
+                      {tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}
+                    </select>
+                  </Tooltip>
                 </div>
               )}
               <div className="form-group">
-                <FieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." />
-                <select value={form.ApiFormat} onChange={e => handleFormatChange(e.target.value)}>
-                  <option value="Ollama">Ollama</option>
-                  <option value="OpenAI">OpenAI</option>
-                  <option value="Gemini">Gemini</option>
-                  <option value="vLLM">vLLM</option>
-                </select>
+                <FormFieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." />
+                <Tooltip content="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." block>
+                  <select value={form.ApiFormat} onChange={e => handleFormatChange(e.target.value)}>
+                    <option value="Ollama">Ollama</option>
+                    <option value="OpenAI">OpenAI</option>
+                    <option value="Gemini">Gemini</option>
+                    <option value="vLLM">vLLM</option>
+                  </select>
+                </Tooltip>
               </div>
             </div>
             <div className="endpoint-form-row">
               <div className="form-group">
-                <FieldLabel text="Name" tooltip="Optional display name for this inference endpoint." />
-                <input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} placeholder="e.g. My Inference Endpoint" />
+                <FormFieldLabel text="Name" tooltip="Optional display name for this inference endpoint." />
+                <Tooltip content="Optional display name for this inference endpoint." block>
+                  <input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} placeholder="e.g. My Inference Endpoint" />
+                </Tooltip>
               </div>
               <div className="form-group">
-                <FieldLabel text="Model" tooltip="Completion model name served by this endpoint. Example: llama3, gpt-4o-mini" />
-                <input value={form.Model} onChange={e => setForm({ ...form, Model: e.target.value })} placeholder="e.g. llama3" />
+                <FormFieldLabel text="Model" tooltip="Completion model name served by this endpoint. Example: llama3, gpt-4.1-mini, gemini-2.5-flash." />
+                <Tooltip content="Completion model name served by this endpoint. Example: llama3, gpt-4.1-mini, gemini-2.5-flash." block>
+                  <input value={form.Model} onChange={e => setForm({ ...form, Model: e.target.value })} placeholder="e.g. llama3" />
+                </Tooltip>
               </div>
             </div>
             <div className="endpoint-form-row">
               <div className="form-group">
-                <FieldLabel text="API Key" tooltip="Authentication key for the inference API. Required for OpenAI, Gemini, and most vLLM deployments; optional for Ollama." />
+                <FormFieldLabel text="API Key" tooltip="Authentication key for the inference API. Required for OpenAI, Gemini, and most vLLM deployments; optional for Ollama." />
                 <div className="password-input-wrapper">
-                  <input type={showApiKey ? "text" : "password"} value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder="Optional" />
+                  <Tooltip content="Authentication key for the inference API. Required for OpenAI, Gemini, and most vLLM deployments; optional for Ollama." block>
+                    <input type={showApiKey ? "text" : "password"} value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder="Optional" />
+                  </Tooltip>
                   <button type="button" className="password-toggle-btn" onClick={() => setShowApiKey(!showApiKey)} title={showApiKey ? "Hide API Key" : "Show API Key"}>
                     {showApiKey ? (
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -575,8 +573,10 @@ export default function CompletionEndpointsView() {
               </div>
             </div>
             <div className="form-group">
-              <FieldLabel text="Endpoint URL" tooltip="Base URL of the completion API server. Example: http://localhost:11434 or https://api.openai.com" />
-              <input value={form.Endpoint} onChange={e => handleEndpointChange(e.target.value)} placeholder="http://localhost:11434" />
+              <FormFieldLabel text="Endpoint URL" tooltip="Base URL of the completion API server. Example: http://localhost:11434 or https://api.openai.com" />
+              <Tooltip content="Base URL of the completion API server. Example: http://localhost:11434 or https://api.openai.com." block>
+                <input value={form.Endpoint} onChange={e => handleEndpointChange(e.target.value)} placeholder="http://localhost:11434" />
+              </Tooltip>
             </div>
           </div>
 
@@ -585,15 +585,16 @@ export default function CompletionEndpointsView() {
             <div className="endpoint-form-section-header">Options</div>
             <div className="form-group">
               <label className="checkbox-label">
+                <input type="checkbox" checked={form.Active} onChange={e => setForm({ ...form, Active: e.target.checked })} />
+                {' '}Active
+                <TooltipIcon content="Enable or disable this inference endpoint. Inactive endpoints are ignored for new work." />
+              </label>
+            </div>
+            <div className="form-group">
+              <label className="checkbox-label">
                 <input type="checkbox" checked={form.EnableRequestHistory} onChange={e => setForm({ ...form, EnableRequestHistory: e.target.checked })} />
                 {' '}Enable Request History
-                <span className="field-tooltip" data-tooltip="Log all completion requests and responses for debugging and auditing.">
-                  <svg className="field-tooltip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="8" cy="8" r="7" />
-                    <line x1="8" y1="7" x2="8" y2="11" />
-                    <circle cx="8" cy="5" r="0.5" fill="currentColor" stroke="none" />
-                  </svg>
-                </span>
+                <TooltipIcon content="Log all completion requests and responses for debugging and auditing." />
               </label>
             </div>
           </div>
@@ -605,65 +606,67 @@ export default function CompletionEndpointsView() {
               <label className="checkbox-label">
                 <input type="checkbox" checked={form.HealthCheckEnabled} onChange={e => setForm({ ...form, HealthCheckEnabled: e.target.checked })} />
                 {' '}Enable Health Checks
-                <span className="field-tooltip" data-tooltip="Periodically probe the endpoint to track availability and uptime.">
-                  <svg className="field-tooltip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="8" cy="8" r="7" />
-                    <line x1="8" y1="7" x2="8" y2="11" />
-                    <circle cx="8" cy="5" r="0.5" fill="currentColor" stroke="none" />
-                  </svg>
-                </span>
+                <TooltipIcon content="Periodically probe the endpoint to track availability and uptime." />
               </label>
             </div>
             {form.HealthCheckEnabled && (
               <>
                 <div className="form-group">
-                  <FieldLabel text="Health Check URL" tooltip="Full URL to probe for health. Auto-set from endpoint and format." />
-                  <input value={form.HealthCheckUrl} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckUrl: e.target.value }); }} placeholder="Auto-detected from endpoint" />
+                  <FormFieldLabel text="Health Check URL" tooltip="Full URL to probe for health. Auto-set from endpoint and format." />
+                  <Tooltip content="Full URL to probe for health. Auto-set from endpoint and format." block>
+                    <input value={form.HealthCheckUrl} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckUrl: e.target.value }); }} placeholder="Auto-detected from endpoint" />
+                  </Tooltip>
                 </div>
                 <div className="endpoint-form-row">
                   <div className="form-group">
-                    <FieldLabel text="Method" tooltip="HTTP method for health checks. GET returns a response body, HEAD is lighter." />
-                    <select value={form.HealthCheckMethod} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckMethod: e.target.value }); }}>
-                      <option value="GET">GET</option>
-                      <option value="HEAD">HEAD</option>
-                    </select>
+                    <FormFieldLabel text="Method" tooltip="HTTP method for health checks. GET returns a response body, HEAD is lighter." />
+                    <Tooltip content="HTTP method for health checks. GET returns a response body, HEAD is lighter." block>
+                      <select value={form.HealthCheckMethod} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckMethod: e.target.value }); }}>
+                        <option value="GET">GET</option>
+                        <option value="HEAD">HEAD</option>
+                      </select>
+                    </Tooltip>
                   </div>
                   <div className="form-group">
-                    <FieldLabel text="Expected Status Code" tooltip="HTTP status code that indicates success. Typically 200." />
-                    <input type="number" value={form.HealthCheckExpectedStatusCode} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckExpectedStatusCode: e.target.value }); }} />
-                  </div>
-                </div>
-                <div className="endpoint-form-row">
-                  <div className="form-group">
-                    <FieldLabel text="Interval (ms)" tooltip="Milliseconds between health checks. Example: 30000 = every 30 seconds." />
-                    <input type="number" value={form.HealthCheckIntervalMs} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckIntervalMs: e.target.value }); }} />
-                  </div>
-                  <div className="form-group">
-                    <FieldLabel text="Timeout (ms)" tooltip="Maximum wait time per health check in milliseconds. Example: 5000 = 5 seconds." />
-                    <input type="number" value={form.HealthCheckTimeoutMs} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckTimeoutMs: e.target.value }); }} />
+                    <FormFieldLabel text="Expected Status Code" tooltip="HTTP status code that indicates success. Typically 200." />
+                    <Tooltip content="HTTP status code that indicates success. Typically 200." block>
+                      <input type="number" value={form.HealthCheckExpectedStatusCode} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckExpectedStatusCode: e.target.value }); }} />
+                    </Tooltip>
                   </div>
                 </div>
                 <div className="endpoint-form-row">
                   <div className="form-group">
-                    <FieldLabel text="Healthy Threshold" tooltip="Consecutive successful checks needed to mark endpoint as healthy." />
-                    <input type="number" value={form.HealthyThreshold} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthyThreshold: e.target.value }); }} />
+                    <FormFieldLabel text="Interval (ms)" tooltip="Milliseconds between health checks. Example: 15000 = every 15 seconds. Use positive values only." />
+                    <Tooltip content="Milliseconds between health checks. Example: 15000 = every 15 seconds. Use positive values only." block>
+                      <input type="number" value={form.HealthCheckIntervalMs} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckIntervalMs: e.target.value }); }} />
+                    </Tooltip>
                   </div>
                   <div className="form-group">
-                    <FieldLabel text="Unhealthy Threshold" tooltip="Consecutive failed checks needed to mark endpoint as unhealthy." />
-                    <input type="number" value={form.UnhealthyThreshold} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, UnhealthyThreshold: e.target.value }); }} />
+                    <FormFieldLabel text="Timeout (ms)" tooltip="Maximum wait time per health check in milliseconds. Example: 5000 = 5 seconds. Use positive values only." />
+                    <Tooltip content="Maximum wait time per health check in milliseconds. Example: 5000 = 5 seconds. Use positive values only." block>
+                      <input type="number" value={form.HealthCheckTimeoutMs} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckTimeoutMs: e.target.value }); }} />
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="endpoint-form-row">
+                  <div className="form-group">
+                    <FormFieldLabel text="Healthy Threshold" tooltip="Consecutive successful checks needed to mark the endpoint healthy. Recommended range: 1-5." />
+                    <Tooltip content="Consecutive successful checks needed to mark the endpoint healthy. Recommended range: 1-5." block>
+                      <input type="number" value={form.HealthyThreshold} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthyThreshold: e.target.value }); }} />
+                    </Tooltip>
+                  </div>
+                  <div className="form-group">
+                    <FormFieldLabel text="Unhealthy Threshold" tooltip="Consecutive failed checks needed to mark the endpoint unhealthy. Recommended range: 1-5." />
+                    <Tooltip content="Consecutive failed checks needed to mark the endpoint unhealthy. Recommended range: 1-5." block>
+                      <input type="number" value={form.UnhealthyThreshold} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, UnhealthyThreshold: e.target.value }); }} />
+                    </Tooltip>
                   </div>
                 </div>
                 <div className="form-group">
                   <label className="checkbox-label">
                     <input type="checkbox" checked={form.HealthCheckUseAuth} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckUseAuth: e.target.checked }); }} />
                     {' '}Send API Key as Bearer Token
-                    <span className="field-tooltip" data-tooltip="Include the API key as a Bearer token in health check requests. Enable for authenticated endpoints.">
-                      <svg className="field-tooltip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="8" cy="8" r="7" />
-                        <line x1="8" y1="7" x2="8" y2="11" />
-                        <circle cx="8" cy="5" r="0.5" fill="currentColor" stroke="none" />
-                      </svg>
-                    </span>
+                    <TooltipIcon content="Include the API key as a Bearer token in health check requests. Enable for authenticated endpoints." />
                   </label>
                 </div>
               </>

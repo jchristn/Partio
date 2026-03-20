@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { PartioApi } from '../utils/api';
 import { copyToClipboard } from '../utils/clipboard';
 import CopyableId from './CopyableId';
+import FormFieldLabel from './FormFieldLabel';
+import Tooltip from './Tooltip';
 import './EndpointExplorerView.css';
 
 function formatHeaders(headers) {
@@ -242,19 +244,21 @@ export default function EndpointExplorerView() {
           {mode === 'embedding' ? (
             <>
               <div className="form-group">
-                <label>Embedding Endpoint</label>
-                <select
-                  value={embeddingForm.EndpointId}
-                  onChange={e => setEmbeddingForm(prev => ({ ...prev, EndpointId: e.target.value }))}
-                  disabled={loadingEndpoints}
-                >
-                  <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
-                  {embeddingEndpoints.map(endpoint => (
-                    <option key={endpoint.Id} value={endpoint.Id}>
-                      {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
-                    </option>
-                  ))}
-                </select>
+                <FormFieldLabel text="Embedding Endpoint" tooltip="Choose the embedding endpoint to exercise through the Partio backend path." />
+                <Tooltip content="Choose the embedding endpoint to exercise through the Partio backend path." block>
+                  <select
+                    value={embeddingForm.EndpointId}
+                    onChange={e => setEmbeddingForm(prev => ({ ...prev, EndpointId: e.target.value }))}
+                    disabled={loadingEndpoints}
+                  >
+                    <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
+                    {embeddingEndpoints.map(endpoint => (
+                      <option key={endpoint.Id} value={endpoint.Id}>
+                        {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
+                      </option>
+                    ))}
+                  </select>
+                </Tooltip>
               </div>
               {activeEmbedding && (
                 <div className="explorer-endpoint-meta">
@@ -264,13 +268,15 @@ export default function EndpointExplorerView() {
                 </div>
               )}
               <div className="form-group">
-                <label>Input Text</label>
-                <textarea
-                  rows={10}
-                  value={embeddingForm.Input}
-                  onChange={e => setEmbeddingForm(prev => ({ ...prev, Input: e.target.value }))}
-                  placeholder="Enter text to send through the selected embedding endpoint..."
-                />
+                <FormFieldLabel text="Input Text" tooltip="Text sent to the selected embedding endpoint. Any length is accepted, but realistic samples are best for debugging." />
+                <Tooltip content="Text sent to the selected embedding endpoint. Any length is accepted, but realistic samples are best for debugging." block>
+                  <textarea
+                    rows={10}
+                    value={embeddingForm.Input}
+                    onChange={e => setEmbeddingForm(prev => ({ ...prev, Input: e.target.value }))}
+                    placeholder="Enter text to send through the selected embedding endpoint..."
+                  />
+                </Tooltip>
               </div>
               <div className="checkbox-group">
                 <input
@@ -279,25 +285,29 @@ export default function EndpointExplorerView() {
                   checked={embeddingForm.L2Normalization}
                   onChange={e => setEmbeddingForm(prev => ({ ...prev, L2Normalization: e.target.checked }))}
                 />
-                <label htmlFor="explorer-l2">Apply L2 normalization after embedding</label>
+                <Tooltip content="Normalize the returned embedding vector to unit length after Partio receives it.">
+                  <label htmlFor="explorer-l2">Apply L2 normalization after embedding</label>
+                </Tooltip>
               </div>
             </>
-          ) : (
+              ) : (
             <>
               <div className="form-group">
-                <label>Inference Endpoint</label>
-                <select
-                  value={completionForm.EndpointId}
-                  onChange={e => setCompletionForm(prev => ({ ...prev, EndpointId: e.target.value }))}
-                  disabled={loadingEndpoints}
-                >
-                  <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
-                  {completionEndpoints.map(endpoint => (
-                    <option key={endpoint.Id} value={endpoint.Id}>
-                      {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
-                    </option>
-                  ))}
-                </select>
+                <FormFieldLabel text="Inference Endpoint" tooltip="Choose the inference endpoint to exercise through the Partio backend path." />
+                <Tooltip content="Choose the inference endpoint to exercise through the Partio backend path." block>
+                  <select
+                    value={completionForm.EndpointId}
+                    onChange={e => setCompletionForm(prev => ({ ...prev, EndpointId: e.target.value }))}
+                    disabled={loadingEndpoints}
+                  >
+                    <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
+                    {completionEndpoints.map(endpoint => (
+                      <option key={endpoint.Id} value={endpoint.Id}>
+                        {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
+                      </option>
+                    ))}
+                  </select>
+                </Tooltip>
               </div>
               {activeCompletion && (
                 <div className="explorer-endpoint-meta">
@@ -307,42 +317,50 @@ export default function EndpointExplorerView() {
                 </div>
               )}
               <div className="form-group">
-                <label>System Prompt</label>
-                <textarea
-                  rows={4}
-                  value={completionForm.SystemPrompt}
-                  onChange={e => setCompletionForm(prev => ({ ...prev, SystemPrompt: e.target.value }))}
-                  placeholder="Optional system prompt..."
-                />
+                <FormFieldLabel text="System Prompt" tooltip="Instruction applied before the user prompt. Use it to shape model behavior or tone." />
+                <Tooltip content="Instruction applied before the user prompt. Use it to shape model behavior or tone." block>
+                  <textarea
+                    rows={4}
+                    value={completionForm.SystemPrompt}
+                    onChange={e => setCompletionForm(prev => ({ ...prev, SystemPrompt: e.target.value }))}
+                    placeholder="Optional system prompt..."
+                  />
+                </Tooltip>
               </div>
               <div className="form-group">
-                <label>Prompt</label>
-                <textarea
-                  rows={10}
-                  value={completionForm.Prompt}
-                  onChange={e => setCompletionForm(prev => ({ ...prev, Prompt: e.target.value }))}
-                  placeholder="Enter the prompt to send through the selected inference endpoint..."
-                />
+                <FormFieldLabel text="Prompt" tooltip="User prompt sent through Partio to the selected inference endpoint." />
+                <Tooltip content="User prompt sent through Partio to the selected inference endpoint." block>
+                  <textarea
+                    rows={10}
+                    value={completionForm.Prompt}
+                    onChange={e => setCompletionForm(prev => ({ ...prev, Prompt: e.target.value }))}
+                    placeholder="Enter the prompt to send through the selected inference endpoint..."
+                  />
+                </Tooltip>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Max Tokens</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={completionForm.MaxTokens}
-                    onChange={e => setCompletionForm(prev => ({ ...prev, MaxTokens: e.target.value }))}
-                  />
+                  <FormFieldLabel text="Max Tokens" tooltip="Maximum number of tokens to ask the model to generate. Minimum is 1." />
+                  <Tooltip content="Maximum number of tokens to ask the model to generate. Minimum is 1." block>
+                    <input
+                      type="number"
+                      min="1"
+                      value={completionForm.MaxTokens}
+                      onChange={e => setCompletionForm(prev => ({ ...prev, MaxTokens: e.target.value }))}
+                    />
+                  </Tooltip>
                 </div>
                 <div className="form-group">
-                  <label>Timeout (ms)</label>
-                  <input
-                    type="number"
-                    min="1000"
-                    step="1000"
-                    value={completionForm.TimeoutMs}
-                    onChange={e => setCompletionForm(prev => ({ ...prev, TimeoutMs: e.target.value }))}
-                  />
+                  <FormFieldLabel text="Timeout (ms)" tooltip="Client-side explorer timeout in milliseconds. Minimum is 1000 and the default is 60000." />
+                  <Tooltip content="Client-side explorer timeout in milliseconds. Minimum is 1000 and the default is 60000." block>
+                    <input
+                      type="number"
+                      min="1000"
+                      step="1000"
+                      value={completionForm.TimeoutMs}
+                      onChange={e => setCompletionForm(prev => ({ ...prev, TimeoutMs: e.target.value }))}
+                    />
+                  </Tooltip>
                 </div>
               </div>
             </>
@@ -370,29 +388,29 @@ export default function EndpointExplorerView() {
                 <h3>Overview</h3>
                 <div className="detail-grid">
                   <div className="detail-item">
-                    <label>Result</label>
+                    <Tooltip content="Whether the explorer request completed successfully through Partio."><label>Result</label></Tooltip>
                     <span className={response.Success ? 'explorer-success' : 'explorer-failure'}>
                       {response.Success ? 'Success' : 'Failed'}
                     </span>
                   </div>
                   <div className="detail-item">
-                    <label>Status</label>
+                    <Tooltip content="HTTP-like status code returned by the explorer endpoint."><label>Status</label></Tooltip>
                     <span className={`http-status ${statusClass(response.StatusCode)}`}>{response.StatusCode}</span>
                   </div>
                   <div className="detail-item">
-                    <label>Response Time</label>
+                    <Tooltip content="Total explorer round-trip time in milliseconds."><label>Response Time</label></Tooltip>
                     <span>{response.ResponseTimeMs != null ? `${response.ResponseTimeMs} ms` : '-'}</span>
                   </div>
                   <div className="detail-item">
-                    <label>Endpoint ID</label>
+                    <Tooltip content="Configured Partio endpoint that handled the request."><label>Endpoint ID</label></Tooltip>
                     <span>{response.EndpointId ? <CopyableId value={response.EndpointId} /> : '-'}</span>
                   </div>
                   <div className="detail-item">
-                    <label>Model</label>
+                    <Tooltip content="Model name Partio targeted for the explorer request."><label>Model</label></Tooltip>
                     <span>{response.Model || '-'}</span>
                   </div>
                   <div className="detail-item">
-                    <label>History Entry</label>
+                    <Tooltip content="Request-history identifier created by Partio when request history is enabled on the endpoint."><label>History Entry</label></Tooltip>
                     <span>{response.RequestHistoryId ? <CopyableId value={response.RequestHistoryId} /> : 'Not recorded'}</span>
                   </div>
                 </div>
@@ -406,11 +424,11 @@ export default function EndpointExplorerView() {
                     <>
                       <div className="detail-grid">
                         <div className="detail-item">
-                          <label>Dimensions</label>
+                          <Tooltip content="Number of numeric dimensions in the returned embedding vector."><label>Dimensions</label></Tooltip>
                           <span>{response.Dimensions || 0}</span>
                         </div>
                         <div className="detail-item detail-item-wide">
-                          <label>Vector Preview</label>
+                          <Tooltip content="Preview of the first few values in the embedding vector returned through Partio."><label>Vector Preview</label></Tooltip>
                           <code>{embeddingPreview.length > 0 ? `[${embeddingPreview.map(value => Number(value).toFixed(6)).join(', ')}${response.Dimensions > embeddingPreview.length ? ', ...' : ''}]` : '(empty)'}</code>
                         </div>
                       </div>

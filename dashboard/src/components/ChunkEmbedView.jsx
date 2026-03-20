@@ -4,6 +4,9 @@ import { PartioApi } from '../utils/api';
 import { copyToClipboard } from '../utils/clipboard';
 import TagInput from './TagInput';
 import KeyValueEditor from './KeyValueEditor';
+import FormFieldLabel from './FormFieldLabel';
+import Tooltip from './Tooltip';
+import TooltipIcon from './TooltipIcon';
 import './ChunkEmbedView.css';
 
 const STRATEGY_COMPATIBILITY = {
@@ -263,31 +266,39 @@ export default function ChunkEmbedView() {
       <div className="chunk-embed-layout">
         <div className="chunk-embed-form card">
           <div className="form-group">
-            <label>Input Type</label>
-            <select value={form.InputType} onChange={e => update('InputType', e.target.value)}>
-              <option value="Text">Text</option>
-              <option value="Code">Code</option>
-              <option value="Hyperlink">Hyperlink</option>
-              <option value="Meta">Meta</option>
-              <option value="List">List</option>
-              <option value="Table">Table</option>
-            </select>
+            <FormFieldLabel text="Input Type" tooltip="Select the semantic cell type Partio should process. Different types unlock different chunking strategies." />
+            <Tooltip content="Select the semantic cell type Partio should process. Different types unlock different chunking strategies." block>
+              <select value={form.InputType} onChange={e => update('InputType', e.target.value)}>
+                <option value="Text">Text</option>
+                <option value="Code">Code</option>
+                <option value="Hyperlink">Hyperlink</option>
+                <option value="Meta">Meta</option>
+                <option value="List">List</option>
+                <option value="Table">Table</option>
+              </select>
+            </Tooltip>
           </div>
 
           {form.InputType === 'Table' ? (
             <div className="form-group">
-              <label>Table (CSV format, first row = headers)</label>
-              <textarea rows={8} value={form.TableInput} onChange={e => update('TableInput', e.target.value)} placeholder={"Name, Age, City\nAlice, 30, New York\nBob, 25, London"} />
+              <FormFieldLabel text="Table (CSV format, first row = headers)" tooltip="Paste comma-separated tabular data. The first row should contain column headers." />
+              <Tooltip content="Paste comma-separated tabular data. The first row should contain column headers." block>
+                <textarea rows={8} value={form.TableInput} onChange={e => update('TableInput', e.target.value)} placeholder={"Name, Age, City\nAlice, 30, New York\nBob, 25, London"} />
+              </Tooltip>
             </div>
           ) : form.InputType === 'List' ? (
             <div className="form-group">
-              <label>List Items (one per line)</label>
-              <textarea rows={8} value={form.ListInput} onChange={e => update('ListInput', e.target.value)} placeholder={"First item\nSecond item\nThird item"} />
+              <FormFieldLabel text="List Items (one per line)" tooltip="Enter one list entry per line. Blank lines are ignored." />
+              <Tooltip content="Enter one list entry per line. Blank lines are ignored." block>
+                <textarea rows={8} value={form.ListInput} onChange={e => update('ListInput', e.target.value)} placeholder={"First item\nSecond item\nThird item"} />
+              </Tooltip>
             </div>
           ) : (
             <div className="form-group">
-              <label>Text Content</label>
-              <textarea rows={8} value={form.Text} onChange={e => update('Text', e.target.value)} placeholder="Enter text to chunk and embed..." />
+              <FormFieldLabel text="Text Content" tooltip="Source content that Partio will chunk, optionally summarize, and embed." />
+              <Tooltip content="Source content that Partio will chunk, optionally summarize, and embed." block>
+                <textarea rows={8} value={form.Text} onChange={e => update('Text', e.target.value)} placeholder="Enter text to chunk and embed..." />
+              </Tooltip>
             </div>
           )}
 
@@ -296,21 +307,24 @@ export default function ChunkEmbedView() {
           <div className="checkbox-group" style={{ marginBottom: 8 }}>
             <input type="checkbox" checked={form.EnableSummarization} onChange={e => update('EnableSummarization', e.target.checked)} id="enableSumm" />
             <label htmlFor="enableSumm"><strong>Enable Summarization</strong></label>
+            <TooltipIcon content="Run summarization over cells before embedding. Requires an active inference endpoint." />
           </div>
 
           {form.EnableSummarization && (
             <div className="summarization-config">
               <div className="form-group">
-                <label>Inference Endpoint</label>
-                <select value={form.CompletionEndpointId} onChange={e => update('CompletionEndpointId', e.target.value)} disabled={endpointsLoading}>
-                  <option value="">{endpointsLoading ? 'Loading...' : '-- Select endpoint --'}</option>
-                  {completionEndpoints.map(ep => (
-                    <option key={ep.Id} value={ep.Id}>{ep.Name || ep.Model} ({ep.Id})</option>
-                  ))}
-                </select>
+                <FormFieldLabel text="Inference Endpoint" tooltip="Completion endpoint used to generate summaries for cells." />
+                <Tooltip content="Completion endpoint used to generate summaries for cells." block>
+                  <select value={form.CompletionEndpointId} onChange={e => update('CompletionEndpointId', e.target.value)} disabled={endpointsLoading}>
+                    <option value="">{endpointsLoading ? 'Loading...' : '-- Select endpoint --'}</option>
+                    {completionEndpoints.map(ep => (
+                      <option key={ep.Id} value={ep.Id}>{ep.Name || ep.Model} ({ep.Id})</option>
+                    ))}
+                  </select>
+                </Tooltip>
               </div>
               <div className="form-group">
-                <label>Order</label>
+                <FormFieldLabel text="Order" tooltip="Choose whether summaries are generated from parent to child (Top Down) or child to parent (Bottom Up)." />
                 <div className="radio-group">
                   <label className="radio-label">
                     <input type="radio" name="summOrder" value="TopDown" checked={form.SummarizationOrder === 'TopDown'} onChange={e => update('SummarizationOrder', e.target.value)} />
@@ -324,30 +338,38 @@ export default function ChunkEmbedView() {
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Max Summary Tokens</label>
-                  <input type="number" min="128" value={form.MaxSummaryTokens} onChange={e => update('MaxSummaryTokens', e.target.value)} />
+                  <FormFieldLabel text="Max Summary Tokens" tooltip="Maximum tokens requested per summary. Minimum is 128." />
+                  <Tooltip content="Maximum tokens requested per summary. Minimum is 128." block>
+                    <input type="number" min="128" value={form.MaxSummaryTokens} onChange={e => update('MaxSummaryTokens', e.target.value)} />
+                  </Tooltip>
                 </div>
                 <div className="form-group">
-                  <label>Min Cell Length</label>
-                  <input type="number" min="0" value={form.MinCellLength} onChange={e => update('MinCellLength', e.target.value)} />
+                  <FormFieldLabel text="Min Cell Length" tooltip="Minimum cell length before summarization is attempted. Zero disables the threshold." />
+                  <Tooltip content="Minimum cell length before summarization is attempted. Zero disables the threshold." block>
+                    <input type="number" min="0" value={form.MinCellLength} onChange={e => update('MinCellLength', e.target.value)} />
+                  </Tooltip>
                 </div>
               </div>
               <div className="form-group">
-                <label>Max Parallel Tasks</label>
-                <input type="number" min="1" max="32" value={form.MaxParallelTasks} onChange={e => update('MaxParallelTasks', e.target.value)} />
+                <FormFieldLabel text="Max Parallel Tasks" tooltip="Maximum concurrent summarization requests. Supported range is 1 to 32." />
+                <Tooltip content="Maximum concurrent summarization requests. Supported range is 1 to 32." block>
+                  <input type="number" min="1" max="32" value={form.MaxParallelTasks} onChange={e => update('MaxParallelTasks', e.target.value)} />
+                </Tooltip>
               </div>
               <div className="form-group">
                 <a className="embeddings-toggle" onClick={() => update('ShowPrompt', !form.ShowPrompt)}>
                   {form.ShowPrompt ? 'Hide Custom Prompt' : 'Show Custom Prompt'}
                 </a>
                 {form.ShowPrompt && (
-                  <textarea
-                    rows={5}
-                    value={form.SummarizationPrompt}
-                    onChange={e => update('SummarizationPrompt', e.target.value)}
-                    placeholder="Summarization prompt template. Use {tokens}, {content}, {context} placeholders."
-                    style={{ marginTop: 4, fontFamily: 'monospace', fontSize: '0.85em' }}
-                  />
+                  <Tooltip content="Custom summarization prompt template. Use the {tokens}, {content}, and {context} placeholders." block>
+                    <textarea
+                      rows={5}
+                      value={form.SummarizationPrompt}
+                      onChange={e => update('SummarizationPrompt', e.target.value)}
+                      placeholder="Summarization prompt template. Use {tokens}, {content}, {context} placeholders."
+                      style={{ marginTop: 4, fontFamily: 'monospace', fontSize: '0.85em' }}
+                    />
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -356,55 +378,94 @@ export default function ChunkEmbedView() {
           {/* Chunking Strategy Section */}
           <div className="form-section-divider" />
           <div className="form-group">
-            <label>Chunking Strategy</label>
-            <select value={form.Strategy} onChange={e => update('Strategy', e.target.value)}>
-              {availableStrategies.map(key => (
-                <option key={key} value={key}>{STRATEGY_LABELS[key]}</option>
-              ))}
-            </select>
+            <FormFieldLabel text="Chunking Strategy" tooltip="How Partio splits the source data into chunks before embedding." />
+            <Tooltip content="How Partio splits the source data into chunks before embedding." block>
+              <select value={form.Strategy} onChange={e => update('Strategy', e.target.value)}>
+                {availableStrategies.map(key => (
+                  <option key={key} value={key}>{STRATEGY_LABELS[key]}</option>
+                ))}
+              </select>
+            </Tooltip>
           </div>
 
           {form.Strategy === 'RowGroupWithHeaders' && (
             <div className="form-group">
-              <label>Row Group Size</label>
-              <input type="number" min="1" value={form.RowGroupSize} onChange={e => update('RowGroupSize', e.target.value)} />
+              <FormFieldLabel text="Row Group Size" tooltip="Number of table rows to group together when using the Row Group With Headers strategy. Minimum is 1." />
+              <Tooltip content="Number of table rows to group together when using the Row Group With Headers strategy. Minimum is 1." block>
+                <input type="number" min="1" value={form.RowGroupSize} onChange={e => update('RowGroupSize', e.target.value)} />
+              </Tooltip>
             </div>
           )}
 
           <div className="form-row">
-            <div className="form-group"><label>Token Count</label><input type="number" value={form.FixedTokenCount} onChange={e => update('FixedTokenCount', e.target.value)} /></div>
-            <div className="form-group"><label>Overlap</label><input type="number" value={form.OverlapCount} onChange={e => update('OverlapCount', e.target.value)} /></div>
+            <div className="form-group">
+              <FormFieldLabel text="Token Count" tooltip="Target chunk size in tokens for token-count-based chunking strategies. Use positive values." />
+              <Tooltip content="Target chunk size in tokens for token-count-based chunking strategies. Use positive values." block>
+                <input type="number" value={form.FixedTokenCount} onChange={e => update('FixedTokenCount', e.target.value)} />
+              </Tooltip>
+            </div>
+            <div className="form-group">
+              <FormFieldLabel text="Overlap" tooltip="Number of tokens to overlap between adjacent chunks. Zero disables overlap." />
+              <Tooltip content="Number of tokens to overlap between adjacent chunks. Zero disables overlap." block>
+                <input type="number" value={form.OverlapCount} onChange={e => update('OverlapCount', e.target.value)} />
+              </Tooltip>
+            </div>
           </div>
 
           <div className="form-group">
-            <label>Overlap Strategy</label>
-            <select value={form.OverlapStrategy} onChange={e => update('OverlapStrategy', e.target.value)}>
-              <option value="SlidingWindow">Sliding Window</option>
-              <option value="SentenceBoundaryAware">Sentence Boundary Aware</option>
-              <option value="SemanticBoundaryAware">Semantic Boundary Aware</option>
-            </select>
+            <FormFieldLabel text="Overlap Strategy" tooltip="How overlap is applied between chunks when overlap is greater than zero." />
+            <Tooltip content="How overlap is applied between chunks when overlap is greater than zero." block>
+              <select value={form.OverlapStrategy} onChange={e => update('OverlapStrategy', e.target.value)}>
+                <option value="SlidingWindow">Sliding Window</option>
+                <option value="SentenceBoundaryAware">Sentence Boundary Aware</option>
+                <option value="SemanticBoundaryAware">Semantic Boundary Aware</option>
+              </select>
+            </Tooltip>
           </div>
 
-          <div className="form-group"><label>Context Prefix</label><input value={form.ContextPrefix} onChange={e => update('ContextPrefix', e.target.value)} placeholder="Optional prefix prepended to each chunk" /></div>
+          <div className="form-group">
+            <FormFieldLabel text="Context Prefix" tooltip="Optional prefix prepended to each produced chunk before embedding. Useful for domain-specific context." />
+            <Tooltip content="Optional prefix prepended to each produced chunk before embedding. Useful for domain-specific context." block>
+              <input value={form.ContextPrefix} onChange={e => update('ContextPrefix', e.target.value)} placeholder="Optional prefix prepended to each chunk" />
+            </Tooltip>
+          </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label>Embedding Endpoint</label>
-              <select value={form.EndpointId} onChange={e => update('EndpointId', e.target.value)} disabled={endpointsLoading}>
-                <option value="">{endpointsLoading ? 'Loading...' : '-- Select endpoint --'}</option>
-                {endpoints.map(ep => (
-                  <option key={ep.Id} value={ep.Id}>{ep.Model} ({ep.Id})</option>
-                ))}
-              </select>
+              <FormFieldLabel text="Embedding Endpoint" tooltip="Embedding endpoint that will receive the final chunk text and produce vectors." />
+              <Tooltip content="Embedding endpoint that will receive the final chunk text and produce vectors." block>
+                <select value={form.EndpointId} onChange={e => update('EndpointId', e.target.value)} disabled={endpointsLoading}>
+                  <option value="">{endpointsLoading ? 'Loading...' : '-- Select endpoint --'}</option>
+                  {endpoints.map(ep => (
+                    <option key={ep.Id} value={ep.Id}>{ep.Model} ({ep.Id})</option>
+                  ))}
+                </select>
+              </Tooltip>
             </div>
             <div className="checkbox-group">
               <input type="checkbox" checked={form.L2Normalization} onChange={e => update('L2Normalization', e.target.checked)} id="l2norm" />
               <label htmlFor="l2norm">L2 Normalize</label>
+              <TooltipIcon content="Normalize each returned embedding vector to length 1 after generation." />
             </div>
           </div>
 
-          <div className="form-group"><label>Labels</label><TagInput value={form.Labels} onChange={v => update('Labels', v)} /></div>
-          <div className="form-group"><label>Tags</label><KeyValueEditor value={form.Tags} onChange={v => update('Tags', v)} /></div>
+          <div className="form-group">
+            <FormFieldLabel text="Labels" tooltip="Flat labels copied onto produced chunks or cells for downstream grouping." />
+            <TagInput
+              value={form.Labels}
+              onChange={v => update('Labels', v)}
+              inputTooltip="Add a label that should be applied to the processed result."
+            />
+          </div>
+          <div className="form-group">
+            <FormFieldLabel text="Tags" tooltip="Structured key/value metadata copied onto produced chunks or cells." />
+            <KeyValueEditor
+              value={form.Tags}
+              onChange={v => update('Tags', v)}
+              keyTooltip="Metadata field name to attach to processed output."
+              valueTooltip="Metadata field value to attach to processed output."
+            />
+          </div>
 
           <button className="primary" onClick={handleSubmit} disabled={loading || !form.EndpointId} style={{ marginTop: 12 }}>
             {loading ? 'Processing...' : 'Process'}

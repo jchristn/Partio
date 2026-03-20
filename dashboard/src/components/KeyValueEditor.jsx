@@ -1,7 +1,15 @@
 import React from 'react';
+import Tooltip from './Tooltip';
 import './KeyValueEditor.css';
 
-export default function KeyValueEditor({ value = {}, onChange }) {
+export default function KeyValueEditor({
+  value = {},
+  onChange,
+  keyTooltip,
+  valueTooltip,
+  addEntryTooltip,
+  removeEntryTooltip
+}) {
   const entries = Object.entries(value);
 
   const handleKeyChange = (oldKey, newKey) => {
@@ -30,12 +38,20 @@ export default function KeyValueEditor({ value = {}, onChange }) {
     <div className="kv-editor">
       {entries.map(([k, v], i) => (
         <div key={i} className="kv-row">
-          <input value={k} onChange={e => handleKeyChange(k, e.target.value)} placeholder="Key" />
-          <input value={v} onChange={e => handleValueChange(k, e.target.value)} placeholder="Value" />
-          <button className="danger kv-remove" onClick={() => removeEntry(k)}>x</button>
+          <Tooltip content={keyTooltip || 'Tag key or metadata field name. Use short, stable names such as source, team, or documentType.'} block>
+            <input value={k} onChange={e => handleKeyChange(k, e.target.value)} placeholder="Key" />
+          </Tooltip>
+          <Tooltip content={valueTooltip || 'Tag value paired with the key. Values are stored as strings.'} block>
+            <input value={v} onChange={e => handleValueChange(k, e.target.value)} placeholder="Value" />
+          </Tooltip>
+          <Tooltip content={removeEntryTooltip || `Remove the ${k || 'current'} tag entry.`}>
+            <button className="danger kv-remove" onClick={() => removeEntry(k)}>x</button>
+          </Tooltip>
         </div>
       ))}
-      <button className="secondary" onClick={addEntry}>+ Add Tag</button>
+      <Tooltip content={addEntryTooltip || 'Add another key/value metadata entry.'}>
+        <button className="secondary" onClick={addEntry}>+ Add Tag</button>
+      </Tooltip>
     </div>
   );
 }

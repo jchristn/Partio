@@ -9,6 +9,7 @@ import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import { copyToClipboard } from '../utils/clipboard';
+import Tooltip from './Tooltip';
 import './RequestHistoryView.css';
 
 function statusClass(code) {
@@ -181,16 +182,19 @@ export default function RequestHistoryView() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique request-history identifier for this recorded Partio request.',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'HttpMethod',
-      label: 'Method'
+      label: 'Method',
+      tooltip: 'HTTP method received by Partio for the recorded request.'
     },
     {
       key: 'HttpUrl',
       label: 'URL',
+      tooltip: 'Request URL that came into Partio.',
       render: (item) => (
         <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
           {item.HttpUrl}
@@ -200,6 +204,7 @@ export default function RequestHistoryView() {
     {
       key: 'HttpStatus',
       label: 'Status',
+      tooltip: 'HTTP status code returned by Partio for the request.',
       render: (item) => item.HttpStatus
         ? <span className={`http-status ${statusClass(item.HttpStatus)}`}>{item.HttpStatus}</span>
         : '-'
@@ -207,17 +212,20 @@ export default function RequestHistoryView() {
     {
       key: 'ResponseTimeMs',
       label: 'Time (ms)',
+      tooltip: 'Total response time measured by Partio in milliseconds.',
       render: (item) => item.ResponseTimeMs != null ? item.ResponseTimeMs : '-',
       sortValue: (item) => item.ResponseTimeMs
     },
     {
       key: 'CreatedUtc',
       label: 'Created',
+      tooltip: 'Timestamp when Partio recorded the request.',
       render: (item) => new Date(item.CreatedUtc).toLocaleString()
     },
     {
       key: 'actions',
       label: 'Actions',
+      tooltip: 'Available actions for this history record, including detail, JSON view, and delete.',
       isAction: true,
       preventRowClick: true,
       sortable: false,
@@ -265,27 +273,27 @@ export default function RequestHistoryView() {
               <h3>Overview</h3>
               <div className="detail-grid">
                 <div className="detail-item">
-                  <label>Method</label>
+                  <Tooltip content="HTTP method received by Partio for this request."><label>Method</label></Tooltip>
                   <span>{detailItem.HttpMethod || '-'}</span>
                 </div>
                 <div className="detail-item">
-                  <label>Status</label>
+                  <Tooltip content="HTTP status code returned by Partio for this request."><label>Status</label></Tooltip>
                   {detailItem.HttpStatus
                     ? <span className={`http-status ${statusClass(detailItem.HttpStatus)}`}>{detailItem.HttpStatus}</span>
                     : <span>-</span>
                   }
                 </div>
                 <div className="detail-item">
-                  <label>Response Time</label>
+                  <Tooltip content="Total request time measured by Partio in milliseconds."><label>Response Time</label></Tooltip>
                   <span>{detailItem.ResponseTimeMs != null ? detailItem.ResponseTimeMs + ' ms' : '-'}</span>
                 </div>
                 <div className="detail-item detail-item-wide">
-                  <label>Request URL</label>
+                  <Tooltip content="The URL called on Partio by the client."><label>Request URL</label></Tooltip>
                   <code>{detailItem.HttpUrl || '-'}</code>
                 </div>
                 {detailEndpoint && (
                   <div className="detail-item detail-item-wide">
-                    <label>Endpoint URL</label>
+                    <Tooltip content="The upstream provider URL Partio targeted for this request."><label>Endpoint URL</label></Tooltip>
                     <code>{buildFullEndpointUrl(detailEndpoint) || detailEndpoint.Endpoint || '-'}</code>
                   </div>
                 )}
@@ -296,19 +304,19 @@ export default function RequestHistoryView() {
               <h3>Context</h3>
               <div className="detail-grid">
                 <div className="detail-item">
-                  <label>Requestor IP</label>
+                  <Tooltip content="Client IP address recorded by Partio for this request."><label>Requestor IP</label></Tooltip>
                   <span>{detailItem.RequestorIp || '-'}</span>
                 </div>
                 <div className="detail-item">
-                  <label>Tenant ID</label>
+                  <Tooltip content="Tenant associated with the request context."><label>Tenant ID</label></Tooltip>
                   <span>{detailItem.TenantId ? <CopyableId value={detailItem.TenantId} /> : '-'}</span>
                 </div>
                 <div className="detail-item">
-                  <label>User ID</label>
+                  <Tooltip content="Authenticated user associated with the request, when available."><label>User ID</label></Tooltip>
                   <span>{detailItem.UserId ? <CopyableId value={detailItem.UserId} /> : '-'}</span>
                 </div>
                 <div className="detail-item">
-                  <label>Credential ID</label>
+                  <Tooltip content="Credential used to authenticate the request, when available."><label>Credential ID</label></Tooltip>
                   <span>{detailItem.CredentialId ? <CopyableId value={detailItem.CredentialId} /> : '-'}</span>
                 </div>
               </div>
@@ -318,19 +326,19 @@ export default function RequestHistoryView() {
               <h3>Timing</h3>
               <div className="detail-grid">
                 <div className="detail-item">
-                  <label>Created</label>
+                  <Tooltip content="Timestamp when Partio first recorded the request."><label>Created</label></Tooltip>
                   <span>{new Date(detailItem.CreatedUtc).toLocaleString()}</span>
                 </div>
                 <div className="detail-item">
-                  <label>Completed</label>
+                  <Tooltip content="Timestamp when the request finished, if Partio recorded completion."><label>Completed</label></Tooltip>
                   <span>{detailItem.CompletedUtc ? new Date(detailItem.CompletedUtc).toLocaleString() : '-'}</span>
                 </div>
                 <div className="detail-item">
-                  <label>Request Body Size</label>
+                  <Tooltip content="Serialized request body size recorded by Partio."><label>Request Body Size</label></Tooltip>
                   <span>{formatBytes(detailItem.RequestBodyLength)}</span>
                 </div>
                 <div className="detail-item">
-                  <label>Response Body Size</label>
+                  <Tooltip content="Serialized response body size recorded by Partio."><label>Response Body Size</label></Tooltip>
                   <span>{formatBytes(detailItem.ResponseBodyLength)}</span>
                 </div>
               </div>
