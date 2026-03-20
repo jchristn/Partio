@@ -92,10 +92,11 @@ namespace Partio.Server
             await _CompletionHealthCheckService.StartAsync().ConfigureAwait(false);
 
             // 7. Initialize SwiftStack
-            SwiftStackApp app = new SwiftStackApp("Partio Server");
+            SwiftStackApp app = new SwiftStackApp("Partio Server", true);
             app.Serializer = _Serializer;
 
             RestApp rest = app.Rest;
+            rest.QuietStartup = true;
             rest.WebserverSettings.Hostname = _Settings.Rest.Hostname;
             rest.WebserverSettings.Port = _Settings.Rest.Port;
             rest.WebserverSettings.Ssl.Enable = _Settings.Rest.Ssl;
@@ -1231,7 +1232,10 @@ namespace Partio.Server
                 case ApiFormatEnum.Ollama:
                     return new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
                 case ApiFormatEnum.OpenAI:
+                case ApiFormatEnum.vLLM:
                     return new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                case ApiFormatEnum.Gemini:
+                    return new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -1244,7 +1248,10 @@ namespace Partio.Server
                 case ApiFormatEnum.Ollama:
                     return new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
                 case ApiFormatEnum.OpenAI:
+                case ApiFormatEnum.vLLM:
                     return new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                case ApiFormatEnum.Gemini:
+                    return new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }

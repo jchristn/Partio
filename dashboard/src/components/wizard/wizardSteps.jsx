@@ -49,7 +49,7 @@ const wizardSteps = [
       </svg>
     ),
     description:
-      'Configure at least one embedding endpoint to generate vector embeddings from your document chunks. Supports OpenAI, Ollama, and other providers.',
+      'Configure at least one embedding endpoint to generate vector embeddings from your document chunks. Supports Ollama, OpenAI, Gemini, vLLM, and other compatible providers.',
     tip: 'This is required for processing. Make sure your API key and model name are correct.',
   },
   {

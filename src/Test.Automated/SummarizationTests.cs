@@ -231,6 +231,22 @@ namespace Test.Automated
                 await Task.CompletedTask;
             });
 
+            await runTest("CompletionEndpoint: Gemini ApiFormat is preserved", async () =>
+            {
+                CompletionEndpoint ep = new CompletionEndpoint();
+                ep.ApiFormat = "Gemini";
+                if (ep.ApiFormat != "Gemini") throw new Exception("Gemini ApiFormat not preserved");
+                await Task.CompletedTask;
+            });
+
+            await runTest("CompletionEndpoint: vLLM ApiFormat is preserved", async () =>
+            {
+                CompletionEndpoint ep = new CompletionEndpoint();
+                ep.ApiFormat = "vLLM";
+                if (ep.ApiFormat != "vLLM") throw new Exception("vLLM ApiFormat not preserved");
+                await Task.CompletedTask;
+            });
+
             // ===== SemanticCellRequest Hierarchy Tests =====
 
             await runTest("SemanticCellRequest: GUID is auto-assigned", async () =>

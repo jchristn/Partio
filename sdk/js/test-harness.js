@@ -24,6 +24,10 @@ let testUserId = null;
 let testCredId = null;
 let testEpId = null;
 let testCepId = null;
+let geminiEpId = null;
+let vllmEpId = null;
+let geminiCepId = null;
+let vllmCepId = null;
 
 async function runTest(name, fn) {
   const start = Date.now();
@@ -150,6 +154,18 @@ await runTest('Enumerate Endpoints', async () => {
   if (!result || !result.Data || result.Data.length === 0) throw new Error('No endpoints');
 });
 
+await runTest('Create Gemini Embedding Endpoint', async () => {
+  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'Gemini Embedding', Model: 'gemini-embedding-001', Endpoint: 'https://generativelanguage.googleapis.com', ApiFormat: 'Gemini', ApiKey: 'test-api-key' });
+  if (!ep || !ep.Id) throw new Error('No response');
+  geminiEpId = ep.Id;
+});
+
+await runTest('Create vLLM Embedding Endpoint', async () => {
+  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'vLLM Embedding', Model: 'intfloat/e5-small-v2', Endpoint: 'http://localhost:8000', ApiFormat: 'vLLM' });
+  if (!ep || !ep.Id) throw new Error('No response');
+  vllmEpId = ep.Id;
+});
+
 // Completion Endpoint CRUD
 await runTest('Create Completion Endpoint', async () => {
   const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama' });
@@ -174,6 +190,18 @@ await runTest('Completion Endpoint Exists (HEAD)', async () => {
 await runTest('Enumerate Completion Endpoints', async () => {
   const result = await client.enumerateCompletionEndpoints();
   if (!result || !result.Data || result.Data.length === 0) throw new Error('No endpoints');
+});
+
+await runTest('Create Gemini Completion Endpoint', async () => {
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Gemini Inference', Model: 'gemini-2.5-flash', Endpoint: 'https://generativelanguage.googleapis.com', ApiFormat: 'Gemini', ApiKey: 'test-api-key' });
+  if (!cep || !cep.Id) throw new Error('No response');
+  geminiCepId = cep.Id;
+});
+
+await runTest('Create vLLM Completion Endpoint', async () => {
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'vLLM Inference', Model: 'Qwen/Qwen2.5-7B-Instruct', Endpoint: 'http://localhost:8000', ApiFormat: 'vLLM' });
+  if (!cep || !cep.Id) throw new Error('No response');
+  vllmCepId = cep.Id;
 });
 
 // Request History
@@ -356,9 +384,25 @@ await runTest('Delete Completion Endpoint', async () => {
   if (await client.completionEndpointExists(testCepId)) throw new Error('Still exists');
 });
 
+await runTest('Delete Gemini Completion Endpoint', async () => {
+  if (geminiCepId) await client.deleteCompletionEndpoint(geminiCepId);
+});
+
+await runTest('Delete vLLM Completion Endpoint', async () => {
+  if (vllmCepId) await client.deleteCompletionEndpoint(vllmCepId);
+});
+
 await runTest('Delete Endpoint', async () => {
   await client.deleteEndpoint(testEpId);
   if (await client.endpointExists(testEpId)) throw new Error('Still exists');
+});
+
+await runTest('Delete Gemini Embedding Endpoint', async () => {
+  if (geminiEpId) await client.deleteEndpoint(geminiEpId);
+});
+
+await runTest('Delete vLLM Embedding Endpoint', async () => {
+  if (vllmEpId) await client.deleteEndpoint(vllmEpId);
 });
 
 await runTest('Delete Credential', async () => {

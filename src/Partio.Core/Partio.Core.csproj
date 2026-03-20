@@ -8,10 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SwiftStack" Version="*" />
+    <PackageReference Include="SwiftStack" Version="0.4.7" />
     <PackageReference Include="SyslogLogging" Version="*" />
     <PackageReference Include="PrettyId" Version="*" />
     <PackageReference Include="SerializationHelper" Version="*" />
+    <PackageReference Include="PolyPrompt" Version="0.1.1" />
     <PackageReference Include="SharpToken" Version="*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
     <PackageReference Include="Npgsql" Version="*" />

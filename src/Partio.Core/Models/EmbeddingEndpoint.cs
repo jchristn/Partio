@@ -212,7 +212,8 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
-        /// Whether to send the endpoint's ApiKey as a Bearer token on health check requests.
+        /// Whether to send the endpoint's ApiKey on health check requests.
+        /// OpenAI and vLLM use a Bearer token. Gemini uses x-goog-api-key.
         /// </summary>
         public bool HealthCheckUseAuth
         {
@@ -310,9 +311,12 @@ namespace Partio.Core.Models
             if (string.IsNullOrEmpty(ep.HealthCheckUrl))
             {
                 string baseUrl = ep.Endpoint.TrimEnd('/');
-                ep.HealthCheckUrl = ep.ApiFormat == ApiFormatEnum.Ollama
-                    ? baseUrl + "/api/tags"
-                    : baseUrl + "/v1/models";
+                ep.HealthCheckUrl = ep.ApiFormat switch
+                {
+                    ApiFormatEnum.Ollama => baseUrl + "/api/tags",
+                    ApiFormatEnum.Gemini => baseUrl + "/v1beta/models",
+                    _ => baseUrl + "/v1/models"
+                };
             }
 
             if (ep.HealthCheckIntervalMs <= 0)
@@ -330,8 +334,11 @@ namespace Partio.Core.Models
             if (ep.UnhealthyThreshold <= 0)
                 ep.UnhealthyThreshold = 2;
 
-            // For OpenAI, default to using auth since most providers require it
-            if (ep.ApiFormat == ApiFormatEnum.OpenAI && !string.IsNullOrEmpty(ep.ApiKey))
+            // OpenAI, vLLM, and Gemini typically require auth for model listing.
+            if ((ep.ApiFormat == ApiFormatEnum.OpenAI
+                || ep.ApiFormat == ApiFormatEnum.vLLM
+                || ep.ApiFormat == ApiFormatEnum.Gemini)
+                && !string.IsNullOrEmpty(ep.ApiKey))
                 ep.HealthCheckUseAuth = true;
         }
     }

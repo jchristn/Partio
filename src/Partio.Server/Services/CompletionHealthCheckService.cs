@@ -283,7 +283,10 @@ namespace Partio.Server.Services
 
             if (endpoint.HealthCheckUseAuth && !string.IsNullOrEmpty(endpoint.ApiKey))
             {
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
+                if (endpoint.ApiFormat == ApiFormatEnum.Gemini)
+                    request.Headers.Add("x-goog-api-key", endpoint.ApiKey);
+                else
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
             }
 
             using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);

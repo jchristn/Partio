@@ -106,6 +106,8 @@ function buildFullEndpointUrl(endpoint) {
   switch (endpoint.ApiFormat) {
     case 'Ollama': return base + '/api/embed';
     case 'OpenAI': return base + '/v1/embeddings';
+    case 'vLLM': return base + '/v1/embeddings';
+    case 'Gemini': return base + '/v1beta/models/' + encodeURIComponent(endpoint.Model || 'gemini-embedding-001') + ':embedContent';
     default: return base;
   }
 }

@@ -575,13 +575,15 @@ Create an embedding endpoint.
 | `HealthCheckExpectedStatusCode` | int | `200` | Expected HTTP status code for a healthy response |
 | `HealthyThreshold` | int | `3` | Consecutive successes required to transition to healthy |
 | `UnhealthyThreshold` | int | `3` | Consecutive failures required to transition to unhealthy |
-| `HealthCheckUseAuth` | bool | `false` | Include the endpoint's API key as a Bearer token in health checks |
+| `HealthCheckUseAuth` | bool | `false` | Include the endpoint's API key in health checks (Bearer for OpenAI/vLLM, `x-goog-api-key` for Gemini) |
 
 When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs a background loop that periodically checks the endpoint. If the endpoint becomes unhealthy, process requests to it return `502 Bad Gateway`.
 
 Health check defaults are applied automatically based on `ApiFormat` when creating or updating an endpoint:
-- **Ollama**: URL defaults to `{Endpoint}/api/tags`, 10s interval, 5s timeout, no auth
+- **Ollama**: URL defaults to `{Endpoint}/api/tags`, 5s interval, 2s timeout, no auth
 - **OpenAI**: URL defaults to `{Endpoint}/v1/models`, 30s interval, 10s timeout, auth enabled
+- **vLLM**: URL defaults to `{Endpoint}/v1/models`, 30s interval, 10s timeout, auth enabled
+- **Gemini**: URL defaults to `{Endpoint}/v1beta/models`, 30s interval, 10s timeout, auth enabled
 
 **Response**: `201 Created` — `EmbeddingEndpoint`
 

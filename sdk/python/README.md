@@ -16,6 +16,8 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 - Semantic cell processing (`process`, `process_batch`)
 - Request history (`get_request_history`, `get_request_history_detail`, `delete_request_history`, `enumerate_request_history`)
 
+Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+
 ## Prerequisites
 
 - Python 3.8 or later

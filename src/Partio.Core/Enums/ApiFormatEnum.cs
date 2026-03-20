@@ -8,6 +8,10 @@ namespace Partio.Core.Enums
         /// <summary>Ollama embedding API format.</summary>
         Ollama,
         /// <summary>OpenAI embedding API format.</summary>
-        OpenAI
+        OpenAI,
+        /// <summary>Google Gemini API format.</summary>
+        Gemini,
+        /// <summary>vLLM API format (OpenAI-compatible).</summary>
+        vLLM
     }
 }

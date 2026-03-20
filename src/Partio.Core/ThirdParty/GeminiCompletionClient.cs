@@ -5,24 +5,24 @@ namespace Partio.Core.ThirdParty
     using SyslogLogging;
 
     /// <summary>
-    /// Completion client for the Ollama API backed by PolyPrompt.
+    /// Completion client for the Gemini API backed by PolyPrompt.
     /// </summary>
-    public class OllamaCompletionClient : CompletionClientBase
+    public class GeminiCompletionClient : CompletionClientBase
     {
-        private readonly OllamaClient _Client;
+        private readonly GeminiClient _Client;
         private int _RecordedCallCount = 0;
 
         /// <summary>
-        /// Initialize a new OllamaCompletionClient.
+        /// Initialize a new GeminiCompletionClient.
         /// </summary>
-        /// <param name="endpoint">Ollama server endpoint URL.</param>
+        /// <param name="endpoint">Gemini API endpoint URL.</param>
         /// <param name="apiKey">API key.</param>
         /// <param name="logging">Logging module.</param>
-        public OllamaCompletionClient(string endpoint, string? apiKey, LoggingModule logging)
+        public GeminiCompletionClient(string endpoint, string? apiKey, LoggingModule logging)
             : base(endpoint, apiKey, logging)
         {
-            _Header = "[OllamaCompletion] ";
-            _Client = new OllamaClient(endpoint, apiKey, logging);
+            _Header = "[GeminiCompletion] ";
+            _Client = new GeminiClient(endpoint, apiKey, logging);
         }
 
         /// <inheritdoc />

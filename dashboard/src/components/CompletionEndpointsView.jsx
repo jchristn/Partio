@@ -10,6 +10,31 @@ import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import './EmbeddingEndpointsView.css';
 
+function getApiFormatDefaults(apiFormat) {
+  switch (apiFormat) {
+    case 'OpenAI':
+      return {
+        Model: 'gpt-4.1-mini',
+        Endpoint: 'https://api.openai.com',
+      };
+    case 'vLLM':
+      return {
+        Model: 'Qwen/Qwen2.5-7B-Instruct',
+        Endpoint: 'http://localhost:8000',
+      };
+    case 'Gemini':
+      return {
+        Model: 'gemini-2.5-flash',
+        Endpoint: 'https://generativelanguage.googleapis.com',
+      };
+    default:
+      return {
+        Model: 'gemma3:4b',
+        Endpoint: 'http://localhost:11434',
+      };
+  }
+}
+
 function getHealthCheckDefaults(apiFormat, endpoint) {
   const baseUrl = (endpoint || '').replace(/\/+$/, '');
   if (apiFormat === 'Ollama') {
@@ -24,6 +49,18 @@ function getHealthCheckDefaults(apiFormat, endpoint) {
       HealthCheckUseAuth: false,
     };
   }
+  if (apiFormat === 'Gemini') {
+    return {
+      HealthCheckUrl: baseUrl ? baseUrl + '/v1beta/models' : '',
+      HealthCheckMethod: 'GET',
+      HealthCheckIntervalMs: 30000,
+      HealthCheckTimeoutMs: 10000,
+      HealthCheckExpectedStatusCode: 200,
+      HealthyThreshold: 2,
+      UnhealthyThreshold: 2,
+      HealthCheckUseAuth: true,
+    };
+  }
   return {
     HealthCheckUrl: baseUrl ? baseUrl + '/v1/models' : '',
     HealthCheckMethod: 'GET',
@@ -34,6 +71,26 @@ function getHealthCheckDefaults(apiFormat, endpoint) {
     UnhealthyThreshold: 2,
     HealthCheckUseAuth: true,
   };
+}
+
+function applyApiFormatDefaults(currentForm, newFormat, healthFieldsEdited) {
+  const previousDefaults = getApiFormatDefaults(currentForm.ApiFormat);
+  const newDefaults = getApiFormatDefaults(newFormat);
+  const nextForm = { ...currentForm, ApiFormat: newFormat };
+
+  if (!currentForm.Model || currentForm.Model === previousDefaults.Model) {
+    nextForm.Model = newDefaults.Model;
+  }
+
+  if (!currentForm.Endpoint || currentForm.Endpoint === previousDefaults.Endpoint) {
+    nextForm.Endpoint = newDefaults.Endpoint;
+  }
+
+  if (!healthFieldsEdited) {
+    Object.assign(nextForm, getHealthCheckDefaults(newFormat, nextForm.Endpoint));
+  }
+
+  return nextForm;
 }
 
 function HealthHistogram({ history, width = 120, height = 24 }) {
@@ -251,8 +308,9 @@ export default function CompletionEndpointsView() {
   const openCreate = () => {
     setEditing(null);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
-    const defaults = getHealthCheckDefaults('Ollama', '');
-    setForm({ TenantId: tenantId, Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: true, HealthCheckEnabled: true, ...defaults });
+    const providerDefaults = getApiFormatDefaults('Ollama');
+    const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: true, HealthCheckEnabled: true, ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -284,12 +342,7 @@ export default function CompletionEndpointsView() {
   };
 
   const handleFormatChange = (newFormat) => {
-    const newForm = { ...form, ApiFormat: newFormat };
-    if (!healthFieldsEdited) {
-      const defaults = getHealthCheckDefaults(newFormat, form.Endpoint);
-      Object.assign(newForm, defaults);
-    }
-    setForm(newForm);
+    setForm(applyApiFormatDefaults(form, newFormat, healthFieldsEdited));
   };
 
   const handleEndpointChange = (newEndpoint) => {
@@ -379,7 +432,7 @@ export default function CompletionEndpointsView() {
     {
       key: 'ApiFormat',
       label: 'Format',
-      tooltip: 'API protocol format: Ollama or OpenAI-compatible'
+      tooltip: 'API protocol format: Ollama, OpenAI, Gemini, or vLLM'
     },
     {
       key: 'Active',
@@ -475,10 +528,12 @@ export default function CompletionEndpointsView() {
                 </div>
               )}
               <div className="form-group">
-                <FieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI for OpenAI-compatible APIs." />
+                <FieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." />
                 <select value={form.ApiFormat} onChange={e => handleFormatChange(e.target.value)}>
                   <option value="Ollama">Ollama</option>
                   <option value="OpenAI">OpenAI</option>
+                  <option value="Gemini">Gemini</option>
+                  <option value="vLLM">vLLM</option>
                 </select>
               </div>
             </div>
@@ -494,7 +549,7 @@ export default function CompletionEndpointsView() {
             </div>
             <div className="endpoint-form-row">
               <div className="form-group">
-                <FieldLabel text="API Key" tooltip="Authentication key for the completion API. Required for OpenAI, optional for Ollama." />
+                <FieldLabel text="API Key" tooltip="Authentication key for the inference API. Required for OpenAI, Gemini, and most vLLM deployments; optional for Ollama." />
                 <div className="password-input-wrapper">
                   <input type={showApiKey ? "text" : "password"} value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder="Optional" />
                   <button type="button" className="password-toggle-btn" onClick={() => setShowApiKey(!showApiKey)} title={showApiKey ? "Hide API Key" : "Show API Key"}>

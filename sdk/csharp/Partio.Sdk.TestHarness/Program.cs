@@ -139,6 +139,8 @@ namespace Partio.Sdk.TestHarness
 
                 // Embedding Endpoint CRUD
                 string testEpId = "";
+                string geminiEpId = "";
+                string vllmEpId = "";
                 await RunTest("Create Endpoint", async () =>
                 {
                     EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Test Embedding", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
@@ -170,6 +172,20 @@ namespace Partio.Sdk.TestHarness
                     if (result == null || result.Data.Count == 0) throw new Exception("No endpoints found");
                 });
 
+                await RunTest("Create Gemini Embedding Endpoint", async () =>
+                {
+                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Gemini Embedding", Model = "gemini-embedding-001", Endpoint = "https://generativelanguage.googleapis.com", ApiFormat = "Gemini", ApiKey = "test-api-key" });
+                    if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No response");
+                    geminiEpId = ep.Id;
+                });
+
+                await RunTest("Create vLLM Embedding Endpoint", async () =>
+                {
+                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "vLLM Embedding", Model = "intfloat/e5-small-v2", Endpoint = "http://localhost:8000", ApiFormat = "vLLM" });
+                    if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No response");
+                    vllmEpId = ep.Id;
+                });
+
                 // Request History
                 await RunTest("Enumerate Request History", async () =>
                 {
@@ -179,6 +195,8 @@ namespace Partio.Sdk.TestHarness
 
                 // Completion Endpoint CRUD
                 string testCepId = "";
+                string geminiCepId = "";
+                string vllmCepId = "";
                 await RunTest("Create Completion Endpoint", async () =>
                 {
                     CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama" });
@@ -208,6 +226,20 @@ namespace Partio.Sdk.TestHarness
                 {
                     EnumerationResult<CompletionEndpoint>? result = await admin.EnumerateCompletionEndpointsAsync();
                     if (result == null || result.Data.Count == 0) throw new Exception("No endpoints found");
+                });
+
+                await RunTest("Create Gemini Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Gemini Inference", Model = "gemini-2.5-flash", Endpoint = "https://generativelanguage.googleapis.com", ApiFormat = "Gemini", ApiKey = "test-api-key" });
+                    if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No response");
+                    geminiCepId = cep.Id;
+                });
+
+                await RunTest("Create vLLM Completion Endpoint", async () =>
+                {
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "vLLM Inference", Model = "Qwen/Qwen2.5-7B-Instruct", Endpoint = "http://localhost:8000", ApiFormat = "vLLM" });
+                    if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No response");
+                    vllmCepId = cep.Id;
                 });
 
                 // Process Single Cell (requires an active embedding endpoint)
@@ -461,11 +493,31 @@ namespace Partio.Sdk.TestHarness
                     if (exists) throw new Exception("Completion endpoint still exists after delete");
                 });
 
+                await RunTest("Delete Gemini Completion Endpoint", async () =>
+                {
+                    if (!string.IsNullOrEmpty(geminiCepId)) await admin.DeleteCompletionEndpointAsync(geminiCepId);
+                });
+
+                await RunTest("Delete vLLM Completion Endpoint", async () =>
+                {
+                    if (!string.IsNullOrEmpty(vllmCepId)) await admin.DeleteCompletionEndpointAsync(vllmCepId);
+                });
+
                 await RunTest("Delete Endpoint", async () =>
                 {
                     await admin.DeleteEndpointAsync(testEpId);
                     bool exists = await admin.EndpointExistsAsync(testEpId);
                     if (exists) throw new Exception("Endpoint still exists after delete");
+                });
+
+                await RunTest("Delete Gemini Embedding Endpoint", async () =>
+                {
+                    if (!string.IsNullOrEmpty(geminiEpId)) await admin.DeleteEndpointAsync(geminiEpId);
+                });
+
+                await RunTest("Delete vLLM Embedding Endpoint", async () =>
+                {
+                    if (!string.IsNullOrEmpty(vllmEpId)) await admin.DeleteEndpointAsync(vllmEpId);
                 });
 
                 await RunTest("Delete Credential", async () =>

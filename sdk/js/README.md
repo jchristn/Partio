@@ -16,6 +16,8 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Semantic cell processing (`process`, `processBatch`)
 - Request history (`getRequestHistory`, `getRequestHistoryDetail`, `deleteRequestHistory`, `enumerateRequestHistory`)
 
+Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+
 ## Prerequisites
 
 - Node.js 18 or later (for native `fetch` support)

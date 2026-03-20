@@ -1,29 +1,29 @@
 namespace Partio.Core.ThirdParty
 {
     using Partio.Core.Models;
-    using PolyPromptEmbeddingOptions = PolyPrompt.Models.EmbeddingOptions;
-    using PolyPromptOpenAiClient = PolyPrompt.Clients.OpenAiClient;
+    using PolyPrompt.Clients;
+    using PolyPrompt.Models;
     using SyslogLogging;
 
     /// <summary>
-    /// Embedding client for OpenAI-compatible APIs backed by PolyPrompt.
+    /// Embedding client for the Gemini API backed by PolyPrompt.
     /// </summary>
-    public class OpenAiEmbeddingClient : EmbeddingClientBase
+    public class GeminiEmbeddingClient : EmbeddingClientBase
     {
-        private readonly PolyPromptOpenAiClient _Client;
+        private readonly GeminiClient _Client;
         private int _RecordedCallCount = 0;
 
         /// <summary>
-        /// Initialize a new OpenAiEmbeddingClient.
+        /// Initialize a new GeminiEmbeddingClient.
         /// </summary>
-        /// <param name="endpoint">OpenAI API endpoint URL.</param>
+        /// <param name="endpoint">Gemini API endpoint URL.</param>
         /// <param name="apiKey">API key.</param>
         /// <param name="logging">Logging module.</param>
-        public OpenAiEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging)
+        public GeminiEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging)
             : base(endpoint, apiKey, logging)
         {
-            _Header = "[OpenAiEmbedding] ";
-            _Client = new PolyPromptOpenAiClient(endpoint, apiKey, logging);
+            _Header = "[GeminiEmbedding] ";
+            _Client = new GeminiClient(endpoint, apiKey, logging);
         }
 
         /// <inheritdoc />
@@ -36,12 +36,12 @@ namespace Partio.Core.ThirdParty
         /// <inheritdoc />
         public override async Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
         {
-            PolyPromptEmbeddingOptions options = new PolyPromptEmbeddingOptions { Model = model };
-            PolyPrompt.Models.EmbeddingResponse response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
+            EmbeddingOptions options = new EmbeddingOptions { Model = model };
+            EmbeddingResponse response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
             SyncCallDetails();
 
             if (!response.Success)
-                throw new Exception(response.Error ?? "OpenAI embedding request failed.");
+                throw new Exception(response.Error ?? "Gemini embedding request failed.");
 
             return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
         }

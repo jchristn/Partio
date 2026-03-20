@@ -16,6 +16,8 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 - Semantic cell processing (`ProcessAsync`, `ProcessBatchAsync`)
 - Request history (`GetRequestHistoryAsync`, `GetRequestHistoryDetailAsync`, `DeleteRequestHistoryAsync`, `EnumerateRequestHistoryAsync`)
 
+Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+
 ## Prerequisites
 
 - .NET 8.0 SDK or later

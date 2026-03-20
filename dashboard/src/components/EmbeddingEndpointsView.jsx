@@ -10,6 +10,31 @@ import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import './EmbeddingEndpointsView.css';
 
+function getApiFormatDefaults(apiFormat) {
+  switch (apiFormat) {
+    case 'OpenAI':
+      return {
+        Model: 'text-embedding-3-small',
+        Endpoint: 'https://api.openai.com',
+      };
+    case 'vLLM':
+      return {
+        Model: 'intfloat/e5-small-v2',
+        Endpoint: 'http://localhost:8000',
+      };
+    case 'Gemini':
+      return {
+        Model: 'gemini-embedding-001',
+        Endpoint: 'https://generativelanguage.googleapis.com',
+      };
+    default:
+      return {
+        Model: 'nomic-embed-text',
+        Endpoint: 'http://localhost:11434',
+      };
+  }
+}
+
 function getHealthCheckDefaults(apiFormat, endpoint) {
   const baseUrl = (endpoint || '').replace(/\/+$/, '');
   if (apiFormat === 'Ollama') {
@@ -24,6 +49,18 @@ function getHealthCheckDefaults(apiFormat, endpoint) {
       HealthCheckUseAuth: false,
     };
   }
+  if (apiFormat === 'Gemini') {
+    return {
+      HealthCheckUrl: baseUrl ? baseUrl + '/v1beta/models' : '',
+      HealthCheckMethod: 'GET',
+      HealthCheckIntervalMs: 30000,
+      HealthCheckTimeoutMs: 10000,
+      HealthCheckExpectedStatusCode: 200,
+      HealthyThreshold: 2,
+      UnhealthyThreshold: 2,
+      HealthCheckUseAuth: true,
+    };
+  }
   return {
     HealthCheckUrl: baseUrl ? baseUrl + '/v1/models' : '',
     HealthCheckMethod: 'GET',
@@ -34,6 +71,26 @@ function getHealthCheckDefaults(apiFormat, endpoint) {
     UnhealthyThreshold: 2,
     HealthCheckUseAuth: true,
   };
+}
+
+function applyApiFormatDefaults(currentForm, newFormat, healthFieldsEdited) {
+  const previousDefaults = getApiFormatDefaults(currentForm.ApiFormat);
+  const newDefaults = getApiFormatDefaults(newFormat);
+  const nextForm = { ...currentForm, ApiFormat: newFormat };
+
+  if (!currentForm.Model || currentForm.Model === previousDefaults.Model) {
+    nextForm.Model = newDefaults.Model;
+  }
+
+  if (!currentForm.Endpoint || currentForm.Endpoint === previousDefaults.Endpoint) {
+    nextForm.Endpoint = newDefaults.Endpoint;
+  }
+
+  if (!healthFieldsEdited) {
+    Object.assign(nextForm, getHealthCheckDefaults(newFormat, nextForm.Endpoint));
+  }
+
+  return nextForm;
 }
 
 function HealthHistogram({ history, width = 120, height = 24 }) {
@@ -252,8 +309,9 @@ export default function EmbeddingEndpointsView() {
   const openCreate = () => {
     setEditing(null);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
-    const defaults = getHealthCheckDefaults('Ollama', '');
-    setForm({ TenantId: tenantId, Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false, HealthCheckEnabled: false, ...defaults });
+    const providerDefaults = getApiFormatDefaults('Ollama');
+    const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', EnableRequestHistory: false, HealthCheckEnabled: false, ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -285,12 +343,7 @@ export default function EmbeddingEndpointsView() {
   };
 
   const handleFormatChange = (newFormat) => {
-    const newForm = { ...form, ApiFormat: newFormat };
-    if (!healthFieldsEdited) {
-      const defaults = getHealthCheckDefaults(newFormat, form.Endpoint);
-      Object.assign(newForm, defaults);
-    }
-    setForm(newForm);
+    setForm(applyApiFormatDefaults(form, newFormat, healthFieldsEdited));
   };
 
   const handleEndpointChange = (newEndpoint) => {
@@ -380,7 +433,7 @@ export default function EmbeddingEndpointsView() {
     {
       key: 'ApiFormat',
       label: 'Format',
-      tooltip: 'API protocol format: Ollama or OpenAI-compatible'
+      tooltip: 'API protocol format: Ollama, OpenAI, Gemini, or vLLM'
     },
     {
       key: 'Active',
@@ -476,10 +529,12 @@ export default function EmbeddingEndpointsView() {
                 </div>
               )}
               <div className="form-group">
-                <FieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI for OpenAI-compatible APIs." />
+                <FieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." />
                 <select value={form.ApiFormat} onChange={e => handleFormatChange(e.target.value)}>
                   <option value="Ollama">Ollama</option>
                   <option value="OpenAI">OpenAI</option>
+                  <option value="Gemini">Gemini</option>
+                  <option value="vLLM">vLLM</option>
                 </select>
               </div>
             </div>
@@ -489,13 +544,13 @@ export default function EmbeddingEndpointsView() {
                 <input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} placeholder="e.g. Default Embedding" />
               </div>
               <div className="form-group">
-                <FieldLabel text="Model" tooltip="Embedding model name served by this endpoint. Example: nomic-embed-text, text-embedding-3-small" />
+                <FieldLabel text="Model" tooltip="Embedding model name served by this endpoint. Example: nomic-embed-text, text-embedding-3-small, gemini-embedding-001" />
                 <input value={form.Model} onChange={e => setForm({ ...form, Model: e.target.value })} placeholder="e.g. nomic-embed-text" />
               </div>
             </div>
             <div className="endpoint-form-row">
               <div className="form-group">
-                <FieldLabel text="API Key" tooltip="Authentication key for the embedding API. Required for OpenAI, optional for Ollama." />
+                <FieldLabel text="API Key" tooltip="Authentication key for the embedding API. Required for OpenAI, Gemini, and most vLLM deployments; optional for Ollama." />
                 <div className="password-input-wrapper">
                   <input type={showApiKey ? "text" : "password"} value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder="Optional" />
                   <button type="button" className="password-toggle-btn" onClick={() => setShowApiKey(!showApiKey)} title={showApiKey ? "Hide API Key" : "Show API Key"}>

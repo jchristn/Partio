@@ -90,7 +90,7 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 ## Features
 
 - **Multiple chunking strategies** including fixed token count, sentence-based, paragraph-based, whole list, and list entry, with configurable overlap via sliding window
-- **Pluggable embedding providers** supporting both Ollama and OpenAI-compatible APIs, selectable per endpoint
+- **Pluggable provider support** for Ollama, OpenAI, Gemini, and OpenAI-compatible backends such as vLLM, selectable per endpoint
 - **Multi-tenant architecture** with tenant, user, credential, and endpoint isolation
 - **Four database backends** out of the box: SQLite (default, zero config), PostgreSQL, MySQL, and SQL Server
 - **Request history and audit logging** with automatic cleanup, filesystem body persistence, configurable retention, and upstream embedding call capture (request/response headers, bodies, timing, and status for each call to the embedding provider)
@@ -98,7 +98,8 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return 502)
 - **Batch processing** for submitting multiple semantic cells in a single request
 - **Optional summarization** with LLM-powered cell summarization before chunking and embedding, supporting top-down and bottom-up strategies
-- **Completion endpoint management** for configuring LLM inference endpoints (Ollama, OpenAI) with health checks
+- **Completion endpoint management** for configuring LLM inference endpoints (Ollama, OpenAI, Gemini, vLLM) with health checks
+- **PolyPrompt-backed provider runtime** so provider-specific embeddings and inference wiring is centralized in a dedicated library
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history
 - **SDKs** for C#, Python, and JavaScript
 - **Docker images** with multi-architecture support (amd64/arm64)
@@ -437,7 +438,7 @@ Ensure you are passing the `Authorization: Bearer {token}` header. The default a
   - Windows cmd: `curl http://localhost:11434/api/pull -d "{\"name\": \"nomic-embed-text\"}"`
 - If running the server standalone in Docker with an external Ollama, `localhost` inside the container is not the host machine; use `host.docker.internal` or the container network address instead.
 - Verify the model name matches what your embedding provider expects (e.g. `nomic-embed-text` for Ollama).
-- Check that `ApiFormat` is set correctly (`Ollama` or `OpenAI`).
+- Check that `ApiFormat` is set correctly (`Ollama`, `OpenAI`, `Gemini`, or `vLLM`).
 
 ### Dashboard cannot connect to the server
 

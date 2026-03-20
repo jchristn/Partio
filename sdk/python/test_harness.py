@@ -24,6 +24,10 @@ def main():
     test_cred_id = None
     test_ep_id = None
     test_cep_id = None
+    gemini_ep_id = None
+    vllm_ep_id = None
+    gemini_cep_id = None
+    vllm_cep_id = None
 
     with PartioClient(endpoint, admin_key) as client:
 
@@ -155,6 +159,20 @@ def main():
             assert result and len(result.get("Data", [])) > 0
         run_test("Enumerate Endpoints", test_enumerate_endpoints)
 
+        def test_create_gemini_endpoint():
+            nonlocal gemini_ep_id
+            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "Gemini Embedding", "Model": "gemini-embedding-001", "Endpoint": "https://generativelanguage.googleapis.com", "ApiFormat": "Gemini", "ApiKey": "test-api-key"})
+            assert ep and "Id" in ep
+            gemini_ep_id = ep["Id"]
+        run_test("Create Gemini Embedding Endpoint", test_create_gemini_endpoint)
+
+        def test_create_vllm_endpoint():
+            nonlocal vllm_ep_id
+            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "vLLM Embedding", "Model": "intfloat/e5-small-v2", "Endpoint": "http://localhost:8000", "ApiFormat": "vLLM"})
+            assert ep and "Id" in ep
+            vllm_ep_id = ep["Id"]
+        run_test("Create vLLM Embedding Endpoint", test_create_vllm_endpoint)
+
         # Completion Endpoint CRUD
         def test_create_completion_endpoint():
             nonlocal test_cep_id
@@ -181,6 +199,20 @@ def main():
             result = client.enumerate_completion_endpoints()
             assert result and len(result.get("Data", [])) > 0
         run_test("Enumerate Completion Endpoints", test_enumerate_completion_endpoints)
+
+        def test_create_gemini_completion_endpoint():
+            nonlocal gemini_cep_id
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Gemini Inference", "Model": "gemini-2.5-flash", "Endpoint": "https://generativelanguage.googleapis.com", "ApiFormat": "Gemini", "ApiKey": "test-api-key"})
+            assert cep and "Id" in cep
+            gemini_cep_id = cep["Id"]
+        run_test("Create Gemini Completion Endpoint", test_create_gemini_completion_endpoint)
+
+        def test_create_vllm_completion_endpoint():
+            nonlocal vllm_cep_id
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "vLLM Inference", "Model": "Qwen/Qwen2.5-7B-Instruct", "Endpoint": "http://localhost:8000", "ApiFormat": "vLLM"})
+            assert cep and "Id" in cep
+            vllm_cep_id = cep["Id"]
+        run_test("Create vLLM Completion Endpoint", test_create_vllm_completion_endpoint)
 
         # Request History
         def test_enumerate_history():
@@ -425,10 +457,30 @@ def main():
             assert not client.completion_endpoint_exists(test_cep_id)
         run_test("Delete Completion Endpoint", test_delete_completion_endpoint)
 
+        def test_delete_gemini_completion_endpoint():
+            if gemini_cep_id:
+                client.delete_completion_endpoint(gemini_cep_id)
+        run_test("Delete Gemini Completion Endpoint", test_delete_gemini_completion_endpoint)
+
+        def test_delete_vllm_completion_endpoint():
+            if vllm_cep_id:
+                client.delete_completion_endpoint(vllm_cep_id)
+        run_test("Delete vLLM Completion Endpoint", test_delete_vllm_completion_endpoint)
+
         def test_delete_endpoint():
             client.delete_endpoint(test_ep_id)
             assert not client.endpoint_exists(test_ep_id)
         run_test("Delete Endpoint", test_delete_endpoint)
+
+        def test_delete_gemini_endpoint():
+            if gemini_ep_id:
+                client.delete_endpoint(gemini_ep_id)
+        run_test("Delete Gemini Embedding Endpoint", test_delete_gemini_endpoint)
+
+        def test_delete_vllm_endpoint():
+            if vllm_ep_id:
+                client.delete_endpoint(vllm_ep_id)
+        run_test("Delete vLLM Embedding Endpoint", test_delete_vllm_endpoint)
 
         def test_delete_credential():
             client.delete_credential(test_cred_id)
