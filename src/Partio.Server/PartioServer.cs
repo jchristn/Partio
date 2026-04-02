@@ -20,10 +20,9 @@ namespace Partio.Server
     using Partio.Server.Models;
     using Partio.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
-    using SwiftStack.Rest.OpenApi;
+    using WatsonWebserver;
     using WatsonWebserver.Core;
+    using WatsonWebserver.Core.OpenApi;
     using Constants = Partio.Core.Constants;
     using ApiErrorResponse = Partio.Core.Models.ApiErrorResponse;
 
@@ -91,18 +90,21 @@ namespace Partio.Server
             _CompletionHealthCheckService = new CompletionHealthCheckService(_Database, _Logging);
             await _CompletionHealthCheckService.StartAsync().ConfigureAwait(false);
 
-            // 7. Initialize SwiftStack
-            SwiftStackApp app = new SwiftStackApp("Partio Server", true);
-            app.Serializer = _Serializer;
-
-            RestApp rest = app.Rest;
-            rest.QuietStartup = true;
-            rest.WebserverSettings.Hostname = _Settings.Rest.Hostname;
-            rest.WebserverSettings.Port = _Settings.Rest.Port;
-            rest.WebserverSettings.Ssl.Enable = _Settings.Rest.Ssl;
+            // 7. Initialize Watson
+            WebserverSettings webSettings = new WebserverSettings(
+                _Settings.Rest.Hostname,
+                _Settings.Rest.Port,
+                _Settings.Rest.Ssl);
+            Webserver server = new Webserver(webSettings, async (ctx) =>
+            {
+                ctx.Response.StatusCode = 404;
+                ctx.Response.ContentType = Constants.JsonContentType;
+                await ctx.Response.Send("{\"Error\":\"NotFound\",\"Message\":\"Route not found\",\"StatusCode\":404}").ConfigureAwait(false);
+            });
+            server.Serializer = _Serializer;
 
             // OpenAPI / Swagger
-            rest.UseOpenApi(settings =>
+            server.UseOpenApi(settings =>
             {
                 settings.Info = new OpenApiInfo
                 {
@@ -112,27 +114,27 @@ namespace Partio.Server
                 };
                 settings.Tags = new List<OpenApiTag>
                 {
-                    new OpenApiTag("Health", "Health check endpoints"),
-                    new OpenApiTag("Process", "Chunk and embed semantic cells"),
-                    new OpenApiTag("Explorer", "Exercise configured embedding and inference endpoints through Partio"),
-                    new OpenApiTag("Tenants", "Tenant management (admin)"),
-                    new OpenApiTag("Users", "User management (admin)"),
-                    new OpenApiTag("Credentials", "Credential management (admin)"),
-                    new OpenApiTag("Embedding Endpoints", "Embedding endpoint management (admin)"),
-                    new OpenApiTag("Completion Endpoints", "Completion/inference endpoint management (admin)"),
-                    new OpenApiTag("Requests", "Request history (admin)")
+                    new OpenApiTag { Name = "Health", Description = "Health check endpoints" },
+                    new OpenApiTag { Name = "Process", Description = "Chunk and embed semantic cells" },
+                    new OpenApiTag { Name = "Explorer", Description = "Exercise configured embedding and inference endpoints through Partio" },
+                    new OpenApiTag { Name = "Tenants", Description = "Tenant management (admin)" },
+                    new OpenApiTag { Name = "Users", Description = "User management (admin)" },
+                    new OpenApiTag { Name = "Credentials", Description = "Credential management (admin)" },
+                    new OpenApiTag { Name = "Embedding Endpoints", Description = "Embedding endpoint management (admin)" },
+                    new OpenApiTag { Name = "Completion Endpoints", Description = "Completion/inference endpoint management (admin)" },
+                    new OpenApiTag { Name = "Requests", Description = "Request history (admin)" }
                 };
                 settings.SecuritySchemes = new Dictionary<string, OpenApiSecurityScheme>
                 {
-                    ["Bearer"] = OpenApiSecurityScheme.Bearer("token", "Bearer token authentication. Use an admin API key or credential bearer token.")
+                    ["Bearer"] = new OpenApiSecurityScheme { Type = "http", Scheme = "bearer", BearerFormat = "token", Description = "Bearer token authentication. Use an admin API key or credential bearer token." }
                 };
             });
 
             #region Routes
 
-            rest.AuthenticationRoute = async (HttpContextBase ctx) =>
+            server.Routes.AuthenticateApiRequest = async (HttpContextBase ctx) =>
             {
-                string? authHeader = ctx.Request.Headers?[Constants.AuthorizationHeader];
+                string? authHeader = ctx.Request.RetrieveHeaderValue(Constants.AuthorizationHeader);
                 string? token = null;
                 if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith(Constants.BearerPrefix, StringComparison.OrdinalIgnoreCase))
                     token = authHeader.Substring(Constants.BearerPrefix.Length).Trim();
@@ -145,270 +147,202 @@ namespace Partio.Server
                 AuthResult result = new AuthResult();
                 result.AuthenticationResult = authCtx.IsAuthenticated
                     ? AuthenticationResultEnum.Success
-                    : AuthenticationResultEnum.Invalid;
+                    : AuthenticationResultEnum.NotFound;
+                result.AuthorizationResult = authCtx.IsAuthenticated
+                    ? AuthorizationResultEnum.Permitted
+                    : AuthorizationResultEnum.DeniedImplicit;
                 return result;
             };
-            rest.PreRoutingRoute = async (HttpContextBase ctx) =>
+            server.Routes.PreRouting = async (HttpContextBase ctx) =>
             {
                 ctx.Response.ContentType = Constants.JsonContentType;
             };
-            rest.PostRoutingRoute = async (HttpContextBase ctx) =>
+            server.Routes.PostRouting = async (HttpContextBase ctx) =>
             {
                 if (_Settings.Debug.Requests)
                     _Logging.Info(_Header + ctx.Request.Method.ToString() + " " + ctx.Request.Url.RawWithQuery + " " + ctx.Response.StatusCode);
             };
-            rest.ExceptionRoute = async (HttpContextBase ctx, Exception ex) =>
+            // Middleware to map domain exceptions to WebserverException
+            // so Watson 7's ApiRouteHandler returns the correct HTTP status codes.
+            server.Middleware.Add(async (HttpContextBase ctx, Func<Task> next, CancellationToken token) =>
             {
-                if (_Settings.Debug.Exceptions)
-                    _Logging.Warn(_Header + "exception: " + ex.Message);
-
-                int statusCode = 500;
-                string error = "InternalServerError";
-
-                if (ex is KeyNotFoundException)
+                try
                 {
-                    statusCode = 404;
-                    error = "NotFound";
+                    await next().ConfigureAwait(false);
                 }
-                else if (ex is ArgumentException || ex is ArgumentNullException)
+                catch (WebserverException)
                 {
-                    statusCode = 400;
-                    error = "BadRequest";
+                    throw; // already mapped
                 }
-                else if (ex is UnauthorizedAccessException)
+                catch (KeyNotFoundException ex)
                 {
-                    statusCode = 401;
-                    error = "Unauthorized";
+                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                    throw new WebserverException(ApiResultEnum.NotFound, ex.Message);
                 }
-                else if (ex is EndpointUnhealthyException)
+                catch (ArgumentException ex)
                 {
-                    statusCode = 502;
-                    error = "BadGateway";
+                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                    throw new WebserverException(ApiResultEnum.BadRequest, ex.Message);
                 }
-
-                ctx.Response.StatusCode = statusCode;
-                ctx.Response.ContentType = Constants.JsonContentType;
-
-                ApiErrorResponse errorResponse = new ApiErrorResponse
+                catch (UnauthorizedAccessException ex)
                 {
-                    Error = error,
-                    Message = ex.Message,
-                    StatusCode = statusCode
-                };
-
-                string json = _Serializer.SerializeJson(errorResponse, true);
-                await ctx.Response.Send(json).ConfigureAwait(false);
-            };
+                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                    throw new WebserverException(ApiResultEnum.NotAuthorized, ex.Message);
+                }
+                catch (EndpointUnhealthyException ex)
+                {
+                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                    throw new WebserverException(ApiResultEnum.InternalError, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                    throw;
+                }
+            });
 
             #region Health
 
             // Health (no auth)
-            rest.Head("/", HealthHead, api => api
-                .WithTag("Health")
-                .WithSummary("Health check")
-                .WithResponse(200, OpenApiResponseMetadata.Create("OK")), false);
-            rest.Get("/", HealthGet, api => api
-                .WithTag("Health")
-                .WithSummary("Health status")
-                .WithResponse(200, OpenApiResponseMetadata.Json<Dictionary<string, string>>("Health status")), false);
-            rest.Get("/v1.0/health", HealthJson, api => api
-                .WithTag("Health")
-                .WithSummary("Health status JSON")
-                .WithResponse(200, OpenApiResponseMetadata.Json<Dictionary<string, string>>("Health status")), false);
-            rest.Get("/v1.0/whoami", WhoAmI, api => api
-                .WithTag("Health")
-                .WithSummary("Returns the role and tenant of the authenticated caller")
-                .WithResponse(200, OpenApiResponseMetadata.Json<Dictionary<string, string>>("Caller identity"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Head("/", HealthHead);
+            server.Get("/", HealthGet, api => {
+                api.Summary = "Health status";
+                api.WithTag("Health")
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Health status", null));
+            });
+            server.Get("/v1.0/health", HealthJson, api => {
+                api.Summary = "Health status JSON";
+                api.WithTag("Health")
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Health status", null));
+            });
+            server.Get("/v1.0/whoami", WhoAmI, api => {
+                api.Summary = "Returns the role and tenant of the authenticated caller";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Health")
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Caller identity", null))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized());
+            }, auth: true);
 
             #endregion
 
             #region Processing
 
             // Process (auth required)
-            rest.Post<SemanticCellRequest>("/v1.0/process", ProcessSingle, api => api
-                .WithTag("Process")
-                .WithSummary("Process a single semantic cell")
-                .WithDescription("Optionally summarizes, then chunks and embeds a single semantic cell. Embedding endpoint ID is specified in EmbeddingConfiguration.EmbeddingEndpointId.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<SemanticCellRequest>("Semantic cell to process", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<SemanticCellResponse>("Processed cell with chunks and embeddings"))
-                .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request or inactive endpoint"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Embedding endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<List<SemanticCellRequest>>("/v1.0/process/batch", ProcessBatch, api => api
-                .WithTag("Process")
-                .WithSummary("Process multiple semantic cells")
-                .WithDescription("Optionally summarizes, then chunks and embeds multiple semantic cells in a single request.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<List<SemanticCellRequest>>("Semantic cells to process", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<List<SemanticCellResponse>>("Processed cells"))
-                .WithResponse(400, OpenApiResponseMetadata.BadRequest("Invalid request or inactive endpoint"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Embedding endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EndpointExplorerEmbeddingRequest>("/v1.0/explorer/embedding", ExploreEmbeddingEndpoint, api => api
-                .WithTag("Explorer")
-                .WithSummary("Exercise an embedding endpoint through Partio")
-                .WithDescription("Sends sample embedding input through the configured Partio embedding path and returns the result together with captured upstream call details.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EndpointExplorerEmbeddingRequest>("Embedding endpoint explorer request", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointExplorerEmbeddingResponse>("Embedding explorer result"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EndpointExplorerCompletionRequest>("/v1.0/explorer/completion", ExploreCompletionEndpoint, api => api
-                .WithTag("Explorer")
-                .WithSummary("Exercise an inference endpoint through Partio")
-                .WithDescription("Sends a prompt through the configured Partio inference path and returns the generated output together with captured upstream call details.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EndpointExplorerCompletionRequest>("Inference endpoint explorer request", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointExplorerCompletionResponse>("Inference explorer result"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Missing or invalid token"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Post<SemanticCellRequest>("/v1.0/process", ProcessSingle, api => {
+                api.Summary = "Process a single semantic cell";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Process")
+                    .WithDescription("Optionally summarizes, then chunks and embeds a single semantic cell. Embedding endpoint ID is specified in EmbeddingConfiguration.EmbeddingEndpointId.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Semantic cell to process", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Processed cell with chunks and embeddings", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Post<List<SemanticCellRequest>>("/v1.0/process/batch", ProcessBatch, api => {
+                api.Summary = "Process multiple semantic cells";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Process")
+                    .WithDescription("Optionally summarizes, then chunks and embeds multiple semantic cells in a single request.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Semantic cells to process", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Processed cells", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Post<EndpointExplorerEmbeddingRequest>("/v1.0/explorer/embedding", ExploreEmbeddingEndpoint, api => {
+                api.Summary = "Exercise an embedding endpoint through Partio";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Explorer")
+                    .WithDescription("Sends sample embedding input through the configured Partio embedding path and returns the result together with captured upstream call details.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Embedding endpoint explorer request", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Embedding explorer result", null))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized());
+            }, auth: true);
+            server.Post<EndpointExplorerCompletionRequest>("/v1.0/explorer/completion", ExploreCompletionEndpoint, api => {
+                api.Summary = "Exercise an inference endpoint through Partio";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Explorer")
+                    .WithDescription("Sends a prompt through the configured Partio inference path and returns the generated output together with captured upstream call details.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Inference endpoint explorer request", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Inference explorer result", null))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized());
+            }, auth: true);
 
             #endregion
 
             #region Tenants
 
             // Tenants (admin)
-            rest.Put<TenantMetadata>("/v1.0/tenants", CreateTenant, api => api
-                .WithTag("Tenants")
-                .WithSummary("Create a tenant")
-                .WithDescription("Creates a tenant along with a default user, credential, and embedding endpoints.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<TenantMetadata>("Tenant to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<TenantMetadata>("Created tenant"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/tenants/{id}", ReadTenant, api => api
-                .WithTag("Tenants")
-                .WithSummary("Read a tenant")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Tenant ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<TenantMetadata>("Tenant details"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Tenant not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Put<TenantMetadata>("/v1.0/tenants/{id}", UpdateTenant, api => api
-                .WithTag("Tenants")
-                .WithSummary("Update a tenant")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Tenant ID", OpenApiSchemaMetadata.String()))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<TenantMetadata>("Tenant fields to update", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<TenantMetadata>("Updated tenant"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Tenant not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Delete("/v1.0/tenants/{id}", DeleteTenant, api => api
-                .WithTag("Tenants")
-                .WithSummary("Delete a tenant")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Tenant ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(204, OpenApiResponseMetadata.NoContent())
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Tenant not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Head("/v1.0/tenants/{id}", HeadTenant, api => api
-                .WithTag("Tenants")
-                .WithSummary("Check if a tenant exists")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Tenant ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Create("Tenant exists"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Tenant not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/tenants/enumerate", EnumerateTenants, api => api
-                .WithTag("Tenants")
-                .WithSummary("List tenants")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<TenantMetadata>>("Paginated tenant list"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Put<TenantMetadata>("/v1.0/tenants", CreateTenant, auth: true);
+            server.Get("/v1.0/tenants/{id}", ReadTenant, api => {
+                api.Summary = "Read a tenant";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Tenants")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Tenant ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Tenant details", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Put<TenantMetadata>("/v1.0/tenants/{id}", UpdateTenant, auth: true);
+            server.Delete("/v1.0/tenants/{id}", DeleteTenant, auth: true);
+            server.Head("/v1.0/tenants/{id}", HeadTenant, auth: true);
+            server.Post<EnumerationRequest>("/v1.0/tenants/enumerate", EnumerateTenants, api => {
+                api.Summary = "List tenants";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Tenants")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Pagination and filter options", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Paginated tenant list", null));
+            }, auth: true);
 
             #endregion
 
             #region Users
 
             // Users (admin)
-            rest.Put<UserMaster>("/v1.0/users", CreateUser, api => api
-                .WithTag("Users")
-                .WithSummary("Create a user")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<UserMaster>("User to create", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<UserMaster>("Created user (password redacted)"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/users/{id}", ReadUser, api => api
-                .WithTag("Users")
-                .WithSummary("Read a user")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "User ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<UserMaster>("User details (password redacted)"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("User not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Put<UserMaster>("/v1.0/users/{id}", UpdateUser, api => api
-                .WithTag("Users")
-                .WithSummary("Update a user")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "User ID", OpenApiSchemaMetadata.String()))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<UserMaster>("User fields to update", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<UserMaster>("Updated user (password redacted)"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("User not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Delete("/v1.0/users/{id}", DeleteUser, api => api
-                .WithTag("Users")
-                .WithSummary("Delete a user")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "User ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(204, OpenApiResponseMetadata.NoContent())
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("User not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Head("/v1.0/users/{id}", HeadUser, api => api
-                .WithTag("Users")
-                .WithSummary("Check if a user exists")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "User ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Create("User exists"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("User not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/users/enumerate", EnumerateUsers, api => api
-                .WithTag("Users")
-                .WithSummary("List users")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<UserMaster>>("Paginated user list"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Put<UserMaster>("/v1.0/users", CreateUser, auth: true);
+            server.Get("/v1.0/users/{id}", ReadUser, api => {
+                api.Summary = "Read a user";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Users")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "User ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("User details (password redacted)", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Put<UserMaster>("/v1.0/users/{id}", UpdateUser, auth: true);
+            server.Delete("/v1.0/users/{id}", DeleteUser, auth: true);
+            server.Head("/v1.0/users/{id}", HeadUser, auth: true);
+            server.Post<EnumerationRequest>("/v1.0/users/enumerate", EnumerateUsers, api => {
+                api.Summary = "List users";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Users")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Pagination and filter options", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Paginated user list", null));
+            }, auth: true);
 
             #endregion
 
             #region Credentials
 
             // Credentials (admin)
-            rest.Put<Credential>("/v1.0/credentials", CreateCredential, api => api
-                .WithTag("Credentials")
-                .WithSummary("Create a credential")
-                .WithDescription("Creates a credential and generates a bearer token.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Credential>("Credential to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<Credential>("Created credential with bearer token"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/credentials/{id}", ReadCredential, api => api
-                .WithTag("Credentials")
-                .WithSummary("Read a credential")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Credential ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Credential>("Credential details"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Credential not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Put<Credential>("/v1.0/credentials/{id}", UpdateCredential, api => api
-                .WithTag("Credentials")
-                .WithSummary("Update a credential")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Credential ID", OpenApiSchemaMetadata.String()))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Credential>("Credential fields to update", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Credential>("Updated credential"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Credential not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Delete("/v1.0/credentials/{id}", DeleteCredential, api => api
-                .WithTag("Credentials")
-                .WithSummary("Delete a credential")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Credential ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(204, OpenApiResponseMetadata.NoContent())
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Credential not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Head("/v1.0/credentials/{id}", HeadCredential, api => api
-                .WithTag("Credentials")
-                .WithSummary("Check if a credential exists")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Credential ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Create("Credential exists"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Credential not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/credentials/enumerate", EnumerateCredentials, api => api
-                .WithTag("Credentials")
-                .WithSummary("List credentials")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<Credential>>("Paginated credential list"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Put<Credential>("/v1.0/credentials", CreateCredential, auth: true);
+            server.Get("/v1.0/credentials/{id}", ReadCredential, api => {
+                api.Summary = "Read a credential";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Credentials")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Credential ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Credential details", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Put<Credential>("/v1.0/credentials/{id}", UpdateCredential, auth: true);
+            server.Delete("/v1.0/credentials/{id}", DeleteCredential, auth: true);
+            server.Head("/v1.0/credentials/{id}", HeadCredential, auth: true);
+            server.Post<EnumerationRequest>("/v1.0/credentials/enumerate", EnumerateCredentials, api => {
+                api.Summary = "List credentials";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Credentials")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Pagination and filter options", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Paginated credential list", null));
+            }, auth: true);
 
             #endregion
 
@@ -418,163 +352,119 @@ namespace Partio.Server
             // NOTE: Literal path routes (/health, /enumerate) must be registered BEFORE
             // parameterized routes (/{id}) to prevent the router from matching literal
             // segments as parameter values.
-            rest.Put<EmbeddingEndpoint>("/v1.0/endpoints/embedding", CreateEndpoint, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("Create an embedding endpoint")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EmbeddingEndpoint>("Endpoint to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Created endpoint"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/endpoints/embedding/enumerate", EnumerateEndpoints, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("List embedding endpoints")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<EmbeddingEndpoint>>("Paginated endpoint list"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/embedding/health", GetAllEndpointHealth, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("List health status for all embedding endpoints")
-                .WithDescription("Returns health status for all monitored embedding endpoints. Scoped by tenant for non-admins.")
-                .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of endpoint health statuses"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/embedding/{id}", ReadEndpoint, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("Read an embedding endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Endpoint details"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/embedding/{id}/health", GetEndpointHealth, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("Get health status for a single embedding endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointHealthStatus>("Endpoint health status"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found or health check not enabled"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Put<EmbeddingEndpoint>("/v1.0/endpoints/embedding/{id}", UpdateEndpoint, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("Update an embedding endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EmbeddingEndpoint>("Endpoint fields to update", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EmbeddingEndpoint>("Updated endpoint"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Delete("/v1.0/endpoints/embedding/{id}", DeleteEndpoint, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("Delete an embedding endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(204, OpenApiResponseMetadata.NoContent())
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Head("/v1.0/endpoints/embedding/{id}", HeadEndpoint, api => api
-                .WithTag("Embedding Endpoints")
-                .WithSummary("Check if an embedding endpoint exists")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Create("Endpoint exists"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Put<EmbeddingEndpoint>("/v1.0/endpoints/embedding", CreateEndpoint, auth: true);
+            server.Post<EnumerationRequest>("/v1.0/endpoints/embedding/enumerate", EnumerateEndpoints, api => {
+                api.Summary = "List embedding endpoints";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Embedding Endpoints")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Pagination and filter options", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Paginated endpoint list", null));
+            }, auth: true);
+            server.Get("/v1.0/endpoints/embedding/health", GetAllEndpointHealth, api => {
+                api.Summary = "List health status for all embedding endpoints";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Embedding Endpoints")
+                    .WithDescription("Returns health status for all monitored embedding endpoints. Scoped by tenant for non-admins.")
+                    .WithResponse(200, OpenApiResponseMetadata.Json("List of endpoint health statuses", null));
+            }, auth: true);
+            server.Get("/v1.0/endpoints/embedding/{id}", ReadEndpoint, api => {
+                api.Summary = "Read an embedding endpoint";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Embedding Endpoints")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Endpoint details", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Get("/v1.0/endpoints/embedding/{id}/health", GetEndpointHealth, api => {
+                api.Summary = "Get health status for a single embedding endpoint";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Embedding Endpoints")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Endpoint health status", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Put<EmbeddingEndpoint>("/v1.0/endpoints/embedding/{id}", UpdateEndpoint, auth: true);
+            server.Delete("/v1.0/endpoints/embedding/{id}", DeleteEndpoint, auth: true);
+            server.Head("/v1.0/endpoints/embedding/{id}", HeadEndpoint, auth: true);
 
             #endregion
 
             #region Completion Endpoints
 
             // Completion Endpoints (admin)
-            rest.Put<CompletionEndpoint>("/v1.0/endpoints/completion", CreateCompletionEndpoint, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("Create a completion endpoint")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<CompletionEndpoint>("Completion endpoint to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<CompletionEndpoint>("Created completion endpoint"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized("Admin access required"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/endpoints/completion/enumerate", EnumerateCompletionEndpoints, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("List completion endpoints")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<CompletionEndpoint>>("Paginated completion endpoint list"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/completion/health", GetAllCompletionEndpointHealth, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("List health status for all completion endpoints")
-                .WithDescription("Returns health status for all monitored completion endpoints. Scoped by tenant for non-admins.")
-                .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of completion endpoint health statuses"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/completion/{id}", ReadCompletionEndpoint, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("Read a completion endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<CompletionEndpoint>("Completion endpoint details"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/endpoints/completion/{id}/health", GetCompletionEndpointHealth, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("Get health status for a single completion endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointHealthStatus>("Completion endpoint health status"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found or health check not enabled"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Put<CompletionEndpoint>("/v1.0/endpoints/completion/{id}", UpdateCompletionEndpoint, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("Update a completion endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<CompletionEndpoint>("Completion endpoint fields to update", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<CompletionEndpoint>("Updated completion endpoint"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Delete("/v1.0/endpoints/completion/{id}", DeleteCompletionEndpoint, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("Delete a completion endpoint")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(204, OpenApiResponseMetadata.NoContent())
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Head("/v1.0/endpoints/completion/{id}", HeadCompletionEndpoint, api => api
-                .WithTag("Completion Endpoints")
-                .WithSummary("Check if a completion endpoint exists")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Create("Completion endpoint exists"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Completion endpoint not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Put<CompletionEndpoint>("/v1.0/endpoints/completion", CreateCompletionEndpoint, auth: true);
+            server.Post<EnumerationRequest>("/v1.0/endpoints/completion/enumerate", EnumerateCompletionEndpoints, api => {
+                api.Summary = "List completion endpoints";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Completion Endpoints")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Pagination and filter options", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Paginated completion endpoint list", null));
+            }, auth: true);
+            server.Get("/v1.0/endpoints/completion/health", GetAllCompletionEndpointHealth, api => {
+                api.Summary = "List health status for all completion endpoints";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Completion Endpoints")
+                    .WithDescription("Returns health status for all monitored completion endpoints. Scoped by tenant for non-admins.")
+                    .WithResponse(200, OpenApiResponseMetadata.Json("List of completion endpoint health statuses", null));
+            }, auth: true);
+            server.Get("/v1.0/endpoints/completion/{id}", ReadCompletionEndpoint, api => {
+                api.Summary = "Read a completion endpoint";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Completion Endpoints")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Completion endpoint details", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Get("/v1.0/endpoints/completion/{id}/health", GetCompletionEndpointHealth, api => {
+                api.Summary = "Get health status for a single completion endpoint";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Completion Endpoints")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Completion endpoint health status", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Put<CompletionEndpoint>("/v1.0/endpoints/completion/{id}", UpdateCompletionEndpoint, auth: true);
+            server.Delete("/v1.0/endpoints/completion/{id}", DeleteCompletionEndpoint, auth: true);
+            server.Head("/v1.0/endpoints/completion/{id}", HeadCompletionEndpoint, auth: true);
 
             #endregion
 
             #region Request-History
 
             // Request History (admin)
-            rest.Get("/v1.0/requests/{id}", ReadRequestHistory, api => api
-                .WithTag("Requests")
-                .WithSummary("Read a request history entry")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Request ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistoryEntry>("Request history entry"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Entry not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Get("/v1.0/requests/{id}/detail", ReadRequestHistoryDetail, api => api
-                .WithTag("Requests")
-                .WithSummary("Read request/response body detail")
-                .WithDescription("Reads the request and response body detail from the filesystem.")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Request ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("Request and response body detail"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Entry or detail not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<EnumerationRequest>("/v1.0/requests/enumerate", EnumerateRequestHistory, api => api
-                .WithTag("Requests")
-                .WithSummary("List request history")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<EnumerationRequest>("Pagination and filter options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EnumerationResult<RequestHistoryEntry>>("Paginated request history"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Delete("/v1.0/requests/{id}", DeleteRequestHistory, api => api
-                .WithTag("Requests")
-                .WithSummary("Delete a request history entry")
-                .WithParameter(OpenApiParameterMetadata.Path("id", "Request ID", OpenApiSchemaMetadata.String()))
-                .WithResponse(204, OpenApiResponseMetadata.NoContent())
-                .WithResponse(404, OpenApiResponseMetadata.NotFound("Entry not found"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
-            rest.Post<RequestStatisticsRequest>("/v1.0/requests/statistics", GetRequestStatistics, api => api
-                .WithTag("Requests")
-                .WithSummary("Get request history statistics")
-                .WithDescription("Returns aggregated request counts grouped by time bucket, broken out by success/failure. Supports filtering by request type (Embedding/Inference), timeframe (Hour/Day/Week/Month), and endpoint URL.")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<RequestStatisticsRequest>("Statistics query options", false))
-                .WithResponse(200, OpenApiResponseMetadata.Json<RequestStatisticsResponse>("Aggregated request statistics"))
-                .WithSecurity("Bearer", Array.Empty<string>()), true);
+            server.Get("/v1.0/requests/{id}", ReadRequestHistory, api => {
+                api.Summary = "Read a request history entry";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Requests")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Request ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Request history entry", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Get("/v1.0/requests/{id}/detail", ReadRequestHistoryDetail, api => {
+                api.Summary = "Read request/response body detail";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Requests")
+                    .WithDescription("Reads the request and response body detail from the filesystem.")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Request ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Request and response body detail", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Post<EnumerationRequest>("/v1.0/requests/enumerate", EnumerateRequestHistory, api => {
+                api.Summary = "List request history";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Requests")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Pagination and filter options", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Paginated request history", null));
+            }, auth: true);
+            server.Delete("/v1.0/requests/{id}", DeleteRequestHistory, auth: true);
+            server.Post<RequestStatisticsRequest>("/v1.0/requests/statistics", GetRequestStatistics, api => {
+                api.Summary = "Get request history statistics";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Requests")
+                    .WithDescription("Returns aggregated request counts grouped by time bucket, broken out by success/failure. Supports filtering by request type (Embedding/Inference), timeframe (Hour/Day/Week/Month), and endpoint URL.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Statistics query options", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Aggregated request statistics", null));
+            }, auth: true);
 
             #endregion
 
@@ -582,7 +472,7 @@ namespace Partio.Server
 
             // 8. Start server
             CancellationTokenSource serverCts = new CancellationTokenSource();
-            Task serverTask = app.Rest.Run(serverCts.Token);
+            server.Start(serverCts.Token);
             _Logging.Info(_Header + "listening on " + (_Settings.Rest.Ssl ? "https" : "http") + "://" + _Settings.Rest.Hostname + ":" + _Settings.Rest.Port);
 
             EventWaitHandle waitHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
@@ -616,8 +506,7 @@ namespace Partio.Server
             if (_CleanupService != null)
                 await _CleanupService.StopAsync().ConfigureAwait(false);
             serverCts.Cancel();
-            try { await serverTask.ConfigureAwait(false); } catch (OperationCanceledException) { }
-            app.Rest.Dispose();
+            server.Dispose();
             _Logging.Info(_Header + "shutdown complete");
         }
 
@@ -786,13 +675,13 @@ namespace Partio.Server
 
         #region Health
 
-        private static async Task<object> HealthHead(AppRequest req)
+        private static async Task<object> HealthHead(ApiRequest req)
         {
             req.Http.Response.StatusCode = 200;
             return null!;
         }
 
-        private static async Task<object> HealthGet(AppRequest req)
+        private static async Task<object> HealthGet(ApiRequest req)
         {
             req.Http.Response.StatusCode = 200;
             return new Dictionary<string, object>
@@ -803,7 +692,7 @@ namespace Partio.Server
             };
         }
 
-        private static async Task<object> HealthJson(AppRequest req)
+        private static async Task<object> HealthJson(ApiRequest req)
         {
             req.Http.Response.StatusCode = 200;
             return new Dictionary<string, object>
@@ -814,7 +703,7 @@ namespace Partio.Server
             };
         }
 
-        private static async Task<object> WhoAmI(AppRequest req)
+        private static async Task<object> WhoAmI(ApiRequest req)
         {
             AuthContext auth = (AuthContext)req.Metadata;
 
@@ -841,7 +730,7 @@ namespace Partio.Server
 
         #region Process
 
-        private static async Task<object> ProcessSingle(AppRequest req)
+        private static async Task<object> ProcessSingle(ApiRequest req)
         {
             bool recordHistory = _Settings.RequestHistory.Enabled && _RequestHistoryService != null;
             RequestHistoryEntry? historyEntry = null;
@@ -902,7 +791,7 @@ namespace Partio.Server
             }
         }
 
-        private static async Task<object> ProcessBatch(AppRequest req)
+        private static async Task<object> ProcessBatch(ApiRequest req)
         {
             bool recordHistory = _Settings.RequestHistory.Enabled && _RequestHistoryService != null;
             RequestHistoryEntry? historyEntry = null;
@@ -1015,7 +904,7 @@ namespace Partio.Server
             return endpoint;
         }
 
-        private static async Task<object> ExploreEmbeddingEndpoint(AppRequest req)
+        private static async Task<object> ExploreEmbeddingEndpoint(ApiRequest req)
         {
             EndpointExplorerEmbeddingResponse response = new EndpointExplorerEmbeddingResponse();
             EndpointExplorerEmbeddingRequest? explorerReq = null;
@@ -1120,7 +1009,7 @@ namespace Partio.Server
             }
         }
 
-        private static async Task<object> ExploreCompletionEndpoint(AppRequest req)
+        private static async Task<object> ExploreCompletionEndpoint(ApiRequest req)
         {
             EndpointExplorerCompletionResponse response = new EndpointExplorerCompletionResponse();
             EndpointExplorerCompletionRequest? explorerReq = null;
@@ -1522,7 +1411,7 @@ namespace Partio.Server
 
         #region Tenants
 
-        private static async Task<object> CreateTenant(AppRequest req)
+        private static async Task<object> CreateTenant(ApiRequest req)
         {
             RequireAdmin(req);
             TenantMetadata? tenant = req.GetData<TenantMetadata>();
@@ -1578,7 +1467,7 @@ namespace Partio.Server
             return created;
         }
 
-        private static async Task<object> ReadTenant(AppRequest req)
+        private static async Task<object> ReadTenant(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1587,7 +1476,7 @@ namespace Partio.Server
             return tenant;
         }
 
-        private static async Task<object> UpdateTenant(AppRequest req)
+        private static async Task<object> UpdateTenant(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1598,7 +1487,7 @@ namespace Partio.Server
             return updated;
         }
 
-        private static async Task<object> DeleteTenant(AppRequest req)
+        private static async Task<object> DeleteTenant(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1607,7 +1496,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> HeadTenant(AppRequest req)
+        private static async Task<object> HeadTenant(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1616,7 +1505,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> EnumerateTenants(AppRequest req)
+        private static async Task<object> EnumerateTenants(ApiRequest req)
         {
             RequireAdmin(req);
             EnumerationRequest? enumReq = req.GetData<EnumerationRequest>();
@@ -1629,7 +1518,7 @@ namespace Partio.Server
 
         #region Users
 
-        private static async Task<object> CreateUser(AppRequest req)
+        private static async Task<object> CreateUser(ApiRequest req)
         {
             RequireAdmin(req);
             UserMaster? user = req.GetData<UserMaster>();
@@ -1638,7 +1527,7 @@ namespace Partio.Server
             return UserMaster.Redact(created);
         }
 
-        private static async Task<object> ReadUser(AppRequest req)
+        private static async Task<object> ReadUser(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1647,7 +1536,7 @@ namespace Partio.Server
             return UserMaster.Redact(user);
         }
 
-        private static async Task<object> UpdateUser(AppRequest req)
+        private static async Task<object> UpdateUser(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1658,7 +1547,7 @@ namespace Partio.Server
             return UserMaster.Redact(updated);
         }
 
-        private static async Task<object> DeleteUser(AppRequest req)
+        private static async Task<object> DeleteUser(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1667,7 +1556,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> HeadUser(AppRequest req)
+        private static async Task<object> HeadUser(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1676,7 +1565,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> EnumerateUsers(AppRequest req)
+        private static async Task<object> EnumerateUsers(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -1695,7 +1584,7 @@ namespace Partio.Server
 
         #region Credentials
 
-        private static async Task<object> CreateCredential(AppRequest req)
+        private static async Task<object> CreateCredential(ApiRequest req)
         {
             RequireAdmin(req);
             Credential? cred = req.GetData<Credential>();
@@ -1705,7 +1594,7 @@ namespace Partio.Server
             return created;
         }
 
-        private static async Task<object> ReadCredential(AppRequest req)
+        private static async Task<object> ReadCredential(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1714,7 +1603,7 @@ namespace Partio.Server
             return cred;
         }
 
-        private static async Task<object> UpdateCredential(AppRequest req)
+        private static async Task<object> UpdateCredential(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1725,7 +1614,7 @@ namespace Partio.Server
             return updated;
         }
 
-        private static async Task<object> DeleteCredential(AppRequest req)
+        private static async Task<object> DeleteCredential(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1734,7 +1623,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> HeadCredential(AppRequest req)
+        private static async Task<object> HeadCredential(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1743,7 +1632,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> EnumerateCredentials(AppRequest req)
+        private static async Task<object> EnumerateCredentials(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -1758,7 +1647,7 @@ namespace Partio.Server
 
         #region Endpoints
 
-        private static async Task<object> CreateEndpoint(AppRequest req)
+        private static async Task<object> CreateEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             EmbeddingEndpoint? ep = req.GetData<EmbeddingEndpoint>();
@@ -1770,7 +1659,7 @@ namespace Partio.Server
             return created;
         }
 
-        private static async Task<object> ReadEndpoint(AppRequest req)
+        private static async Task<object> ReadEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1779,7 +1668,7 @@ namespace Partio.Server
             return ep;
         }
 
-        private static async Task<object> UpdateEndpoint(AppRequest req)
+        private static async Task<object> UpdateEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1792,7 +1681,7 @@ namespace Partio.Server
             return updated;
         }
 
-        private static async Task<object> DeleteEndpoint(AppRequest req)
+        private static async Task<object> DeleteEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1802,7 +1691,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> HeadEndpoint(AppRequest req)
+        private static async Task<object> HeadEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1811,7 +1700,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> EnumerateEndpoints(AppRequest req)
+        private static async Task<object> EnumerateEndpoints(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -1826,7 +1715,7 @@ namespace Partio.Server
 
         #region Endpoint Health
 
-        private static async Task<object> GetAllEndpointHealth(AppRequest req)
+        private static async Task<object> GetAllEndpointHealth(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -1845,7 +1734,7 @@ namespace Partio.Server
             return statuses;
         }
 
-        private static async Task<object> GetEndpointHealth(AppRequest req)
+        private static async Task<object> GetEndpointHealth(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1864,7 +1753,7 @@ namespace Partio.Server
 
         #region Completion Endpoints
 
-        private static async Task<object> CreateCompletionEndpoint(AppRequest req)
+        private static async Task<object> CreateCompletionEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             CompletionEndpoint? ep = req.GetData<CompletionEndpoint>();
@@ -1876,7 +1765,7 @@ namespace Partio.Server
             return created;
         }
 
-        private static async Task<object> ReadCompletionEndpoint(AppRequest req)
+        private static async Task<object> ReadCompletionEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1885,7 +1774,7 @@ namespace Partio.Server
             return ep;
         }
 
-        private static async Task<object> UpdateCompletionEndpoint(AppRequest req)
+        private static async Task<object> UpdateCompletionEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1898,7 +1787,7 @@ namespace Partio.Server
             return updated;
         }
 
-        private static async Task<object> DeleteCompletionEndpoint(AppRequest req)
+        private static async Task<object> DeleteCompletionEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1908,7 +1797,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> HeadCompletionEndpoint(AppRequest req)
+        private static async Task<object> HeadCompletionEndpoint(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1917,7 +1806,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> EnumerateCompletionEndpoints(AppRequest req)
+        private static async Task<object> EnumerateCompletionEndpoints(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -1932,7 +1821,7 @@ namespace Partio.Server
 
         #region Completion Endpoint Health
 
-        private static async Task<object> GetAllCompletionEndpointHealth(AppRequest req)
+        private static async Task<object> GetAllCompletionEndpointHealth(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -1951,7 +1840,7 @@ namespace Partio.Server
             return statuses;
         }
 
-        private static async Task<object> GetCompletionEndpointHealth(AppRequest req)
+        private static async Task<object> GetCompletionEndpointHealth(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1970,7 +1859,7 @@ namespace Partio.Server
 
         #region Request History
 
-        private static async Task<object> ReadRequestHistory(AppRequest req)
+        private static async Task<object> ReadRequestHistory(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1979,7 +1868,7 @@ namespace Partio.Server
             return entry;
         }
 
-        private static async Task<object> ReadRequestHistoryDetail(AppRequest req)
+        private static async Task<object> ReadRequestHistoryDetail(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -1998,7 +1887,7 @@ namespace Partio.Server
             return _JsonSerializer.DeserializeJson<object>(detail);
         }
 
-        private static async Task<object> EnumerateRequestHistory(AppRequest req)
+        private static async Task<object> EnumerateRequestHistory(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -2019,7 +1908,7 @@ namespace Partio.Server
             return result;
         }
 
-        private static async Task<object> DeleteRequestHistory(AppRequest req)
+        private static async Task<object> DeleteRequestHistory(ApiRequest req)
         {
             RequireAdmin(req);
             string id = req.Parameters["id"];
@@ -2028,7 +1917,7 @@ namespace Partio.Server
             return null!;
         }
 
-        private static async Task<object> GetRequestStatistics(AppRequest req)
+        private static async Task<object> GetRequestStatistics(ApiRequest req)
         {
             RequireAdmin(req);
             AuthContext auth = (AuthContext)req.Metadata;
@@ -2053,7 +1942,7 @@ namespace Partio.Server
 
         #region Helpers
 
-        private static void RequireAdmin(AppRequest req)
+        private static void RequireAdmin(ApiRequest req)
         {
             AuthContext auth = (AuthContext)req.Metadata;
             if (!auth.IsGlobalAdmin)

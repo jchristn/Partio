@@ -1,95 +1,91 @@
-namespace Test.Automated
+namespace Test.Shared
 {
     using System;
     using System.Collections.Generic;
     using System.Linq;
     using Partio.Sdk.Models;
 
-    /// <summary>
-    /// Unit tests for the v0.2.0 summarization feature models.
-    /// These tests validate model instantiation, default values, and local logic only.
-    /// They do NOT require a running server.
-    /// </summary>
-    public static class SummarizationTests
+    public static class SharedSummarizationUnitTests
     {
-        public static async Task RunAll(Func<string, Func<Task>, Task> runTest)
+        public static IReadOnlyList<SharedNamedTestCase> GetTests()
         {
+            List<SharedNamedTestCase> tests = new List<SharedNamedTestCase>();
+
             // ===== SummarizationConfiguration Defaults =====
 
-            await runTest("SumConfig: MaxSummaryTokens defaults to 1024", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: MaxSummaryTokens defaults to 1024", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.MaxSummaryTokens != 1024)
                     throw new Exception("Expected MaxSummaryTokens=1024, got " + config.MaxSummaryTokens);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: MinCellLength defaults to 0", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: MinCellLength defaults to 0", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.MinCellLength != 0)
                     throw new Exception("Expected MinCellLength=0, got " + config.MinCellLength);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: MaxParallelTasks defaults to 4", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: MaxParallelTasks defaults to 4", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.MaxParallelTasks != 4)
                     throw new Exception("Expected MaxParallelTasks=4, got " + config.MaxParallelTasks);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: MaxRetries defaults to 10", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: MaxRetries defaults to 10", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.MaxRetries != 10)
                     throw new Exception("Expected MaxRetries=10, got " + config.MaxRetries);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: MaxRetriesPerSummary defaults to 2", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: MaxRetriesPerSummary defaults to 2", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.MaxRetriesPerSummary != 2)
                     throw new Exception("Expected MaxRetriesPerSummary=2, got " + config.MaxRetriesPerSummary);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: TimeoutMs defaults to 30000", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: TimeoutMs defaults to 30000", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.TimeoutMs != 30000)
                     throw new Exception("Expected TimeoutMs=30000, got " + config.TimeoutMs);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: Order defaults to BottomUp", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: Order defaults to BottomUp", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.Order != "BottomUp")
                     throw new Exception("Expected Order='BottomUp', got '" + config.Order + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: SummarizationPrompt defaults to null", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: SummarizationPrompt defaults to null", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
-                // SDK model defaults prompt to null (server fills in the default template)
                 if (config.SummarizationPrompt != null)
                     throw new Exception("Expected SummarizationPrompt=null, got '" + config.SummarizationPrompt + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: CompletionEndpointId defaults to empty", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: CompletionEndpointId defaults to empty", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 if (config.CompletionEndpointId != string.Empty)
                     throw new Exception("Expected CompletionEndpointId='', got '" + config.CompletionEndpointId + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SumConfig: Custom values are preserved", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SumConfig: Custom values are preserved", async () =>
             {
                 SummarizationConfiguration config = new SummarizationConfiguration();
                 config.MaxSummaryTokens = 2048;
@@ -112,103 +108,102 @@ namespace Test.Automated
                 if (config.CompletionEndpointId != "cep_test123") throw new Exception("CompletionEndpointId not preserved");
                 if (config.SummarizationPrompt != "Summarize: {content}") throw new Exception("SummarizationPrompt not preserved");
                 await Task.CompletedTask;
-            });
+            }));
 
             // ===== CompletionEndpoint Model Tests =====
 
-            await runTest("CompletionEndpoint: Default creation succeeds", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: Default creation succeeds", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep == null) throw new Exception("Failed to create CompletionEndpoint");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: Id is null by default (server assigns)", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: Id is null by default (server assigns)", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
-                // SDK model has Id as nullable string, server generates the cep_ prefixed ID
                 if (ep.Id != null)
                     throw new Exception("Expected Id=null, got '" + ep.Id + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: Active defaults to true", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: Active defaults to true", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (!ep.Active) throw new Exception("Expected Active=true");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: EnableRequestHistory defaults to true", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: EnableRequestHistory defaults to true", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (!ep.EnableRequestHistory) throw new Exception("Expected EnableRequestHistory=true");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: ApiFormat defaults to Ollama", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: ApiFormat defaults to Ollama", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.ApiFormat != "Ollama")
                     throw new Exception("Expected ApiFormat='Ollama', got '" + ep.ApiFormat + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: HealthCheckEnabled defaults to true", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckEnabled defaults to true", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (!ep.HealthCheckEnabled) throw new Exception("Expected HealthCheckEnabled=true");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: HealthCheckIntervalMs defaults to 30000", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckIntervalMs defaults to 30000", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.HealthCheckIntervalMs != 30000)
                     throw new Exception("Expected HealthCheckIntervalMs=30000, got " + ep.HealthCheckIntervalMs);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: HealthCheckTimeoutMs defaults to 5000", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckTimeoutMs defaults to 5000", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.HealthCheckTimeoutMs != 5000)
                     throw new Exception("Expected HealthCheckTimeoutMs=5000, got " + ep.HealthCheckTimeoutMs);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: HealthCheckExpectedStatusCode defaults to 200", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckExpectedStatusCode defaults to 200", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.HealthCheckExpectedStatusCode != 200)
                     throw new Exception("Expected HealthCheckExpectedStatusCode=200, got " + ep.HealthCheckExpectedStatusCode);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: HealthyThreshold defaults to 3", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthyThreshold defaults to 3", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.HealthyThreshold != 3)
                     throw new Exception("Expected HealthyThreshold=3, got " + ep.HealthyThreshold);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: UnhealthyThreshold defaults to 3", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: UnhealthyThreshold defaults to 3", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.UnhealthyThreshold != 3)
                     throw new Exception("Expected UnhealthyThreshold=3, got " + ep.UnhealthyThreshold);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: HealthCheckUseAuth defaults to false", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckUseAuth defaults to false", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.HealthCheckUseAuth) throw new Exception("Expected HealthCheckUseAuth=false");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: Custom field assignment", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: Custom field assignment", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 ep.TenantId = "tenant_abc";
@@ -229,52 +224,52 @@ namespace Test.Automated
                 if (ep.Labels == null || ep.Labels.Count != 2) throw new Exception("Labels not preserved");
                 if (ep.Tags == null || !ep.Tags.ContainsKey("region")) throw new Exception("Tags not preserved");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: Gemini ApiFormat is preserved", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: Gemini ApiFormat is preserved", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 ep.ApiFormat = "Gemini";
                 if (ep.ApiFormat != "Gemini") throw new Exception("Gemini ApiFormat not preserved");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: vLLM ApiFormat is preserved", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: vLLM ApiFormat is preserved", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 ep.ApiFormat = "vLLM";
                 if (ep.ApiFormat != "vLLM") throw new Exception("vLLM ApiFormat not preserved");
                 await Task.CompletedTask;
-            });
+            }));
 
             // ===== SemanticCellRequest Hierarchy Tests =====
 
-            await runTest("SemanticCellRequest: GUID is auto-assigned", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: GUID is auto-assigned", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 if (cell.GUID == Guid.Empty)
                     throw new Exception("Expected auto-assigned GUID, got Guid.Empty");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Each instance gets unique GUID", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Each instance gets unique GUID", async () =>
             {
                 SemanticCellRequest cell1 = new SemanticCellRequest();
                 SemanticCellRequest cell2 = new SemanticCellRequest();
                 if (cell1.GUID == cell2.GUID)
                     throw new Exception("Two instances got the same GUID");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: ParentGUID defaults to null", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: ParentGUID defaults to null", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 if (cell.ParentGUID != null)
                     throw new Exception("Expected ParentGUID=null, got " + cell.ParentGUID);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: ParentGUID links parent-child correctly", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: ParentGUID links parent-child correctly", async () =>
             {
                 SemanticCellRequest parent = new SemanticCellRequest();
                 SemanticCellRequest child = new SemanticCellRequest();
@@ -285,17 +280,17 @@ namespace Test.Automated
                 if (child.ParentGUID.Value != parent.GUID)
                     throw new Exception("ParentGUID does not match parent's GUID");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Children defaults to null", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Children defaults to null", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 if (cell.Children != null)
                     throw new Exception("Expected Children=null, got non-null");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Children collection can be initialized and populated", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Children collection can be initialized and populated", async () =>
             {
                 SemanticCellRequest parent = new SemanticCellRequest();
                 SemanticCellRequest child1 = new SemanticCellRequest();
@@ -308,34 +303,34 @@ namespace Test.Automated
                 if (parent.Children[0].GUID != child1.GUID) throw new Exception("First child GUID mismatch");
                 if (parent.Children[1].GUID != child2.GUID) throw new Exception("Second child GUID mismatch");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Type defaults to Text", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Type defaults to Text", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 if (cell.Type != "Text")
                     throw new Exception("Expected Type='Text', got '" + cell.Type + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Type can be set to Summary", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Type can be set to Summary", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 cell.Type = "Summary";
                 if (cell.Type != "Summary")
                     throw new Exception("Expected Type='Summary', got '" + cell.Type + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: SummarizationConfiguration defaults to null", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: SummarizationConfiguration defaults to null", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 if (cell.SummarizationConfiguration != null)
                     throw new Exception("Expected SummarizationConfiguration=null");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: SummarizationConfiguration can be attached", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: SummarizationConfiguration can be attached", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 SummarizationConfiguration config = new SummarizationConfiguration();
@@ -351,18 +346,18 @@ namespace Test.Automated
                 if (cell.SummarizationConfiguration.MaxSummaryTokens != 512)
                     throw new Exception("MaxSummaryTokens not preserved on cell");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Text content assignment", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Text content assignment", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 cell.Text = "Hello, this is test content for summarization.";
                 if (cell.Text != "Hello, this is test content for summarization.")
                     throw new Exception("Text content not preserved");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: ChunkingConfiguration defaults populated", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: ChunkingConfiguration defaults populated", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 if (cell.ChunkingConfiguration == null)
@@ -370,19 +365,18 @@ namespace Test.Automated
                 if (cell.ChunkingConfiguration.Strategy != "FixedTokenCount")
                     throw new Exception("Expected default Strategy='FixedTokenCount', got '" + cell.ChunkingConfiguration.Strategy + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: EmbeddingConfiguration defaults populated", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: EmbeddingConfiguration defaults populated", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 if (cell.EmbeddingConfiguration == null)
                     throw new Exception("EmbeddingConfiguration should not be null by default");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Flat list with ParentGUID relationships", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Flat list with ParentGUID relationships", async () =>
             {
-                // Build a flat list where child references parent via ParentGUID
                 SemanticCellRequest root = new SemanticCellRequest { Text = "Root content" };
                 SemanticCellRequest child1 = new SemanticCellRequest { Text = "Child 1", ParentGUID = root.GUID };
                 SemanticCellRequest child2 = new SemanticCellRequest { Text = "Child 2", ParentGUID = root.GUID };
@@ -390,7 +384,6 @@ namespace Test.Automated
 
                 List<SemanticCellRequest> flat = new List<SemanticCellRequest> { root, child1, child2, grandchild };
 
-                // Verify the flat list preserves parent-child GUID links
                 SemanticCellRequest? foundChild1 = flat.FirstOrDefault(c => c.GUID == child1.GUID);
                 if (foundChild1 == null) throw new Exception("child1 not found in flat list");
                 if (!foundChild1.ParentGUID.HasValue) throw new Exception("child1 ParentGUID should not be null");
@@ -401,15 +394,14 @@ namespace Test.Automated
                 if (!foundGrandchild.ParentGUID.HasValue || foundGrandchild.ParentGUID.Value != child1.GUID)
                     throw new Exception("grandchild ParentGUID should reference child1");
 
-                // Roots are cells with no ParentGUID
                 List<SemanticCellRequest> roots = flat.Where(c => !c.ParentGUID.HasValue).ToList();
                 if (roots.Count != 1) throw new Exception("Expected 1 root, got " + roots.Count);
                 if (roots[0].GUID != root.GUID) throw new Exception("Root GUID mismatch");
 
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Nested Children hierarchy", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Nested Children hierarchy", async () =>
             {
                 SemanticCellRequest grandchild = new SemanticCellRequest { Text = "Grandchild" };
                 SemanticCellRequest child = new SemanticCellRequest
@@ -430,9 +422,9 @@ namespace Test.Automated
                 if (childChildren[0].Text != "Grandchild")
                     throw new Exception("Grandchild text mismatch");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellRequest: Labels and Tags assignment", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellRequest: Labels and Tags assignment", async () =>
             {
                 SemanticCellRequest cell = new SemanticCellRequest();
                 cell.Labels = new List<string> { "important", "chapter1" };
@@ -443,36 +435,36 @@ namespace Test.Automated
                 if (cell.Tags == null || cell.Tags.Count != 2) throw new Exception("Tags not preserved");
                 if (cell.Tags["source"] != "document.pdf") throw new Exception("Tag 'source' value mismatch");
                 await Task.CompletedTask;
-            });
+            }));
 
             // ===== SemanticCellResponse Tests =====
 
-            await runTest("SemanticCellResponse: Default creation succeeds", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: Default creation succeeds", async () =>
             {
                 SemanticCellResponse resp = new SemanticCellResponse();
                 if (resp == null) throw new Exception("Failed to create SemanticCellResponse");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: Type field supports Summary", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: Type field supports Summary", async () =>
             {
                 SemanticCellResponse resp = new SemanticCellResponse();
                 resp.Type = "Summary";
                 if (resp.Type != "Summary")
                     throw new Exception("Expected Type='Summary', got '" + resp.Type + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: Type field supports Text", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: Type field supports Text", async () =>
             {
                 SemanticCellResponse resp = new SemanticCellResponse();
                 resp.Type = "Text";
                 if (resp.Type != "Text")
                     throw new Exception("Expected Type='Text', got '" + resp.Type + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: Children collection", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: Children collection", async () =>
             {
                 SemanticCellResponse parent = new SemanticCellResponse();
                 parent.GUID = Guid.NewGuid();
@@ -494,9 +486,9 @@ namespace Test.Automated
                 if (parent.Children[0].ParentGUID != parent.GUID)
                     throw new Exception("Child ParentGUID should match parent GUID");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: GUID preserved through assignment", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: GUID preserved through assignment", async () =>
             {
                 Guid testGuid = Guid.NewGuid();
                 SemanticCellResponse resp = new SemanticCellResponse();
@@ -504,9 +496,9 @@ namespace Test.Automated
                 if (resp.GUID != testGuid)
                     throw new Exception("GUID not preserved: expected " + testGuid + ", got " + resp.GUID);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: ParentGUID preserved through assignment", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: ParentGUID preserved through assignment", async () =>
             {
                 Guid parentGuid = Guid.NewGuid();
                 SemanticCellResponse resp = new SemanticCellResponse();
@@ -516,25 +508,25 @@ namespace Test.Automated
                 if (resp.ParentGUID.Value != parentGuid)
                     throw new Exception("ParentGUID not preserved");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: ParentGUID defaults to null", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: ParentGUID defaults to null", async () =>
             {
                 SemanticCellResponse resp = new SemanticCellResponse();
                 if (resp.ParentGUID != null)
                     throw new Exception("Expected ParentGUID=null by default");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: Text defaults to empty", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: Text defaults to empty", async () =>
             {
                 SemanticCellResponse resp = new SemanticCellResponse();
                 if (resp.Text != string.Empty)
                     throw new Exception("Expected Text='', got '" + resp.Text + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: Chunks defaults to empty list", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: Chunks defaults to empty list", async () =>
             {
                 SemanticCellResponse resp = new SemanticCellResponse();
                 if (resp.Chunks == null)
@@ -542,9 +534,9 @@ namespace Test.Automated
                 if (resp.Chunks.Count != 0)
                     throw new Exception("Chunks should be empty by default, got " + resp.Chunks.Count);
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("SemanticCellResponse: Nested response hierarchy", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("SemanticCellResponse: Nested response hierarchy", async () =>
             {
                 Guid rootGuid = Guid.NewGuid();
                 Guid childGuid = Guid.NewGuid();
@@ -575,7 +567,6 @@ namespace Test.Automated
                     Children = new List<SemanticCellResponse> { childResp }
                 };
 
-                // Verify the hierarchy is correctly wired
                 if (rootResp.Children == null || rootResp.Children.Count != 1)
                     throw new Exception("Root should have 1 child");
                 SemanticCellResponse foundChild = rootResp.Children[0];
@@ -587,39 +578,38 @@ namespace Test.Automated
                 if (foundSummary.Type != "Summary") throw new Exception("Summary type mismatch");
                 if (foundSummary.ParentGUID != childGuid) throw new Exception("Summary ParentGUID should be child");
                 await Task.CompletedTask;
-            });
+            }));
 
             // ===== EmbeddingEndpoint vs CompletionEndpoint Comparison =====
 
-            await runTest("CompletionEndpoint: HealthCheckMethod defaults to GET", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckMethod defaults to GET", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.HealthCheckMethod != "GET")
                     throw new Exception("Expected HealthCheckMethod='GET', got '" + ep.HealthCheckMethod + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: Labels and Tags default to null", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: Labels and Tags default to null", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.Labels != null) throw new Exception("Expected Labels=null by default");
                 if (ep.Tags != null) throw new Exception("Expected Tags=null by default");
                 await Task.CompletedTask;
-            });
+            }));
 
-            await runTest("CompletionEndpoint: HealthCheckUrl defaults to null", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckUrl defaults to null", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
                 if (ep.HealthCheckUrl != null)
                     throw new Exception("Expected HealthCheckUrl=null, got '" + ep.HealthCheckUrl + "'");
                 await Task.CompletedTask;
-            });
+            }));
 
             // ===== Summary Type Round-Trip =====
 
-            await runTest("Summary cell round-trip: request to response types align", async () =>
+            tests.Add(SharedNamedTestCase.CreateAsync("Summary cell round-trip: request to response types align", async () =>
             {
-                // Simulate creating a summary cell request and its corresponding response
                 SemanticCellRequest reqCell = new SemanticCellRequest();
                 reqCell.Type = "Summary";
                 reqCell.Text = "This is a generated summary.";
@@ -627,7 +617,6 @@ namespace Test.Automated
                 Guid parentGuid = Guid.NewGuid();
                 reqCell.ParentGUID = parentGuid;
 
-                // Build a corresponding response
                 SemanticCellResponse respCell = new SemanticCellResponse();
                 respCell.GUID = cellGuid;
                 respCell.ParentGUID = parentGuid;
@@ -639,7 +628,9 @@ namespace Test.Automated
                 if (respCell.Type != reqCell.Type) throw new Exception("Type not preserved");
                 if (respCell.Text != reqCell.Text) throw new Exception("Text not preserved");
                 await Task.CompletedTask;
-            });
+            }));
+
+            return tests;
         }
     }
 }

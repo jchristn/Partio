@@ -1,12 +1,12 @@
 namespace Partio.Core.Serialization
 {
-    using SwiftStack.Serialization;
+    using WatsonWebserver.Core;
 
     /// <summary>
     /// Custom JSON serializer for Partio using SerializationHelper.
     /// PascalCase output, WriteIndented for pretty printing, no JsonPropertyName attributes.
     /// </summary>
-    public class PartioSerializer : ISerializer
+    public class PartioSerializer : ISerializationHelper
     {
         private readonly SerializationHelper.Serializer _Serializer;
 
@@ -27,17 +27,6 @@ namespace Partio.Core.Serialization
         public T DeserializeJson<T>(string json)
         {
             return _Serializer.DeserializeJson<T>(json);
-        }
-
-        /// <summary>
-        /// Deserialize bytes containing JSON to an object instance.
-        /// </summary>
-        /// <typeparam name="T">Target type.</typeparam>
-        /// <param name="bytes">Bytes containing JSON.</param>
-        /// <returns>Deserialized object instance.</returns>
-        public T DeserializeJson<T>(byte[] bytes)
-        {
-            return _Serializer.DeserializeJson<T>(bytes);
         }
 
         /// <summary>

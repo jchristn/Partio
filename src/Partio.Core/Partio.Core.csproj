@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SwiftStack" Version="0.4.7" />
+    <PackageReference Include="Watson" Version="7.0.4" />
     <PackageReference Include="SyslogLogging" Version="*" />
     <PackageReference Include="PrettyId" Version="*" />
     <PackageReference Include="SerializationHelper" Version="*" />
