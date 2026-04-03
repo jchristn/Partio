@@ -91,7 +91,7 @@ namespace Partio.Core.ThirdParty
 
             // Capture request headers
             Dictionary<string, string> reqHeaders = new Dictionary<string, string>();
-            foreach (var header in _HttpClient.DefaultRequestHeaders)
+            foreach (KeyValuePair<string, IEnumerable<string>> header in _HttpClient.DefaultRequestHeaders)
             {
                 reqHeaders[header.Key] = string.Join(", ", header.Value);
             }
@@ -105,37 +105,38 @@ namespace Partio.Core.ThirdParty
 
             try
             {
-                using CancellationTokenSource timeoutCts = new CancellationTokenSource(timeoutMs);
-                using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
-
-                HttpResponseMessage response = await _HttpClient.PostAsync(url, content, linkedCts.Token).ConfigureAwait(false);
-                string responseBody = await response.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
-
-                sw.Stop();
-
-                detail.StatusCode = (int)response.StatusCode;
-                detail.ResponseTimeMs = sw.ElapsedMilliseconds;
-                detail.ResponseBody = responseBody;
-                detail.Success = response.IsSuccessStatusCode;
-
-                // Capture response headers
-                Dictionary<string, string> respHeaders = new Dictionary<string, string>();
-                foreach (var header in response.Headers)
+                using (CancellationTokenSource timeoutCts = new CancellationTokenSource(timeoutMs))
+                using (CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token))
                 {
-                    respHeaders[header.Key] = string.Join(", ", header.Value);
-                }
-                foreach (var header in response.Content.Headers)
-                {
-                    respHeaders[header.Key] = string.Join(", ", header.Value);
-                }
-                detail.ResponseHeaders = respHeaders;
+                    HttpResponseMessage response = await _HttpClient.PostAsync(url, content, linkedCts.Token).ConfigureAwait(false);
+                    string responseBody = await response.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
 
-                CallDetails.Add(detail);
+                    sw.Stop();
 
-                CompletionHttpResult result = new CompletionHttpResult();
-                result.Response = response;
-                result.ResponseBody = responseBody;
-                return result;
+                    detail.StatusCode = (int)response.StatusCode;
+                    detail.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    detail.ResponseBody = responseBody;
+                    detail.Success = response.IsSuccessStatusCode;
+
+                    // Capture response headers
+                    Dictionary<string, string> respHeaders = new Dictionary<string, string>();
+                    foreach (KeyValuePair<string, IEnumerable<string>> header in response.Headers)
+                    {
+                        respHeaders[header.Key] = string.Join(", ", header.Value);
+                    }
+                    foreach (KeyValuePair<string, IEnumerable<string>> header in response.Content.Headers)
+                    {
+                        respHeaders[header.Key] = string.Join(", ", header.Value);
+                    }
+                    detail.ResponseHeaders = respHeaders;
+
+                    CallDetails.Add(detail);
+
+                    CompletionHttpResult result = new CompletionHttpResult();
+                    result.Response = response;
+                    result.ResponseBody = responseBody;
+                    return result;
+                }
             }
             catch (Exception ex)
             {

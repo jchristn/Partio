@@ -20,7 +20,7 @@ namespace Partio.Server.Services
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _CancellationTokens = new ConcurrentDictionary<string, CancellationTokenSource>();
         private readonly ConcurrentDictionary<string, Task> _RunningTasks = new ConcurrentDictionary<string, Task>();
         private readonly HttpClient _HttpClient = new HttpClient();
-        private static readonly TimeSpan HistoryRetention = TimeSpan.FromHours(24);
+        private static readonly TimeSpan _HistoryRetention = TimeSpan.FromHours(24);
 
         /// <summary>
         /// Initialize a new EmbeddingHealthCheckService.
@@ -293,16 +293,18 @@ namespace Partio.Server.Services
                     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
             }
 
-            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            timeoutCts.CancelAfter(endpoint.HealthCheckTimeoutMs);
+            using (CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token))
+            {
+                timeoutCts.CancelAfter(endpoint.HealthCheckTimeoutMs);
 
-            HttpResponseMessage response = await _HttpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
-            int statusCode = (int)response.StatusCode;
-            bool success = statusCode == endpoint.HealthCheckExpectedStatusCode;
+                HttpResponseMessage response = await _HttpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
+                int statusCode = (int)response.StatusCode;
+                bool success = statusCode == endpoint.HealthCheckExpectedStatusCode;
 
-            _Logging.Debug(_Header + "received " + statusCode + " from " + url + " for endpoint " + endpoint.Id + " (" + endpoint.Model + "), success: " + success);
+                _Logging.Debug(_Header + "received " + statusCode + " from " + url + " for endpoint " + endpoint.Id + " (" + endpoint.Model + "), success: " + success);
 
-            return success;
+                return success;
+            }
         }
 
         private void UpdateState(EndpointHealthState state, bool success, string? errorMessage, EmbeddingEndpoint endpoint)
@@ -319,7 +321,7 @@ namespace Partio.Server.Services
                 state.CheckHistory.Add(record);
 
                 // Prune records older than 24 hours
-                DateTime cutoff = now - HistoryRetention;
+                DateTime cutoff = now - _HistoryRetention;
                 state.CheckHistory.RemoveAll(r => r.TimestampUtc < cutoff);
             }
 

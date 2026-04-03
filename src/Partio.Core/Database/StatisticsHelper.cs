@@ -107,13 +107,13 @@ namespace Partio.Core.Database
             TimeSpan step = GetBucketStep(timeframe);
 
             // Pre-generate all expected bucket keys with zero counts
-            Dictionary<string, (long success, long failure)> bucketMap = new Dictionary<string, (long, long)>();
+            Dictionary<string, BucketCounts> bucketMap = new Dictionary<string, BucketCounts>();
             DateTime cursor = TruncateToBucket(cutoff, timeframe);
             DateTime end = TruncateToBucket(now, timeframe);
 
             while (cursor <= end)
             {
-                bucketMap[FormatBucketKey(cursor)] = (0, 0);
+                bucketMap[FormatBucketKey(cursor)] = new BucketCounts();
                 cursor = cursor.Add(step);
             }
 
@@ -131,29 +131,29 @@ namespace Partio.Core.Database
 
                 bool isSuccess = row["http_status"] != DBNull.Value && Convert.ToInt32(row["http_status"]) < 400;
 
-                if (bucketMap.TryGetValue(key, out var counts))
+                if (bucketMap.TryGetValue(key, out BucketCounts? counts) && counts != null)
                 {
                     if (isSuccess)
-                        bucketMap[key] = (counts.success + 1, counts.failure);
+                        counts.Success++;
                     else
-                        bucketMap[key] = (counts.success, counts.failure + 1);
+                        counts.Failure++;
                 }
             }
 
             // Build response
             RequestStatisticsResponse response = new RequestStatisticsResponse();
 
-            foreach (var kvp in bucketMap.OrderBy(k => k.Key))
+            foreach (KeyValuePair<string, BucketCounts> kvp in bucketMap.OrderBy(k => k.Key))
             {
                 response.Buckets.Add(new RequestStatisticsBucket
                 {
                     TimeBucket = kvp.Key,
-                    SuccessCount = kvp.Value.success,
-                    FailureCount = kvp.Value.failure
+                    SuccessCount = kvp.Value.Success,
+                    FailureCount = kvp.Value.Failure
                 });
 
-                response.TotalSuccess += kvp.Value.success;
-                response.TotalFailure += kvp.Value.failure;
+                response.TotalSuccess += kvp.Value.Success;
+                response.TotalFailure += kvp.Value.Failure;
             }
 
             return response;

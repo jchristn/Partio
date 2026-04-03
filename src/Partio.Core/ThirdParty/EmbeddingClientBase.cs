@@ -129,7 +129,7 @@ namespace Partio.Core.ThirdParty
 
             // Capture request headers
             Dictionary<string, string> reqHeaders = new Dictionary<string, string>();
-            foreach (var header in _HttpClient.DefaultRequestHeaders)
+            foreach (KeyValuePair<string, IEnumerable<string>> header in _HttpClient.DefaultRequestHeaders)
             {
                 reqHeaders[header.Key] = string.Join(", ", header.Value);
             }
@@ -155,11 +155,11 @@ namespace Partio.Core.ThirdParty
 
                 // Capture response headers
                 Dictionary<string, string> respHeaders = new Dictionary<string, string>();
-                foreach (var header in response.Headers)
+                foreach (KeyValuePair<string, IEnumerable<string>> header in response.Headers)
                 {
                     respHeaders[header.Key] = string.Join(", ", header.Value);
                 }
-                foreach (var header in response.Content.Headers)
+                foreach (KeyValuePair<string, IEnumerable<string>> header in response.Content.Headers)
                 {
                     respHeaders[header.Key] = string.Join(", ", header.Value);
                 }

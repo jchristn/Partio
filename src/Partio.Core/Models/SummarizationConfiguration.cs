@@ -19,10 +19,6 @@ namespace Partio.Core.Models
         private int _TimeoutMs = 30000;
 
         /// <summary>
-        /// Default summarization prompt template.
-        /// Supports {tokens}, {content}, and {context} placeholders.
-        /// </summary>
-        /// <summary>
         /// System prompt sent as a separate system message to the completion API.
         /// This is more effective than embedding instructions in the user prompt for small models.
         /// </summary>
@@ -33,6 +29,10 @@ namespace Partio.Core.Models
             "Start directly with the first substantive word. " +
             "If the content cannot be summarized, output exactly: None";
 
+        /// <summary>
+        /// Default summarization prompt template.
+        /// Supports {tokens}, {content}, and {context} placeholders.
+        /// </summary>
         public static readonly string DefaultPrompt =
             "Summarize the following content in at most {tokens} tokens.\n\n" +
             "Content:\n{content}\n\n" +

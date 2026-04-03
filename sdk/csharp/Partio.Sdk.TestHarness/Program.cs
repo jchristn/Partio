@@ -50,7 +50,7 @@ namespace Partio.Sdk.TestHarness
                 {
                     TenantMetadata? tenant = await admin.CreateTenantAsync(new TenantMetadata { Name = "Test Tenant", Labels = new List<string> { "test" } });
                     if (tenant == null) throw new Exception("No response");
-                    testTenantId = tenant.Id;
+                    testTenantId = tenant.Id ?? string.Empty;
                 });
 
                 await RunTest("Read Tenant", async () =>
@@ -83,7 +83,7 @@ namespace Partio.Sdk.TestHarness
                 {
                     UserMaster? userResult = await admin.CreateUserAsync(new UserMaster { TenantId = testTenantId, Email = "test@test.com", Password = "testpass", IsAdmin = false });
                     if (userResult == null) throw new Exception("No response");
-                    testUserId = userResult.Id;
+                    testUserId = userResult.Id ?? string.Empty;
                 });
 
                 await RunTest("Read User", async () =>
@@ -116,7 +116,7 @@ namespace Partio.Sdk.TestHarness
                 {
                     Credential? cred = await admin.CreateCredentialAsync(new Credential { TenantId = testTenantId, UserId = testUserId, Name = "Test Key" });
                     if (cred == null) throw new Exception("No response");
-                    testCredId = cred.Id;
+                    testCredId = cred.Id ?? string.Empty;
                 });
 
                 await RunTest("Read Credential", async () =>
@@ -145,7 +145,7 @@ namespace Partio.Sdk.TestHarness
                 {
                     EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Test Embedding", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
                     if (ep == null) throw new Exception("No response");
-                    testEpId = ep.Id;
+                    testEpId = ep.Id ?? string.Empty;
                 });
 
                 await RunTest("Read Endpoint", async () =>
@@ -201,7 +201,7 @@ namespace Partio.Sdk.TestHarness
                 {
                     CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
                     if (cep == null) throw new Exception("No response");
-                    testCepId = cep.Id;
+                    testCepId = cep.Id ?? string.Empty;
                 });
 
                 await RunTest("Read Completion Endpoint", async () =>
@@ -286,9 +286,9 @@ namespace Partio.Sdk.TestHarness
                     if (result == null) throw new Exception("No response");
                     if (string.IsNullOrEmpty(result.Text)) throw new Exception("Missing Text");
                     if (result.Chunks == null || result.Chunks.Count == 0) throw new Exception("No chunks");
-                    if (result.Chunks[0].Embeddings == null || result.Chunks[0].Embeddings.Count == 0) throw new Exception("No embeddings");
-                    if (result.Chunks[0].Labels == null || result.Chunks[0].Labels.Count == 0) throw new Exception("No labels on chunk");
-                    if (result.Chunks[0].Tags == null || result.Chunks[0].Tags.Count == 0) throw new Exception("No tags on chunk");
+                    if (result.Chunks[0].Embeddings == null || result.Chunks[0].Embeddings!.Count == 0) throw new Exception("No embeddings");
+                    if (result.Chunks[0].Labels == null || result.Chunks[0].Labels!.Count == 0) throw new Exception("No labels on chunk");
+                    if (result.Chunks[0].Tags == null || result.Chunks[0].Tags!.Count == 0) throw new Exception("No tags on chunk");
                 });
 
                 // Process Table strategies

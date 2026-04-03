@@ -1126,7 +1126,7 @@ namespace Partio.Server
         /// cl100k_base (100k vocab BPE) is more efficient than most embedding model tokenizers,
         /// so N model tokens ≈ N * 0.75 cl100k_base tokens.
         /// </summary>
-        private const double TokenScalingFactor = 0.75;
+        private const double _TokenScalingFactor = 0.75;
 
         private static void ValidateStrategyForAtomType(SemanticCellRequest request)
         {
@@ -1202,7 +1202,7 @@ namespace Partio.Server
                 int maxCl100kTokens = int.MaxValue;
                 if (modelContextLength.HasValue)
                 {
-                    maxCl100kTokens = (int)(modelContextLength.Value * TokenScalingFactor);
+                    maxCl100kTokens = (int)(modelContextLength.Value * _TokenScalingFactor);
                     if (maxCl100kTokens < 1) maxCl100kTokens = 1;
                 }
 
