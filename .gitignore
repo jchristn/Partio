@@ -12,7 +12,7 @@ obj/
 ## Logs and data
 logs/
 request-history/
-partio.json
+**/bin/**/partio.json
 
 ## Node
 node_modules/
@@ -38,4 +38,3 @@ desktop.ini
 
 # Docker directory exceptions
 !docker/**/*.db
-!docker/**/partio.json

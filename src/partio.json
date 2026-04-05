@@ -1,0 +1,66 @@
+{
+  "Rest": {
+    "Hostname": "localhost",
+    "Port": 8400,
+    "Ssl": false
+  },
+  "Database": {
+    "Type": "Sqlite",
+    "Filename": "./partio.db",
+    "Port": 0,
+    "RequireEncryption": false,
+    "LogQueries": false
+  },
+  "Logging": {
+    "SyslogServers": [],
+    "ConsoleLogging": true,
+    "EnableColors": false,
+    "LogDirectory": "./logs/",
+    "LogFilename": "partio.log",
+    "FileLogging": true,
+    "IncludeDateInFilename": true,
+    "MinimumSeverity": 0
+  },
+  "Debug": {
+    "Authentication": false,
+    "Exceptions": true,
+    "Requests": false,
+    "DatabaseQueries": false
+  },
+  "Cors": {
+    "Enabled": true,
+    "AllowedOrigins": "*",
+    "AllowedMethods": "GET, POST, PUT, DELETE, HEAD, OPTIONS",
+    "AllowedHeaders": "Content-Type, Authorization, X-Requested-With",
+    "ExposedHeaders": "",
+    "MaxAgeSeconds": 86400,
+    "AllowCredentials": false
+  },
+  "RequestHistory": {
+    "Enabled": true,
+    "Directory": "./request-history/",
+    "RetentionDays": 7,
+    "CleanupIntervalMinutes": 60,
+    "MaxRequestBodyBytes": 65536,
+    "MaxResponseBodyBytes": 65536
+  },
+  "AdminApiKeys": [
+    "partioadmin"
+  ],
+  "DefaultEmbeddingEndpoints": [
+    {
+      "Name": "nomic-embed-text",
+      "Model": "nomic-embed-text",
+      "Endpoint": "http://localhost:11434",
+      "ApiFormat": "Ollama"
+    }
+  ],
+  "DefaultInferenceEndpoints": [
+    {
+      "Name": "gemma3:4b",
+      "Model": "gemma3:4b",
+      "Endpoint": "http://localhost:11434",
+      "ApiFormat": "Ollama"
+    }
+  ]
+}
