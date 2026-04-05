@@ -153,9 +153,35 @@ namespace Partio.Server
                     : AuthorizationResultEnum.DeniedImplicit;
                 return result;
             };
+            if (_Settings.Cors.Enabled)
+            {
+                server.Routes.Preflight = async (HttpContextBase ctx) =>
+                {
+                    ctx.Response.StatusCode = 204;
+                    ctx.Response.Headers.Add("Access-Control-Allow-Origin", _Settings.Cors.AllowedOrigins);
+                    ctx.Response.Headers.Add("Access-Control-Allow-Methods", _Settings.Cors.AllowedMethods);
+                    ctx.Response.Headers.Add("Access-Control-Allow-Headers", _Settings.Cors.AllowedHeaders);
+                    ctx.Response.Headers.Add("Access-Control-Max-Age", _Settings.Cors.MaxAgeSeconds.ToString());
+                    if (!string.IsNullOrEmpty(_Settings.Cors.ExposedHeaders))
+                        ctx.Response.Headers.Add("Access-Control-Expose-Headers", _Settings.Cors.ExposedHeaders);
+                    if (_Settings.Cors.AllowCredentials)
+                        ctx.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
+                    await ctx.Response.Send().ConfigureAwait(false);
+                };
+            }
+
             server.Routes.PreRouting = async (HttpContextBase ctx) =>
             {
                 ctx.Response.ContentType = Constants.JsonContentType;
+
+                if (_Settings.Cors.Enabled)
+                {
+                    ctx.Response.Headers.Add("Access-Control-Allow-Origin", _Settings.Cors.AllowedOrigins);
+                    if (!string.IsNullOrEmpty(_Settings.Cors.ExposedHeaders))
+                        ctx.Response.Headers.Add("Access-Control-Expose-Headers", _Settings.Cors.ExposedHeaders);
+                    if (_Settings.Cors.AllowCredentials)
+                        ctx.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
+                }
             };
             server.Routes.PostRouting = async (HttpContextBase ctx) =>
             {

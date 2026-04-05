@@ -33,6 +33,15 @@
         "Requests": false,
         "DatabaseQueries": false
     },
+    "Cors": {
+        "Enabled": true,
+        "AllowedOrigins": "*",
+        "AllowedMethods": "GET, POST, PUT, DELETE, HEAD, OPTIONS",
+        "AllowedHeaders": "Content-Type, Authorization, X-Requested-With",
+        "ExposedHeaders": "",
+        "MaxAgeSeconds": 86400,
+        "AllowCredentials": false
+    },
     "RequestHistory": {
         "Enabled": true,
         "Directory": "/app/request-history/",

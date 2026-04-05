@@ -9,6 +9,7 @@ namespace Partio.Core.Settings
         private DatabaseSettings _Database = new DatabaseSettings();
         private LoggingSettings _Logging = new LoggingSettings();
         private DebugSettings _Debug = new DebugSettings();
+        private CorsSettings _Cors = new CorsSettings();
         private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
         private List<string> _AdminApiKeys = new List<string> { "partioadmin" };
         private List<DefaultEmbeddingEndpoint> _DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>();
@@ -48,6 +49,15 @@ namespace Partio.Core.Settings
         {
             get => _Debug;
             set => _Debug = value ?? throw new ArgumentNullException(nameof(Debug));
+        }
+
+        /// <summary>
+        /// CORS settings.
+        /// </summary>
+        public CorsSettings Cors
+        {
+            get => _Cors;
+            set => _Cors = value ?? new CorsSettings();
         }
 
         /// <summary>
