@@ -4,9 +4,11 @@ import { PartioApi } from '../utils/api';
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  const [serverUrl, setServerUrl] = useState(localStorage.getItem('partio_serverUrl') || '');
-  const [bearerToken, setBearerToken] = useState(localStorage.getItem('partio_bearerToken') || '');
-  const [isConnected, setIsConnected] = useState(false);
+  const savedUrl = localStorage.getItem('partio_serverUrl') || '';
+  const savedToken = localStorage.getItem('partio_bearerToken') || '';
+  const [serverUrl, setServerUrl] = useState(savedUrl);
+  const [bearerToken, setBearerToken] = useState(savedToken);
+  const [isConnected, setIsConnected] = useState(!!(savedUrl && savedToken));
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState(localStorage.getItem('partio_theme') || 'light');
   const [userRole, setUserRole] = useState(null);
@@ -16,6 +18,29 @@ export function AppProvider({ children }) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('partio_theme', theme);
   }, [theme]);
+
+  // Verify saved credentials on page load; log out if the server is unreachable
+  useEffect(() => {
+    if (savedUrl && savedToken) {
+      fetch(`${savedUrl}/v1.0/health`, {
+        headers: { 'Authorization': `Bearer ${savedToken}` }
+      }).then(res => {
+        if (!res.ok) {
+          setIsConnected(false);
+        } else {
+          const api = new PartioApi(savedUrl, savedToken);
+          api.whoami().then(identity => {
+            if (identity) {
+              setUserRole(identity.Role);
+              setTenantName(identity.TenantName);
+            }
+          }).catch(() => {});
+        }
+      }).catch(() => {
+        setIsConnected(false);
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleTheme = useCallback(() => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');

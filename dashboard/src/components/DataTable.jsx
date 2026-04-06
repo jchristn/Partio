@@ -131,6 +131,61 @@ export default function DataTable({
 
   return (
     <div className="data-table-container">
+      {!hidePagination && (
+        <div className="pagination">
+          <div className="pagination-info">
+            Showing {filteredAndSortedData.length === 0 ? 0 : startIndex + 1} to{' '}
+            {endIndex} of {filteredAndSortedData.length} entries
+          </div>
+
+          <div className="pagination-controls">
+            <Tooltip content="Choose how many rows to show per page: 10, 25, 50, or 100." block>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(0);
+                  setPageInput('1');
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </Tooltip>
+
+            <button onClick={() => goToPage(0)} disabled={currentPage === 0}>
+              First
+            </button>
+            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
+              Prev
+            </button>
+
+            <span className="page-input-container">
+              <span>Page</span>
+              <Tooltip content="Jump to a specific page number, then press Enter. Valid range is 1 through the last page." >
+                <input
+                  type="text"
+                  value={pageInput}
+                  onChange={handlePageInputChange}
+                  onKeyDown={handlePageInputSubmit}
+                  className="page-input"
+                />
+              </Tooltip>
+              <span>of {totalPages}</span>
+            </span>
+
+            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
+              Next
+            </button>
+            <button onClick={() => goToPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
+              Last
+            </button>
+          </div>
+        </div>
+      )}
+
       <table className="data-table">
         <thead>
           <tr>
@@ -200,61 +255,6 @@ export default function DataTable({
           )}
         </tbody>
       </table>
-
-      {!hidePagination && (
-        <div className="pagination">
-          <div className="pagination-info">
-            Showing {filteredAndSortedData.length === 0 ? 0 : startIndex + 1} to{' '}
-            {endIndex} of {filteredAndSortedData.length} entries
-          </div>
-
-          <div className="pagination-controls">
-            <Tooltip content="Choose how many rows to show per page: 10, 25, 50, or 100." block>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(0);
-                  setPageInput('1');
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </Tooltip>
-
-            <button onClick={() => goToPage(0)} disabled={currentPage === 0}>
-              First
-            </button>
-            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
-              Prev
-            </button>
-
-            <span className="page-input-container">
-              Page{' '}
-              <Tooltip content="Jump to a specific page number, then press Enter. Valid range is 1 through the last page." >
-                <input
-                  type="text"
-                  value={pageInput}
-                  onChange={handlePageInputChange}
-                  onKeyDown={handlePageInputSubmit}
-                  className="page-input"
-                />
-              </Tooltip>{' '}
-              of {totalPages}
-            </span>
-
-            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
-              Next
-            </button>
-            <button onClick={() => goToPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
-              Last
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -439,7 +439,7 @@ input:focus, select:focus, textarea:focus {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   background: var(--card-bg);
 }
 
@@ -484,8 +484,17 @@ input:focus, select:focus, textarea:focus {
 }
 
 .page-input-container {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 4px;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.page-input-container .tooltip-anchor {
+  display: inline-flex;
+  align-items: center;
 }
 
 .page-input {

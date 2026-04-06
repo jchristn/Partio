@@ -117,6 +117,7 @@ namespace Partio.Core.Database.Postgresql.Implementations
 
             List<string> conditions = new List<string>();
             conditions.Add("tenant_id = '" + _Driver.Sanitize(tenantId) + "'");
+            conditions.Add("completed_utc IS NOT NULL");
 
             if (!string.IsNullOrEmpty(request.ContinuationToken))
                 conditions.Add("id > '" + _Driver.Sanitize(request.ContinuationToken) + "'");
@@ -175,11 +176,12 @@ namespace Partio.Core.Database.Postgresql.Implementations
             if (request == null) throw new ArgumentNullException(nameof(request));
 
             List<string> conditions = new List<string>();
+            conditions.Add("completed_utc IS NOT NULL");
 
             if (!string.IsNullOrEmpty(request.ContinuationToken))
                 conditions.Add("id > '" + _Driver.Sanitize(request.ContinuationToken) + "'");
 
-            string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+            string whereClause = "WHERE " + string.Join(" AND ", conditions);
 
             string orderByClause;
             switch (request.Order)
@@ -309,6 +311,7 @@ namespace Partio.Core.Database.Postgresql.Implementations
         {
             DateTime cutoff = StatisticsHelper.GetCutoff(request.Timeframe);
 
+            conditions.Add("completed_utc IS NOT NULL");
             conditions.Add("created_utc >= '" + _Driver.FormatDateTime(cutoff) + "'");
             StatisticsHelper.AddTypeConditions(conditions, request.RequestType);
             StatisticsHelper.AddEndpointCondition(conditions, request.EndpointFilter, _Driver.Sanitize);
