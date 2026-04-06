@@ -183,74 +183,107 @@ namespace Partio.Server
                     if (_Settings.Cors.AllowCredentials)
                         ctx.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
                 }
-
-                if (_Settings.RequestHistory.Enabled && _RequestHistoryService != null)
-                {
-                    AuthContext? auth = ctx.Metadata as AuthContext;
-                    RequestHistoryEntry entry = await _RequestHistoryService.CreateEntryAsync(
-                        ctx.Request.Method.ToString(),
-                        ctx.Request.Url.RawWithQuery,
-                        ctx.Request.Source.IpAddress,
-                        auth).ConfigureAwait(false);
-                    Stopwatch sw = Stopwatch.StartNew();
-                    _InFlightRequests[ctx.Guid.ToString()] = new InFlightRequest { Entry = entry, Stopwatch = sw };
-                }
             };
             server.Routes.PostRouting = async (HttpContextBase ctx) =>
             {
                 if (_Settings.Debug.Requests)
                     _Logging.Info(_Header + ctx.Request.Method.ToString() + " " + ctx.Request.Url.RawWithQuery + " " + ctx.Response.StatusCode);
-
-                if (_InFlightRequests.TryRemove(ctx.Guid.ToString(), out InFlightRequest? inflight) && !inflight.DetailRecorded)
-                {
-                    inflight.Stopwatch.Stop();
-                    string? requestBody = ctx.Request.ContentLength > 0 ? ctx.Request.DataAsString : null;
-                    string? responseBody = ctx.Response.DataAsString;
-                    Dictionary<string, string> reqHeaders = ExtractHeaders(ctx.Request.Headers);
-                    Dictionary<string, string> respHeaders = ExtractHeaders(ctx.Response.Headers);
-                    await _RequestHistoryService!.UpdateWithResponseAsync(
-                        inflight.Entry,
-                        ctx.Response.StatusCode,
-                        inflight.Stopwatch.Elapsed.TotalMilliseconds,
-                        requestBody, responseBody, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
-                }
             };
-            // Middleware to map domain exceptions to WebserverException
-            // so Watson 7's ApiRouteHandler returns the correct HTTP status codes.
+            // Middleware: request history tracking + exception mapping.
+            // Request history is tracked here (not in PreRouting/PostRouting) because
+            // the middleware pipeline is guaranteed to execute for all HTTP methods.
             server.Middleware.Add(async (HttpContextBase ctx, Func<Task> next, CancellationToken token) =>
             {
+                string connId = ctx.Guid.ToString();
+                int statusCode = 500;
+
+                // Create request history entry before the route handler runs
+                if (_Settings.RequestHistory.Enabled && _RequestHistoryService != null)
+                {
+                    try
+                    {
+                        AuthContext? auth = ctx.Metadata as AuthContext;
+                        RequestHistoryEntry entry = await _RequestHistoryService.CreateEntryAsync(
+                            ctx.Request.Method.ToString(),
+                            ctx.Request.Url.RawWithQuery,
+                            ctx.Request.Source.IpAddress,
+                            auth).ConfigureAwait(false);
+                        Stopwatch sw = Stopwatch.StartNew();
+                        _InFlightRequests[connId] = new InFlightRequest { Entry = entry, Stopwatch = sw };
+                    }
+                    catch (Exception ex)
+                    {
+                        _Logging.Warn(_Header + "failed to create request history entry: " + ex.Message);
+                    }
+                }
+
                 try
                 {
-                    await next().ConfigureAwait(false);
+                    try
+                    {
+                        await next().ConfigureAwait(false);
+                        statusCode = ctx.Response.StatusCode;
+                    }
+                    catch (WebserverException wex)
+                    {
+                        statusCode = wex.StatusCode;
+                        throw; // already mapped
+                    }
+                    catch (KeyNotFoundException ex)
+                    {
+                        statusCode = 404;
+                        if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                        throw new WebserverException(ApiResultEnum.NotFound, ex.Message);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        statusCode = 400;
+                        if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                        throw new WebserverException(ApiResultEnum.BadRequest, ex.Message);
+                    }
+                    catch (UnauthorizedAccessException ex)
+                    {
+                        statusCode = 401;
+                        if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                        throw new WebserverException(ApiResultEnum.NotAuthorized, ex.Message);
+                    }
+                    catch (EndpointUnhealthyException ex)
+                    {
+                        statusCode = 500;
+                        if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                        throw new WebserverException(ApiResultEnum.InternalError, ex.Message);
+                    }
+                    catch (Exception ex)
+                    {
+                        statusCode = 500;
+                        if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                        throw;
+                    }
                 }
-                catch (WebserverException)
+                finally
                 {
-                    throw; // already mapped
-                }
-                catch (KeyNotFoundException ex)
-                {
-                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
-                    throw new WebserverException(ApiResultEnum.NotFound, ex.Message);
-                }
-                catch (ArgumentException ex)
-                {
-                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
-                    throw new WebserverException(ApiResultEnum.BadRequest, ex.Message);
-                }
-                catch (UnauthorizedAccessException ex)
-                {
-                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
-                    throw new WebserverException(ApiResultEnum.NotAuthorized, ex.Message);
-                }
-                catch (EndpointUnhealthyException ex)
-                {
-                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
-                    throw new WebserverException(ApiResultEnum.InternalError, ex.Message);
-                }
-                catch (Exception ex)
-                {
-                    if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
-                    throw;
+                    // Update request history entry after the route handler completes
+                    if (_InFlightRequests.TryRemove(connId, out InFlightRequest? inflight) && !inflight.DetailRecorded)
+                    {
+                        try
+                        {
+                            inflight.Stopwatch.Stop();
+                            string? requestBody = ctx.Request.ContentLength > 0 ? ctx.Request.DataAsString : null;
+                            string? responseBody = null;
+                            try { responseBody = ctx.Response.DataAsString; } catch { }
+                            Dictionary<string, string> reqHeaders = ExtractHeaders(ctx.Request.Headers);
+                            Dictionary<string, string> respHeaders = ExtractHeaders(ctx.Response.Headers);
+                            await _RequestHistoryService!.UpdateWithResponseAsync(
+                                inflight.Entry,
+                                statusCode,
+                                inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                                requestBody, responseBody, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            _Logging.Warn(_Header + "failed to update request history entry: " + ex.Message);
+                        }
+                    }
                 }
             });
 
