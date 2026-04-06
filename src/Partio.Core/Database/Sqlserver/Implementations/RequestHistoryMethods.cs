@@ -46,7 +46,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
                 (entry.RequestBodyLength.HasValue ? entry.RequestBodyLength.Value.ToString() : "NULL") + ", " +
                 (entry.ResponseBodyLength.HasValue ? entry.ResponseBodyLength.Value.ToString() : "NULL") + ", " +
                 (entry.HttpStatus.HasValue ? entry.HttpStatus.Value.ToString() : "NULL") + ", " +
-                (entry.ResponseTimeMs.HasValue ? entry.ResponseTimeMs.Value.ToString() : "NULL") + ", " +
+                (entry.ResponseTimeMs.HasValue ? entry.ResponseTimeMs.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "NULL") + ", " +
                 _Driver.FormatNullableString(entry.ObjectKey) + ", " +
                 "'" + _Driver.FormatDateTime(entry.CreatedUtc) + "', " +
                 (entry.CompletedUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.CompletedUtc.Value) + "'" : "NULL") +
@@ -77,7 +77,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
                 "request_body_length = " + (entry.RequestBodyLength.HasValue ? entry.RequestBodyLength.Value.ToString() : "NULL") + ", " +
                 "response_body_length = " + (entry.ResponseBodyLength.HasValue ? entry.ResponseBodyLength.Value.ToString() : "NULL") + ", " +
                 "http_status = " + (entry.HttpStatus.HasValue ? entry.HttpStatus.Value.ToString() : "NULL") + ", " +
-                "response_time_ms = " + (entry.ResponseTimeMs.HasValue ? entry.ResponseTimeMs.Value.ToString() : "NULL") + ", " +
+                "response_time_ms = " + (entry.ResponseTimeMs.HasValue ? entry.ResponseTimeMs.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "NULL") + ", " +
                 "object_key = " + _Driver.FormatNullableString(entry.ObjectKey) + ", " +
                 "completed_utc = " + (entry.CompletedUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.CompletedUtc.Value) + "'" : "NULL") + " " +
                 "WHERE id = '" + _Driver.Sanitize(entry.Id) + "';";
