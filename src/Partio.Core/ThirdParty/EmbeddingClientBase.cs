@@ -149,7 +149,7 @@ namespace Partio.Core.ThirdParty
                 sw.Stop();
 
                 detail.StatusCode = (int)response.StatusCode;
-                detail.ResponseTimeMs = sw.ElapsedMilliseconds;
+                detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 detail.ResponseBody = responseBody;
                 detail.Success = response.IsSuccessStatusCode;
 
@@ -175,7 +175,7 @@ namespace Partio.Core.ThirdParty
             catch (Exception ex)
             {
                 sw.Stop();
-                detail.ResponseTimeMs = sw.ElapsedMilliseconds;
+                detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 detail.Success = false;
                 detail.Error = ex.Message;
                 CallDetails.Add(detail);

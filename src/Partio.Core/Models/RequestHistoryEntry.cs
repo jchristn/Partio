@@ -17,7 +17,7 @@ namespace Partio.Core.Models
         private long? _RequestBodyLength = null;
         private long? _ResponseBodyLength = null;
         private int? _HttpStatus = null;
-        private long? _ResponseTimeMs = null;
+        private double? _ResponseTimeMs = null;
         private string? _ObjectKey = null;
         private DateTime _CreatedUtc = DateTime.UtcNow;
         private DateTime? _CompletedUtc = null;
@@ -116,10 +116,10 @@ namespace Partio.Core.Models
         /// <summary>
         /// Response time in milliseconds.
         /// </summary>
-        public long? ResponseTimeMs
+        public double? ResponseTimeMs
         {
             get => _ResponseTimeMs;
-            set => _ResponseTimeMs = value;
+            set => _ResponseTimeMs = value.HasValue ? Math.Round(value.Value, 2) : null;
         }
 
         /// <summary>
@@ -169,7 +169,7 @@ namespace Partio.Core.Models
             entry.RequestBodyLength = row["request_body_length"] == DBNull.Value ? null : Convert.ToInt64(row["request_body_length"]);
             entry.ResponseBodyLength = row["response_body_length"] == DBNull.Value ? null : Convert.ToInt64(row["response_body_length"]);
             entry.HttpStatus = row["http_status"] == DBNull.Value ? null : Convert.ToInt32(row["http_status"]);
-            entry.ResponseTimeMs = row["response_time_ms"] == DBNull.Value ? null : Convert.ToInt64(row["response_time_ms"]);
+            entry.ResponseTimeMs = row["response_time_ms"] == DBNull.Value ? null : Convert.ToDouble(row["response_time_ms"]);
             entry.ObjectKey = row["object_key"] == DBNull.Value ? null : row["object_key"].ToString();
             entry.CreatedUtc = DateTime.Parse(row["created_utc"].ToString() ?? DateTime.UtcNow.ToString("o")).ToUniversalTime();
             entry.CompletedUtc = row["completed_utc"] == DBNull.Value ? null : DateTime.Parse(row["completed_utc"].ToString()!).ToUniversalTime();

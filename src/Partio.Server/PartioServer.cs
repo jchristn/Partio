@@ -45,6 +45,7 @@ namespace Partio.Server
         private static DateTime _StartTimeUtc = DateTime.UtcNow;
         private static string _Header = "[PartioServer] ";
         private static ConcurrentDictionary<string, AuthContext> _AuthContexts = new ConcurrentDictionary<string, AuthContext>();
+        private static ConcurrentDictionary<string, InFlightRequest> _InFlightRequests = new ConcurrentDictionary<string, InFlightRequest>();
         private static bool _ShuttingDown = false;
 
         /// <summary>
@@ -182,11 +183,37 @@ namespace Partio.Server
                     if (_Settings.Cors.AllowCredentials)
                         ctx.Response.Headers.Add("Access-Control-Allow-Credentials", "true");
                 }
+
+                if (_Settings.RequestHistory.Enabled && _RequestHistoryService != null)
+                {
+                    AuthContext? auth = ctx.Metadata as AuthContext;
+                    RequestHistoryEntry entry = await _RequestHistoryService.CreateEntryAsync(
+                        ctx.Request.Method.ToString(),
+                        ctx.Request.Url.RawWithQuery,
+                        ctx.Request.Source.IpAddress,
+                        auth).ConfigureAwait(false);
+                    Stopwatch sw = Stopwatch.StartNew();
+                    _InFlightRequests[ctx.Guid.ToString()] = new InFlightRequest { Entry = entry, Stopwatch = sw };
+                }
             };
             server.Routes.PostRouting = async (HttpContextBase ctx) =>
             {
                 if (_Settings.Debug.Requests)
                     _Logging.Info(_Header + ctx.Request.Method.ToString() + " " + ctx.Request.Url.RawWithQuery + " " + ctx.Response.StatusCode);
+
+                if (_InFlightRequests.TryRemove(ctx.Guid.ToString(), out InFlightRequest? inflight) && !inflight.DetailRecorded)
+                {
+                    inflight.Stopwatch.Stop();
+                    string? requestBody = ctx.Request.ContentLength > 0 ? ctx.Request.DataAsString : null;
+                    string? responseBody = ctx.Response.DataAsString;
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(ctx.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(ctx.Response.Headers);
+                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                        inflight.Entry,
+                        ctx.Response.StatusCode,
+                        inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestBody, responseBody, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
+                }
             };
             // Middleware to map domain exceptions to WebserverException
             // so Watson 7's ApiRouteHandler returns the correct HTTP status codes.
@@ -758,20 +785,8 @@ namespace Partio.Server
 
         private static async Task<object> ProcessSingle(ApiRequest req)
         {
-            bool recordHistory = _Settings.RequestHistory.Enabled && _RequestHistoryService != null;
-            RequestHistoryEntry? historyEntry = null;
-            Stopwatch? sw = null;
-
-            if (recordHistory)
-            {
-                AuthContext auth = (AuthContext)req.Metadata;
-                historyEntry = await _RequestHistoryService!.CreateEntryAsync(
-                    req.Http.Request.Method.ToString(),
-                    req.Http.Request.Url.RawWithQuery,
-                    req.Http.Request.Source.IpAddress,
-                    auth).ConfigureAwait(false);
-                sw = Stopwatch.StartNew();
-            }
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
 
             SemanticCellRequest? cellReq = null;
 
@@ -788,30 +803,32 @@ namespace Partio.Server
 
                 ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
 
-                if (recordHistory && historyEntry != null && sw != null)
+                if (inflight != null)
                 {
-                    sw.Stop();
+                    inflight.Stopwatch.Stop();
+                    inflight.DetailRecorded = true;
                     string requestJson = _Serializer.SerializeJson(cellReq, false);
                     string responseJson = _Serializer.SerializeJson(cellResult.Response, false);
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, cellResult.EmbeddingCalls, cellResult.CompletionCalls).ConfigureAwait(false);
+                        inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, cellResult.EmbeddingCalls, cellResult.CompletionCalls).ConfigureAwait(false);
                 }
 
                 return cellResult.Response;
             }
             catch (Exception ex)
             {
-                if (recordHistory && historyEntry != null && sw != null)
+                if (inflight != null)
                 {
-                    sw.Stop();
+                    inflight.Stopwatch.Stop();
+                    inflight.DetailRecorded = true;
                     int statusCode = MapExceptionToStatusCode(ex);
                     string? requestBody = cellReq != null ? _Serializer.SerializeJson(cellReq, false) : null;
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
+                        inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
                 }
                 throw;
             }
@@ -819,20 +836,8 @@ namespace Partio.Server
 
         private static async Task<object> ProcessBatch(ApiRequest req)
         {
-            bool recordHistory = _Settings.RequestHistory.Enabled && _RequestHistoryService != null;
-            RequestHistoryEntry? historyEntry = null;
-            Stopwatch? sw = null;
-
-            if (recordHistory)
-            {
-                AuthContext auth = (AuthContext)req.Metadata;
-                historyEntry = await _RequestHistoryService!.CreateEntryAsync(
-                    req.Http.Request.Method.ToString(),
-                    req.Http.Request.Url.RawWithQuery,
-                    req.Http.Request.Source.IpAddress,
-                    auth).ConfigureAwait(false);
-                sw = Stopwatch.StartNew();
-            }
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
 
             List<SemanticCellRequest>? cellReqs = null;
 
@@ -860,30 +865,32 @@ namespace Partio.Server
                     allCompletionCalls.AddRange(cellResult.CompletionCalls);
                 }
 
-                if (recordHistory && historyEntry != null && sw != null)
+                if (inflight != null)
                 {
-                    sw.Stop();
+                    inflight.Stopwatch.Stop();
+                    inflight.DetailRecorded = true;
                     string requestJson = _Serializer.SerializeJson(cellReqs, false);
                     string responseJson = _Serializer.SerializeJson(responses, false);
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, allEmbeddingCalls, allCompletionCalls).ConfigureAwait(false);
+                        inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, allEmbeddingCalls, allCompletionCalls).ConfigureAwait(false);
                 }
 
                 return responses;
             }
             catch (Exception ex)
             {
-                if (recordHistory && historyEntry != null && sw != null)
+                if (inflight != null)
                 {
-                    sw.Stop();
+                    inflight.Stopwatch.Stop();
+                    inflight.DetailRecorded = true;
                     int statusCode = MapExceptionToStatusCode(ex);
                     string? requestBody = cellReqs != null ? _Serializer.SerializeJson(cellReqs, false) : null;
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await _RequestHistoryService!.UpdateWithResponseAsync(
-                        historyEntry, statusCode, sw.ElapsedMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
+                        inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
                 }
                 throw;
             }
@@ -932,9 +939,11 @@ namespace Partio.Server
 
         private static async Task<object> ExploreEmbeddingEndpoint(ApiRequest req)
         {
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+
             EndpointExplorerEmbeddingResponse response = new EndpointExplorerEmbeddingResponse();
             EndpointExplorerEmbeddingRequest? explorerReq = null;
-            RequestHistoryEntry? historyEntry = null;
             Stopwatch sw = Stopwatch.StartNew();
 
             try
@@ -950,19 +959,8 @@ namespace Partio.Server
                 response.Model = endpoint.Model;
                 response.Input = explorerReq.Input;
 
-                bool recordHistory = _Settings.RequestHistory.Enabled
-                    && _RequestHistoryService != null
-                    && endpoint.EnableRequestHistory;
-
-                if (recordHistory)
-                {
-                    historyEntry = await _RequestHistoryService!.CreateEntryAsync(
-                        req.Http.Request.Method.ToString(),
-                        req.Http.Request.Url.RawWithQuery,
-                        req.Http.Request.Source.IpAddress,
-                        auth).ConfigureAwait(false);
-                    response.RequestHistoryId = historyEntry.Id;
-                }
+                if (inflight != null)
+                    response.RequestHistoryId = inflight.Entry.Id;
 
                 req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
                 req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
@@ -981,17 +979,19 @@ namespace Partio.Server
                     response.StatusCode = 200;
                     response.Embedding = embedding;
                     response.Dimensions = embedding.Count;
-                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                     response.EmbeddingCalls = client.CallDetails.ToList();
 
-                    if (recordHistory && historyEntry != null)
+                    if (inflight != null)
                     {
+                        inflight.Stopwatch.Stop();
+                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                         await _RequestHistoryService!.UpdateWithResponseAsync(
-                            historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, response.EmbeddingCalls, null).ConfigureAwait(false);
+                            inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, response.EmbeddingCalls, null).ConfigureAwait(false);
                     }
 
                     return response;
@@ -1003,17 +1003,19 @@ namespace Partio.Server
                     response.Success = false;
                     response.StatusCode = MapExceptionToStatusCode(ex);
                     response.Error = ex.Message;
-                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                     response.EmbeddingCalls = client.CallDetails.ToList();
 
-                    if (recordHistory && historyEntry != null)
+                    if (inflight != null)
                     {
+                        inflight.Stopwatch.Stop();
+                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                         await _RequestHistoryService!.UpdateWithResponseAsync(
-                            historyEntry, response.StatusCode, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, response.EmbeddingCalls, null).ConfigureAwait(false);
+                            inflight.Entry, response.StatusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, response.EmbeddingCalls, null).ConfigureAwait(false);
                     }
 
                     return response;
@@ -1025,7 +1027,7 @@ namespace Partio.Server
                 response.Success = false;
                 response.StatusCode = MapExceptionToStatusCode(ex);
                 response.Error = ex.Message;
-                response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 if (explorerReq != null)
                 {
                     response.EndpointId = explorerReq.EndpointId;
@@ -1037,9 +1039,11 @@ namespace Partio.Server
 
         private static async Task<object> ExploreCompletionEndpoint(ApiRequest req)
         {
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+
             EndpointExplorerCompletionResponse response = new EndpointExplorerCompletionResponse();
             EndpointExplorerCompletionRequest? explorerReq = null;
-            RequestHistoryEntry? historyEntry = null;
             Stopwatch sw = Stopwatch.StartNew();
 
             try
@@ -1056,19 +1060,8 @@ namespace Partio.Server
                 response.Prompt = explorerReq.Prompt;
                 response.SystemPrompt = explorerReq.SystemPrompt;
 
-                bool recordHistory = _Settings.RequestHistory.Enabled
-                    && _RequestHistoryService != null
-                    && endpoint.EnableRequestHistory;
-
-                if (recordHistory)
-                {
-                    historyEntry = await _RequestHistoryService!.CreateEntryAsync(
-                        req.Http.Request.Method.ToString(),
-                        req.Http.Request.Url.RawWithQuery,
-                        req.Http.Request.Source.IpAddress,
-                        auth).ConfigureAwait(false);
-                    response.RequestHistoryId = historyEntry.Id;
-                }
+                if (inflight != null)
+                    response.RequestHistoryId = inflight.Entry.Id;
 
                 req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
                 req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
@@ -1092,17 +1085,19 @@ namespace Partio.Server
                     response.Success = true;
                     response.StatusCode = 200;
                     response.Output = output;
-                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                     response.CompletionCalls = client.CallDetails.ToList();
 
-                    if (recordHistory && historyEntry != null)
+                    if (inflight != null)
                     {
+                        inflight.Stopwatch.Stop();
+                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                         await _RequestHistoryService!.UpdateWithResponseAsync(
-                            historyEntry, 200, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                            inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
                     }
 
                     return response;
@@ -1114,17 +1109,19 @@ namespace Partio.Server
                     response.Success = false;
                     response.StatusCode = MapExceptionToStatusCode(ex);
                     response.Error = ex.Message;
-                    response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                    response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                     response.CompletionCalls = client.CallDetails.ToList();
 
-                    if (recordHistory && historyEntry != null)
+                    if (inflight != null)
                     {
+                        inflight.Stopwatch.Stop();
+                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                         await _RequestHistoryService!.UpdateWithResponseAsync(
-                            historyEntry, response.StatusCode, sw.ElapsedMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                            inflight.Entry, response.StatusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
                     }
 
                     return response;
@@ -1136,7 +1133,7 @@ namespace Partio.Server
                 response.Success = false;
                 response.StatusCode = MapExceptionToStatusCode(ex);
                 response.Error = ex.Message;
-                response.ResponseTimeMs = sw.ElapsedMilliseconds;
+                response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 if (explorerReq != null)
                 {
                     response.EndpointId = explorerReq.EndpointId;
@@ -1978,5 +1975,12 @@ namespace Partio.Server
         }
 
         #endregion
+
+        private class InFlightRequest
+        {
+            public RequestHistoryEntry Entry { get; set; } = null!;
+            public Stopwatch Stopwatch { get; set; } = null!;
+            public bool DetailRecorded { get; set; } = false;
+        }
     }
 }

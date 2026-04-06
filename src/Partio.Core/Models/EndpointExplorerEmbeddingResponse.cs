@@ -48,7 +48,7 @@ namespace Partio.Core.Models
         /// <summary>
         /// Overall request duration in milliseconds.
         /// </summary>
-        public long ResponseTimeMs { get; set; } = 0;
+        public double ResponseTimeMs { get; set; } = 0;
 
         /// <summary>
         /// Related request-history entry ID when persisted.

@@ -43,7 +43,7 @@ namespace Partio.Core.Models
         /// <summary>
         /// Timing for this call in milliseconds.
         /// </summary>
-        public long? ResponseTimeMs { get; set; }
+        public double? ResponseTimeMs { get; set; }
 
         /// <summary>
         /// Whether the call succeeded.

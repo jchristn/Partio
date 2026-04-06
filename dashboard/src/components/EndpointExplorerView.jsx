@@ -117,7 +117,7 @@ function CallGroups({ title, calls }) {
             <span className="embedding-call-method">{call.Method || 'POST'}</span>
             <code className="embedding-call-url">{call.Url || '-'}</code>
             {call.ResponseTimeMs != null && (
-              <span className="embedding-call-time">{call.ResponseTimeMs} ms</span>
+              <span className="embedding-call-time">{Number(call.ResponseTimeMs).toFixed(2)} ms</span>
             )}
             {!call.Success && <span className="embedding-call-failed">FAILED</span>}
           </div>
@@ -399,7 +399,7 @@ export default function EndpointExplorerView() {
                   </div>
                   <div className="detail-item">
                     <Tooltip content="Total explorer round-trip time in milliseconds."><label>Response Time</label></Tooltip>
-                    <span>{response.ResponseTimeMs != null ? `${response.ResponseTimeMs} ms` : '-'}</span>
+                    <span>{response.ResponseTimeMs != null ? `${Number(response.ResponseTimeMs).toFixed(2)} ms` : '-'}</span>
                   </div>
                   <div className="detail-item">
                     <Tooltip content="Configured Partio endpoint that handled the request."><label>Endpoint ID</label></Tooltip>
@@ -409,7 +409,7 @@ export default function EndpointExplorerView() {
                     <Tooltip content="Model name Partio targeted for the explorer request."><label>Model</label></Tooltip>
                     <span>{response.Model || '-'}</span>
                   </div>
-                  <div className="detail-item">
+                  <div className="detail-item" style={{ whiteSpace: 'nowrap' }}>
                     <Tooltip content="Request-history identifier created by Partio when request history is enabled on the endpoint."><label>History Entry</label></Tooltip>
                     <span>{response.RequestHistoryId ? <CopyableId value={response.RequestHistoryId} /> : 'Not recorded'}</span>
                   </div>

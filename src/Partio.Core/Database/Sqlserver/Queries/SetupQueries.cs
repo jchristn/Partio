@@ -150,7 +150,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     request_body_length BIGINT NULL,
                     response_body_length BIGINT NULL,
                     http_status INT NULL,
-                    response_time_ms BIGINT NULL,
+                    response_time_ms FLOAT NULL,
                     object_key NVARCHAR(256) NULL,
                     created_utc NVARCHAR(64) NOT NULL,
                     completed_utc NVARCHAR(64) NULL

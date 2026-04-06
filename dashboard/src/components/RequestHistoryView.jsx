@@ -213,7 +213,7 @@ export default function RequestHistoryView() {
       key: 'ResponseTimeMs',
       label: 'Time (ms)',
       tooltip: 'Total response time measured by Partio in milliseconds.',
-      render: (item) => item.ResponseTimeMs != null ? item.ResponseTimeMs : '-',
+      render: (item) => item.ResponseTimeMs != null ? Number(item.ResponseTimeMs).toFixed(2) : '-',
       sortValue: (item) => item.ResponseTimeMs
     },
     {
@@ -285,7 +285,7 @@ export default function RequestHistoryView() {
                 </div>
                 <div className="detail-item">
                   <Tooltip content="Total request time measured by Partio in milliseconds."><label>Response Time</label></Tooltip>
-                  <span>{detailItem.ResponseTimeMs != null ? detailItem.ResponseTimeMs + ' ms' : '-'}</span>
+                  <span>{detailItem.ResponseTimeMs != null ? Number(detailItem.ResponseTimeMs).toFixed(2) + ' ms' : '-'}</span>
                 </div>
                 <div className="detail-item detail-item-wide">
                   <Tooltip content="The URL called on Partio by the client."><label>Request URL</label></Tooltip>
@@ -398,7 +398,7 @@ export default function RequestHistoryView() {
                       <span className="embedding-call-method">{call.Method || 'POST'}</span>
                       <code className="embedding-call-url">{call.Url || '-'}</code>
                       {call.ResponseTimeMs != null && (
-                        <span className="embedding-call-time">{call.ResponseTimeMs} ms</span>
+                        <span className="embedding-call-time">{Number(call.ResponseTimeMs).toFixed(2)} ms</span>
                       )}
                       {!call.Success && (
                         <span className="embedding-call-failed">FAILED</span>
@@ -445,7 +445,7 @@ export default function RequestHistoryView() {
                       <span className="embedding-call-method">{call.Method || 'POST'}</span>
                       <code className="embedding-call-url">{call.Url || '-'}</code>
                       {call.ResponseTimeMs != null && (
-                        <span className="embedding-call-time">{call.ResponseTimeMs} ms</span>
+                        <span className="embedding-call-time">{Number(call.ResponseTimeMs).toFixed(2)} ms</span>
                       )}
                       {!call.Success && (
                         <span className="embedding-call-failed">FAILED</span>

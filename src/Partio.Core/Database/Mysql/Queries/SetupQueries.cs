@@ -133,7 +133,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 request_body_length BIGINT NULL,
                 response_body_length BIGINT NULL,
                 http_status INTEGER NULL,
-                response_time_ms BIGINT NULL,
+                response_time_ms DOUBLE NULL,
                 object_key VARCHAR(256) NULL,
                 created_utc TEXT NOT NULL,
                 completed_utc TEXT NULL

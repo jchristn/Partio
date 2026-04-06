@@ -74,7 +74,7 @@ namespace Partio.Server.Services
         public async Task UpdateWithResponseAsync(
             RequestHistoryEntry entry,
             int statusCode,
-            long responseTimeMs,
+            double responseTimeMs,
             string? requestBody,
             string? responseBody,
             Dictionary<string, string>? requestHeaders = null,
