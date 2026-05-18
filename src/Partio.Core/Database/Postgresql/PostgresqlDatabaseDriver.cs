@@ -56,6 +56,8 @@ namespace Partio.Core.Database.Postgresql
             // Migration: add name column to embedding_endpoints
             try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddName, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddTokenizationJson, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
 
             Tenant = new TenantMethods(this, _Logging);
             User = new UserMethods(this, _Logging);

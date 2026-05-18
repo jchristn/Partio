@@ -224,6 +224,9 @@ export default function EndpointExplorerView() {
 
   const resultBody = response ? JSON.stringify(response, null, 2) : null;
   const embeddingPreview = response?.Embedding ? response.Embedding.slice(0, 16) : [];
+  const providerMetadataBody = response?.TokenizationProfile?.ProviderMetadata
+    ? JSON.stringify(response.TokenizationProfile.ProviderMetadata, null, 2)
+    : null;
 
   return (
     <div className="endpoint-explorer">
@@ -413,9 +416,54 @@ export default function EndpointExplorerView() {
                     <Tooltip content="Request-history identifier created by Partio when request history is enabled on the endpoint."><label>History Entry</label></Tooltip>
                     <span>{response.RequestHistoryId ? <CopyableId value={response.RequestHistoryId} /> : 'Not recorded'}</span>
                   </div>
+                  {mode === 'embedding' && response.TokenizationProfile && (
+                    <>
+                      <div className="detail-item">
+                        <Tooltip content="Where Partio resolved the active tokenization profile from for this endpoint and model."><label>Tokenizer Source</label></Tooltip>
+                        <span>{response.TokenizationProfile.ProfileSource || '-'}</span>
+                      </div>
+                      <div className="detail-item">
+                        <Tooltip content="Effective input budget that would govern chunking for this embedding endpoint after reserved tokens are removed."><label>Effective Budget</label></Tooltip>
+                        <span>{response.TokenizationProfile.EffectiveInputBudget || 0}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
                 {response.Error && <div className="explorer-response-error">{response.Error}</div>}
               </div>
+
+              {mode === 'embedding' && response.TokenizationProfile && (
+                <div className="detail-section">
+                  <h3>Tokenization Profile</h3>
+                  <div className="detail-grid">
+                    <div className="detail-item">
+                      <Tooltip content="Tokenizer family used for endpoint-aware budgeting and chunk slicing."><label>Tokenizer Kind</label></Tooltip>
+                      <span>{response.TokenizationProfile.TokenizerKind || '-'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <Tooltip content="Tokenizer model or vocabulary identifier used for counting and slicing."><label>Tokenizer Model</label></Tooltip>
+                      <span>{response.TokenizationProfile.TokenizerModel || '-'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <Tooltip content="Upstream maximum input tokens before reserved tokens are deducted."><label>Max Input Tokens</label></Tooltip>
+                      <span>{response.TokenizationProfile.MaxInputTokens || 0}</span>
+                    </div>
+                    <div className="detail-item">
+                      <Tooltip content="Tokens reserved ahead of chunking, for example when a context prefix is applied."><label>Reserved Tokens</label></Tooltip>
+                      <span>{response.TokenizationProfile.ReservedInputTokens || 0}</span>
+                    </div>
+                    <div className="detail-item">
+                      <Tooltip content="How the upstream endpoint applies token limits to batched embedding inputs."><label>Batch Limit Mode</label></Tooltip>
+                      <span>{response.TokenizationProfile.BatchLimitMode || '-'}</span>
+                    </div>
+                    <div className="detail-item">
+                      <Tooltip content="Whether Partio had to fall back past an endpoint override or provider probe to produce this profile."><label>Used Fallback</label></Tooltip>
+                      <span>{response.TokenizationProfile.UsedFallback ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
+                  <CollapsibleSection title="Provider Metadata" content={providerMetadataBody} />
+                </div>
+              )}
 
               {mode === 'embedding' ? (
                 <div className="detail-section">

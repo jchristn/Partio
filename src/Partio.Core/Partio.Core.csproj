@@ -14,10 +14,15 @@
     <PackageReference Include="SerializationHelper" Version="*" />
     <PackageReference Include="PolyPrompt" Version="0.1.1" />
     <PackageReference Include="SharpToken" Version="*" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
     <PackageReference Include="Npgsql" Version="*" />
     <PackageReference Include="MySql.Data" Version="*" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Tokenization\\Data\\bert-base-uncased-vocab.txt" />
   </ItemGroup>
 
 </Project>

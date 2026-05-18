@@ -1289,14 +1289,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Test Embedding\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"HealthCheckEnabled\": false,\n    \"HealthCheckUrl\": null,\n    \"HealthCheckMethod\": \"GET\",\n    \"HealthCheckIntervalMs\": 5000,\n    \"HealthCheckTimeoutMs\": 2000,\n    \"HealthCheckExpectedStatusCode\": 200,\n    \"HealthyThreshold\": 3,\n    \"UnhealthyThreshold\": 3,\n    \"HealthCheckUseAuth\": false,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Test Embedding\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"HealthCheckEnabled\": false,\n    \"HealthCheckUrl\": null,\n    \"HealthCheckMethod\": \"GET\",\n    \"HealthCheckIntervalMs\": 5000,\n    \"HealthCheckTimeoutMs\": 2000,\n    \"HealthCheckExpectedStatusCode\": 200,\n    \"HealthyThreshold\": 3,\n    \"UnhealthyThreshold\": 3,\n    \"HealthCheckUseAuth\": false,\n    \"Tokenization\": {\n        \"TokenizerKind\": \"BertWordPiece\",\n        \"TokenizerModel\": \"bert-base-uncased\",\n        \"MaxInputTokens\": 512,\n        \"ReservedInputTokens\": 0,\n        \"BatchLimitMode\": \"PerInput\",\n        \"AutoDetect\": true\n    },\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"tokenization\": \"override\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
 							"host": ["{{baseUrl}}"],
 							"path": ["v1.0", "endpoints", "embedding"]
 						},
-						"description": "Create a new embedding endpoint. The response endpoint ID is automatically saved to the `endpointId` variable."
+						"description": "Create a new embedding endpoint with an explicit tokenization override. The response endpoint ID is automatically saved to the `endpointId` variable."
 					}
 				},
 				{
@@ -1350,14 +1350,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"Id\": \"{{endpointId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Updated Embedding\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"updated\": \"true\"\n    }\n}"
+							"raw": "{\n    \"Id\": \"{{endpointId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Updated Embedding\",\n    \"Model\": \"{{embeddingModel}}\",\n    \"Endpoint\": \"{{embeddingEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"Tokenization\": {\n        \"TokenizerKind\": \"Cl100kBase\",\n        \"TokenizerModel\": \"cl100k_base\",\n        \"MaxInputTokens\": 8192,\n        \"ReservedInputTokens\": 32,\n        \"BatchLimitMode\": \"WholeRequest\",\n        \"AutoDetect\": false\n    },\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"updated\": \"true\",\n        \"tokenization\": \"fallback-disabled\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}",
 							"host": ["{{baseUrl}}"],
 							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}"]
 						},
-						"description": "Update an existing embedding endpoint."
+						"description": "Update an existing embedding endpoint and change the tokenization override to a fallback-disabled profile."
 					}
 				},
 				{
@@ -1479,6 +1479,48 @@
 							"path": ["v1.0", "endpoints", "embedding", "health"]
 						},
 						"description": "Get health status for all monitored endpoints. Non-admin callers see only their tenant's endpoints."
+					}
+				},
+				{
+					"name": "Explore Embedding Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"pm.test('Response includes TokenizationProfile', function () {",
+									"    pm.expect(jsonData.TokenizationProfile).to.exist;",
+									"});",
+									"if (jsonData && jsonData.RequestHistoryId) {",
+									"    pm.collectionVariables.set('requestId', jsonData.RequestHistoryId);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"EndpointId\": \"{{endpointId}}\",\n    \"Input\": \"Postman explorer request used to inspect resolved tokenization diagnostics.\",\n    \"L2Normalization\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/explorer/embedding",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "explorer", "embedding"]
+						},
+						"description": "Run the configured embedding endpoint through Partio and capture the resolved tokenization profile plus upstream call detail."
 					}
 				},
 				{
@@ -1716,7 +1758,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["v1.0", "requests", "{{requestId}}", "detail"]
 						},
-						"description": "Read the full request/response body detail from filesystem storage."
+						"description": "Read the full request/response body detail from filesystem storage, including upstream call traces and resolved `TokenizationProfile` when available."
 					}
 				},
 				{

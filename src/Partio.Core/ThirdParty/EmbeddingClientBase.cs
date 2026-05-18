@@ -72,15 +72,24 @@ namespace Partio.Core.ThirdParty
         public abstract Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default);
 
         /// <summary>
-        /// Retrieve the model's context length (in model-native tokens).
-        /// Returns null if the information is unavailable.
+        /// Retrieve runtime capabilities for a model, including tokenization metadata when available.
         /// </summary>
         /// <param name="model">Model name.</param>
         /// <param name="token">Cancellation token.</param>
-        /// <returns>Context length or null.</returns>
-        public virtual Task<int?> GetModelContextLengthAsync(string model, CancellationToken token = default)
+        /// <returns>Capability data or null.</returns>
+        public virtual Task<EmbeddingModelCapabilities?> GetModelCapabilitiesAsync(string model, CancellationToken token = default)
         {
-            return Task.FromResult<int?>(null);
+            return Task.FromResult<EmbeddingModelCapabilities?>(null);
+        }
+
+        /// <summary>
+        /// Retrieve the model's context length (in model-native tokens).
+        /// Returns null if the information is unavailable.
+        /// </summary>
+        public virtual async Task<int?> GetModelContextLengthAsync(string model, CancellationToken token = default)
+        {
+            EmbeddingModelCapabilities? capabilities = await GetModelCapabilitiesAsync(model, token).ConfigureAwait(false);
+            return capabilities?.MaxInputTokens;
         }
 
         /// <summary>
@@ -116,12 +125,14 @@ namespace Partio.Core.ThirdParty
         /// <param name="url">Full URL to call.</param>
         /// <param name="content">HTTP content to send.</param>
         /// <param name="requestBodyJson">Request body as a JSON string (for recording).</param>
+        /// <param name="purpose">Optional high-level purpose for the call.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>An EmbeddingHttpResult containing the response and body.</returns>
         protected async Task<EmbeddingHttpResult> PostAndRecordAsync(
-            string url, StringContent content, string requestBodyJson, CancellationToken token)
+            string url, StringContent content, string requestBodyJson, string? purpose, CancellationToken token)
         {
             EmbeddingCallDetail detail = new EmbeddingCallDetail();
+            detail.Purpose = purpose;
             detail.Url = url;
             detail.Method = "POST";
             detail.RequestBody = requestBodyJson;

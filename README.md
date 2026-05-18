@@ -90,6 +90,7 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 ## Features
 
 - **Multiple chunking strategies** including fixed token count, sentence-based, paragraph-based, whole list, and list entry, with configurable overlap via sliding window
+- **Endpoint-aware token budgeting** with model-native token counting, endpoint overrides, provider probing where available, provider defaults, and a required global fallback profile
 - **Pluggable provider support** for Ollama, OpenAI, Gemini, and OpenAI-compatible backends such as vLLM, selectable per endpoint
 - **Multi-tenant architecture** with tenant, user, credential, and endpoint isolation
 - **Four database backends** out of the box: SQLite (default, zero config), PostgreSQL, MySQL, and SQL Server
@@ -148,6 +149,24 @@ curl http://localhost:11434/api/pull -d "{\"name\": \"nomic-embed-text\"}"
 The Ollama container shares the server's network namespace, so the default `localhost:11434` endpoint works without any configuration changes. Models are persisted in a Docker volume across restarts.
 
 Default admin API key: `partioadmin`
+
+## Tokenization Resolution
+
+Partio resolves the tokenization profile used for chunk sizing, chunk slicing, and embedding batching in this order:
+
+1. Endpoint-level `Tokenization` override
+2. Live provider probe plus short-lived in-memory cache
+3. Provider default registry
+4. Server-wide `TokenizationDefaults.GlobalFallback`
+
+`FixedTokenCount` now means a requested budget in the active embedding endpoint's token space, not a hardcoded `cl100k_base` approximation. Semantic strategies also descend within the strategy flow when one sentence, paragraph, list item, or table unit is too large, so emitted chunks are already in-budget before Partio calls the upstream embedding endpoint.
+
+For diagnostics, embedding responses expose these headers when applicable:
+
+- `X-Partio-Tokenizer-Kind`
+- `X-Partio-Tokenizer-Model`
+- `X-Partio-Tokenizer-Source`
+- `X-Partio-Effective-Input-Budget`
 
 ### Docker (Server Only)
 
@@ -263,7 +282,7 @@ curl -X POST http://localhost:8400/v1.0/process/batch \
 
 | Strategy | Description |
 |----------|-------------|
-| `FixedTokenCount` | Split content into chunks of a fixed token count (uses cl100k_base encoding). Configurable overlap via `OverlapCount` or `OverlapPercentage`. |
+| `FixedTokenCount` | Split content into chunks of a fixed token count in the active embedding endpoint's token space. Configurable overlap via `OverlapCount` or `OverlapPercentage`. |
 | `SentenceBased` | Split at sentence boundaries. |
 | `ParagraphBased` | Split at paragraph boundaries. |
 | `WholeList` | Treat an entire list as a single chunk. |
@@ -323,6 +342,42 @@ Partio is configured via `partio.json`, created automatically on first run.
     "RetentionDays": 7,
     "CleanupIntervalMinutes": 60
   },
+  "TokenizationDefaults": {
+    "GlobalFallback": {
+      "TokenizerKind": "Cl100kBase",
+      "TokenizerModel": "cl100k_base",
+      "MaxInputTokens": 8192,
+      "ReservedInputTokens": 0,
+      "BatchLimitMode": "PerInput",
+      "AutoDetect": true
+    },
+    "OpenAI": {
+      "TokenizerKind": "Cl100kBase",
+      "TokenizerModel": "cl100k_base",
+      "MaxInputTokens": 8192,
+      "ReservedInputTokens": 0,
+      "BatchLimitMode": "PerInput",
+      "AutoDetect": true
+    },
+    "vLLM": {
+      "TokenizerKind": "Cl100kBase",
+      "TokenizerModel": "cl100k_base",
+      "MaxInputTokens": 8192,
+      "ReservedInputTokens": 0,
+      "BatchLimitMode": "PerInput",
+      "AutoDetect": true
+    },
+    "Gemini": {
+      "TokenizerKind": "Cl100kBase",
+      "TokenizerModel": "cl100k_base",
+      "MaxInputTokens": 2048,
+      "ReservedInputTokens": 0,
+      "BatchLimitMode": "PerInput",
+      "AutoDetect": true
+    },
+    "Ollama": null,
+    "CapabilityCacheTtlSeconds": 300
+  },
   "AdminApiKeys": ["partioadmin"],
   "DefaultEmbeddingEndpoints": [
     {
@@ -333,6 +388,8 @@ Partio is configured via `partio.json`, created automatically on first run.
   ]
 }
 ```
+
+Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields.
 
 ### Database Options
 
@@ -367,12 +424,30 @@ EndpointExplorerCompletionResponse? explorer = await client.ExploreCompletionEnd
 });
 ```
 
+Embedding endpoint CRUD in the C# SDK now includes `Tokenization` and explorer responses include `TokenizationProfile`.
+
 ### Python
 
 ```python
 from partio_sdk import PartioClient
 
 with PartioClient("http://localhost:8400", "partioadmin") as client:
+    endpoint = client.create_endpoint({
+        "TenantId": "default",
+        "Name": "Pinned MiniLM",
+        "Model": "all-minilm",
+        "Endpoint": "http://localhost:11434",
+        "ApiFormat": "Ollama",
+        "Tokenization": {
+            "TokenizerKind": "BertWordPiece",
+            "TokenizerModel": "bert-base-uncased",
+            "MaxInputTokens": 512,
+            "ReservedInputTokens": 0,
+            "BatchLimitMode": "PerInput",
+            "AutoDetect": true
+        }
+    })
+
     result = client.process({
         "Type": "Text",
         "Text": "Hello world",
@@ -391,6 +466,22 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
 import { PartioClient } from './partio-sdk.js';
 
 const client = new PartioClient('http://localhost:8400', 'partioadmin');
+const endpoint = await client.createEndpoint({
+  TenantId: 'default',
+  Name: 'Pinned MiniLM',
+  Model: 'all-minilm',
+  Endpoint: 'http://localhost:11434',
+  ApiFormat: 'Ollama',
+  Tokenization: {
+    TokenizerKind: 'BertWordPiece',
+    TokenizerModel: 'bert-base-uncased',
+    MaxInputTokens: 512,
+    ReservedInputTokens: 0,
+    BatchLimitMode: 'PerInput',
+    AutoDetect: true
+  }
+});
+
 const result = await client.process({
   Type: 'Text',
   Text: 'Hello world',
@@ -462,6 +553,7 @@ Ensure you are passing the `Authorization: Bearer {token}` header. The default a
 - If running the server standalone in Docker with an external Ollama, `localhost` inside the container is not the host machine; use `host.docker.internal` or the container network address instead.
 - Verify the model name matches what your embedding provider expects (e.g. `nomic-embed-text` for Ollama).
 - Check that `ApiFormat` is set correctly (`Ollama`, `OpenAI`, `Gemini`, or `vLLM`).
+- If the model family does not share `cl100k_base` tokenization, inspect the `X-Partio-Tokenizer-*` headers or explorer `TokenizationProfile` to confirm the resolved tokenizer source and effective budget.
 
 ### Dashboard cannot connect to the server
 
@@ -473,7 +565,7 @@ Verify `Hostname`, `Port`, `DatabaseName`, `Username`, and `Password` in `partio
 
 ### Chunks are too large or too small
 
-Adjust `FixedTokenCount` in your `ChunkingConfiguration`. The server caps chunk size to the model's context window automatically. Use `OverlapCount` or `OverlapPercentage` with `OverlapStrategy: "SlidingWindow"` for overlapping chunks.
+Adjust `FixedTokenCount` in your `ChunkingConfiguration`. Partio now caps chunk size to the resolved embedding endpoint budget in the active tokenizer space instead of applying a cross-tokenizer scaling heuristic. Use `OverlapCount` or `OverlapPercentage` with `OverlapStrategy: "SlidingWindow"` for overlapping chunks.
 
 ### Request history filling up disk
 
@@ -505,7 +597,7 @@ Have a question, found a bug, or want to request a feature?
 - **Questions and discussions**: [Start a discussion](https://github.com/jchristn/partio/discussions)
 
 When filing an issue, please include:
-1. The Partio version (`v0.2.0`, or the Docker image tag)
+1. The Partio version (`v0.3.0`, or the Docker image tag)
 2. Steps to reproduce the problem
 3. The request/response (redact any credentials)
 4. Relevant log output from `./logs/`

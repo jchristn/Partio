@@ -130,7 +130,22 @@ await runTest('Enumerate Credentials', async () => {
 
 // Endpoint CRUD
 await runTest('Create Endpoint', async () => {
-  const ep = await client.createEndpoint({ TenantId: testTenantId, Name: 'Test Embedding', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false });
+  const ep = await client.createEndpoint({
+    TenantId: testTenantId,
+    Name: 'Test Embedding',
+    Model: 'test-model',
+    Endpoint: 'http://localhost:11434',
+    ApiFormat: 'Ollama',
+    HealthCheckEnabled: false,
+    Tokenization: {
+      TokenizerKind: 'BertWordPiece',
+      TokenizerModel: 'bert-base-uncased',
+      MaxInputTokens: 384,
+      ReservedInputTokens: 16,
+      BatchLimitMode: 'PerInput',
+      AutoDetect: true
+    }
+  });
   if (!ep || !ep.Id) throw new Error('No response');
   testEpId = ep.Id;
 });
@@ -138,11 +153,32 @@ await runTest('Create Endpoint', async () => {
 await runTest('Read Endpoint', async () => {
   const ep = await client.getEndpoint(testEpId);
   if (!ep || ep.Model !== 'test-model') throw new Error('Mismatch');
+  if (!ep.Tokenization) throw new Error('Expected tokenization override');
+  if (ep.Tokenization.TokenizerModel !== 'bert-base-uncased') throw new Error('Tokenizer model mismatch');
+  if (ep.Tokenization.MaxInputTokens !== 384) throw new Error('MaxInputTokens mismatch');
 });
 
 await runTest('Update Endpoint', async () => {
-  const updated = await client.updateEndpoint(testEpId, { TenantId: testTenantId, Name: 'Updated Embedding', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false });
+  const updated = await client.updateEndpoint(testEpId, {
+    TenantId: testTenantId,
+    Name: 'Updated Embedding',
+    Model: 'test-model-updated',
+    Endpoint: 'http://localhost:11434',
+    ApiFormat: 'Ollama',
+    HealthCheckEnabled: false,
+    Tokenization: {
+      TokenizerKind: 'Cl100kBase',
+      TokenizerModel: 'cl100k_base',
+      MaxInputTokens: 2048,
+      ReservedInputTokens: 32,
+      BatchLimitMode: 'WholeRequest',
+      AutoDetect: false
+    }
+  });
   if (!updated) throw new Error('Update failed');
+  if (!updated.Tokenization) throw new Error('Expected updated tokenization override');
+  if (updated.Tokenization.BatchLimitMode !== 'WholeRequest') throw new Error('Batch limit mode mismatch');
+  if (updated.Tokenization.AutoDetect !== false) throw new Error('AutoDetect should be false');
 });
 
 await runTest('Endpoint Exists (HEAD)', async () => {
@@ -217,6 +253,12 @@ await runTest('Explore Embedding Endpoint', async () => {
   });
   if (!result || result.EndpointId !== testEpId) throw new Error('Endpoint mismatch');
   if (!result.EmbeddingCalls || result.EmbeddingCalls.length === 0) throw new Error('Expected upstream call details');
+  if (!result.TokenizationProfile) throw new Error('Expected tokenization profile');
+  if ((result.TokenizationProfile.EffectiveInputBudget || 0) < 1) throw new Error('Expected effective input budget');
+  if (result.RequestHistoryId) {
+    const detail = await client.getRequestHistoryDetail(result.RequestHistoryId);
+    if (!detail || !detail.TokenizationProfile) throw new Error('Expected tokenization profile in request history detail');
+  }
 });
 
 await runTest('Explore Completion Endpoint', async () => {

@@ -36,5 +36,8 @@ namespace Partio.Sdk.Models
 
         [JsonPropertyName("EmbeddingCalls")]
         public List<EmbeddingCallDetail>? EmbeddingCalls { get; set; }
+
+        [JsonPropertyName("TokenizationProfile")]
+        public ResolvedTokenizationProfile? TokenizationProfile { get; set; }
     }
 }

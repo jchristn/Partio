@@ -18,6 +18,7 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 - Request history (`get_request_history`, `get_request_history_detail`, `delete_request_history`, `enumerate_request_history`)
 
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
 
 ## Prerequisites
 
@@ -45,6 +46,22 @@ pip install -r requirements.txt
 from partio_sdk import PartioClient
 
 with PartioClient("http://localhost:8400", "your-access-key") as client:
+    endpoint = client.create_endpoint({
+        "TenantId": "default",
+        "Name": "Pinned MiniLM",
+        "Model": "all-minilm",
+        "Endpoint": "http://localhost:11434",
+        "ApiFormat": "Ollama",
+        "Tokenization": {
+            "TokenizerKind": "BertWordPiece",
+            "TokenizerModel": "bert-base-uncased",
+            "MaxInputTokens": 512,
+            "ReservedInputTokens": 0,
+            "BatchLimitMode": "PerInput",
+            "AutoDetect": True
+        }
+    })
+
     result = client.process({
         "Type": "Text",
         "Text": "Hello, world!",
@@ -59,6 +76,12 @@ with PartioClient("http://localhost:8400", "your-access-key") as client:
         "Prompt": "Explain what Partio does in one short paragraph."
     })
     print(f"Explorer success: {explorer['Success']}")
+
+    embedding_explorer = client.explore_embedding_endpoint({
+        "EndpointId": endpoint["Id"],
+        "Input": "Tokenizer diagnostics sample"
+    })
+    print(embedding_explorer["TokenizationProfile"]["ProfileSource"])
 ```
 
 ## Running the Test Harness
@@ -101,3 +124,7 @@ Runtime: 1234ms
 Result: PASS
 ================
 ```
+
+## Release Versioning
+
+The Python SDK is currently source-distributed from this repository rather than published as a separate package artifact. Its release version tracks the Partio repository release tag for this feature set, which is `0.3.0`.

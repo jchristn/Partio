@@ -16,6 +16,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\sdk\csharp\Partio.Sdk\Partio.Sdk.csproj" />
+    <ProjectReference Include="..\Partio.Core\Partio.Core.csproj" />
+    <ProjectReference Include="..\Partio.Server\Partio.Server.csproj" />
     <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
   </ItemGroup>
 </Project>

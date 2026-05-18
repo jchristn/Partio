@@ -71,6 +71,7 @@ namespace Partio.Server.Services
         /// <param name="responseHeaders">Response headers dictionary.</param>
         /// <param name="embeddingCalls">Details of upstream embedding HTTP calls, if any.</param>
         /// <param name="completionCalls">Details of upstream completion/inference HTTP calls, if any.</param>
+        /// <param name="additionalDetail">Additional diagnostics to persist with the detail payload.</param>
         public async Task UpdateWithResponseAsync(
             RequestHistoryEntry entry,
             int statusCode,
@@ -80,7 +81,8 @@ namespace Partio.Server.Services
             Dictionary<string, string>? requestHeaders = null,
             Dictionary<string, string>? responseHeaders = null,
             List<EmbeddingCallDetail>? embeddingCalls = null,
-            List<CompletionCallDetail>? completionCalls = null)
+            List<CompletionCallDetail>? completionCalls = null,
+            Dictionary<string, object?>? additionalDetail = null)
         {
             entry.HttpStatus = statusCode;
             entry.ResponseTimeMs = responseTimeMs;
@@ -136,6 +138,14 @@ namespace Partio.Server.Services
                 { "EmbeddingCalls", embeddingCalls },
                 { "CompletionCalls", completionCalls }
             };
+
+            if (additionalDetail != null)
+            {
+                foreach (KeyValuePair<string, object?> kvp in additionalDetail)
+                {
+                    detail[kvp.Key] = kvp.Value;
+                }
+            }
 
             string json = _Serializer.SerializeJson(detail, true);
             string filePath = Path.Combine(_Settings.RequestHistory.Directory, objectKey + ".json");

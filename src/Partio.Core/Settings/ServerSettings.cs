@@ -11,6 +11,7 @@ namespace Partio.Core.Settings
         private DebugSettings _Debug = new DebugSettings();
         private CorsSettings _Cors = new CorsSettings();
         private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
+        private TokenizationDefaultsSettings _TokenizationDefaults = new TokenizationDefaultsSettings();
         private List<string> _AdminApiKeys = new List<string> { "partioadmin" };
         private List<DefaultEmbeddingEndpoint> _DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>();
         private List<DefaultInferenceEndpoint> _DefaultInferenceEndpoints = new List<DefaultInferenceEndpoint>();
@@ -67,6 +68,15 @@ namespace Partio.Core.Settings
         {
             get => _RequestHistory;
             set => _RequestHistory = value ?? throw new ArgumentNullException(nameof(RequestHistory));
+        }
+
+        /// <summary>
+        /// Tokenization defaults, provider defaults, and global fallback behavior.
+        /// </summary>
+        public TokenizationDefaultsSettings TokenizationDefaults
+        {
+            get => _TokenizationDefaults;
+            set => _TokenizationDefaults = value ?? throw new ArgumentNullException(nameof(TokenizationDefaults));
         }
 
         /// <summary>

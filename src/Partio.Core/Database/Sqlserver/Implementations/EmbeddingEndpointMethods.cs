@@ -37,11 +37,12 @@ namespace Partio.Core.Database.Sqlserver.Implementations
             SerializationHelper.Serializer serializer = new SerializationHelper.Serializer();
             string labelsJson = serializer.SerializeJson(endpoint.Labels, false);
             string tagsJson = serializer.SerializeJson(endpoint.Tags, false);
+            string tokenizationJson = endpoint.Tokenization != null ? serializer.SerializeJson(endpoint.Tokenization, false) : string.Empty;
 
             string query =
                 "INSERT INTO embedding_endpoints (id, tenant_id, name, model, endpoint, api_format, api_key, active, enable_request_history, " +
                 "health_check_enabled, health_check_url, health_check_method, health_check_interval_ms, health_check_timeout_ms, " +
-                "health_check_expected_status, healthy_threshold, unhealthy_threshold, health_check_use_auth, " +
+                "health_check_expected_status, healthy_threshold, unhealthy_threshold, health_check_use_auth, tokenization_json, " +
                 "labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
                 "'" + _Driver.Sanitize(endpoint.Id) + "', " +
                 "'" + _Driver.Sanitize(endpoint.TenantId) + "', " +
@@ -61,6 +62,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
                 endpoint.HealthyThreshold + ", " +
                 endpoint.UnhealthyThreshold + ", " +
                 _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
+                _Driver.FormatNullableString(endpoint.Tokenization != null ? tokenizationJson : null) + ", " +
                 "'" + _Driver.Sanitize(labelsJson) + "', " +
                 "'" + _Driver.Sanitize(tagsJson) + "', " +
                 "'" + _Driver.FormatDateTime(endpoint.CreatedUtc) + "', " +
@@ -122,6 +124,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
             SerializationHelper.Serializer serializer = new SerializationHelper.Serializer();
             string labelsJson = serializer.SerializeJson(endpoint.Labels, false);
             string tagsJson = serializer.SerializeJson(endpoint.Tags, false);
+            string tokenizationJson = endpoint.Tokenization != null ? serializer.SerializeJson(endpoint.Tokenization, false) : string.Empty;
 
             string query =
                 "UPDATE embedding_endpoints SET " +
@@ -142,6 +145,7 @@ namespace Partio.Core.Database.Sqlserver.Implementations
                 "healthy_threshold = " + endpoint.HealthyThreshold + ", " +
                 "unhealthy_threshold = " + endpoint.UnhealthyThreshold + ", " +
                 "health_check_use_auth = " + _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
+                "tokenization_json = " + _Driver.FormatNullableString(endpoint.Tokenization != null ? tokenizationJson : null) + ", " +
                 "labels_json = '" + _Driver.Sanitize(labelsJson) + "', " +
                 "tags_json = '" + _Driver.Sanitize(tagsJson) + "', " +
                 "last_update_utc = '" + _Driver.FormatDateTime(endpoint.LastUpdateUtc) + "' " +

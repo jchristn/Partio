@@ -81,6 +81,7 @@ namespace Partio.Core.Database.Sqlite.Queries
                 healthy_threshold INTEGER NOT NULL DEFAULT 2,
                 unhealthy_threshold INTEGER NOT NULL DEFAULT 2,
                 health_check_use_auth BOOLEAN NOT NULL DEFAULT 0,
+                tokenization_json TEXT NULL,
                 labels_json TEXT NULL,
                 tags_json TEXT NULL,
                 created_utc TEXT NOT NULL,
@@ -144,6 +145,12 @@ namespace Partio.Core.Database.Sqlite.Queries
         /// </summary>
         public static readonly string AlterEmbeddingEndpointsAddName =
             @"ALTER TABLE embedding_endpoints ADD COLUMN name VARCHAR(256) NULL;";
+
+        /// <summary>
+        /// Migration: add tokenization_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddTokenizationJson =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN tokenization_json TEXT NULL;";
 
         /// <summary>
         /// All table creation queries in dependency order.

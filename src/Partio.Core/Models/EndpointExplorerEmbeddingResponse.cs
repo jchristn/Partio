@@ -59,5 +59,10 @@ namespace Partio.Core.Models
         /// Upstream embedding calls made by Partio for this explorer request.
         /// </summary>
         public List<EmbeddingCallDetail> EmbeddingCalls { get; set; } = new List<EmbeddingCallDetail>();
+
+        /// <summary>
+        /// Resolved tokenization profile that would govern chunking for this endpoint/model pair.
+        /// </summary>
+        public ResolvedTokenizationProfile? TokenizationProfile { get; set; }
     }
 }

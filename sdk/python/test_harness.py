@@ -135,7 +135,22 @@ def main():
         # Endpoint CRUD
         def test_create_endpoint():
             nonlocal test_ep_id
-            ep = client.create_endpoint({"TenantId": test_tenant_id, "Name": "Test Embedding", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False})
+            ep = client.create_endpoint({
+                "TenantId": test_tenant_id,
+                "Name": "Test Embedding",
+                "Model": "test-model",
+                "Endpoint": "http://localhost:11434",
+                "ApiFormat": "Ollama",
+                "HealthCheckEnabled": False,
+                "Tokenization": {
+                    "TokenizerKind": "BertWordPiece",
+                    "TokenizerModel": "bert-base-uncased",
+                    "MaxInputTokens": 384,
+                    "ReservedInputTokens": 16,
+                    "BatchLimitMode": "PerInput",
+                    "AutoDetect": True
+                }
+            })
             assert ep and "Id" in ep
             test_ep_id = ep["Id"]
         run_test("Create Endpoint", test_create_endpoint)
@@ -143,11 +158,32 @@ def main():
         def test_read_endpoint():
             ep = client.get_endpoint(test_ep_id)
             assert ep and ep["Model"] == "test-model"
+            assert ep.get("Tokenization"), "Expected tokenization override"
+            assert ep["Tokenization"].get("TokenizerModel") == "bert-base-uncased"
+            assert ep["Tokenization"].get("MaxInputTokens") == 384
         run_test("Read Endpoint", test_read_endpoint)
 
         def test_update_endpoint():
-            updated = client.update_endpoint(test_ep_id, {"TenantId": test_tenant_id, "Name": "Updated Embedding", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False})
+            updated = client.update_endpoint(test_ep_id, {
+                "TenantId": test_tenant_id,
+                "Name": "Updated Embedding",
+                "Model": "test-model-updated",
+                "Endpoint": "http://localhost:11434",
+                "ApiFormat": "Ollama",
+                "HealthCheckEnabled": False,
+                "Tokenization": {
+                    "TokenizerKind": "Cl100kBase",
+                    "TokenizerModel": "cl100k_base",
+                    "MaxInputTokens": 2048,
+                    "ReservedInputTokens": 32,
+                    "BatchLimitMode": "WholeRequest",
+                    "AutoDetect": False
+                }
+            })
             assert updated is not None
+            assert updated.get("Tokenization"), "Expected updated tokenization override"
+            assert updated["Tokenization"].get("BatchLimitMode") == "WholeRequest"
+            assert updated["Tokenization"].get("AutoDetect") is False
         run_test("Update Endpoint", test_update_endpoint)
 
         def test_endpoint_exists():
@@ -228,6 +264,11 @@ def main():
             assert result is not None, "No response"
             assert result.get("EndpointId") == test_ep_id, "Endpoint mismatch"
             assert result.get("EmbeddingCalls") and len(result["EmbeddingCalls"]) > 0, "Expected upstream call details"
+            assert result.get("TokenizationProfile"), "Expected tokenization profile"
+            assert result["TokenizationProfile"].get("EffectiveInputBudget", 0) > 0, "Expected effective input budget"
+            if result.get("RequestHistoryId"):
+                detail = client.get_request_history_detail(result["RequestHistoryId"])
+                assert detail and detail.get("TokenizationProfile"), "Expected tokenization profile in request history detail"
         run_test("Explore Embedding Endpoint", test_explore_embedding_endpoint)
 
         def test_explore_completion_endpoint():

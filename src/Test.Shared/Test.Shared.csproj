@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\sdk\csharp\Partio.Sdk\Partio.Sdk.csproj" />
+    <ProjectReference Include="..\Partio.Core\Partio.Core.csproj" />
   </ItemGroup>
 </Project>

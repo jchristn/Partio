@@ -50,6 +50,42 @@
         "MaxRequestBodyBytes": 65536,
         "MaxResponseBodyBytes": 65536
     },
+    "TokenizationDefaults": {
+        "GlobalFallback": {
+            "TokenizerKind": "Cl100kBase",
+            "TokenizerModel": "cl100k_base",
+            "MaxInputTokens": 8192,
+            "ReservedInputTokens": 0,
+            "BatchLimitMode": "PerInput",
+            "AutoDetect": true
+        },
+        "OpenAI": {
+            "TokenizerKind": "Cl100kBase",
+            "TokenizerModel": "cl100k_base",
+            "MaxInputTokens": 8192,
+            "ReservedInputTokens": 0,
+            "BatchLimitMode": "PerInput",
+            "AutoDetect": true
+        },
+        "vLLM": {
+            "TokenizerKind": "Cl100kBase",
+            "TokenizerModel": "cl100k_base",
+            "MaxInputTokens": 8192,
+            "ReservedInputTokens": 0,
+            "BatchLimitMode": "PerInput",
+            "AutoDetect": true
+        },
+        "Gemini": {
+            "TokenizerKind": "Cl100kBase",
+            "TokenizerModel": "cl100k_base",
+            "MaxInputTokens": 2048,
+            "ReservedInputTokens": 0,
+            "BatchLimitMode": "PerInput",
+            "AutoDetect": true
+        },
+        "Ollama": null,
+        "CapabilityCacheTtlSeconds": 300
+    },
     "AdminApiKeys": [
         "partioadmin"
     ],

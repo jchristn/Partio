@@ -2,7 +2,6 @@ namespace Partio.Core.Models
 {
     using System.Data;
     using Partio.Core.Enums;
-    using System.Text.Json.Serialization;
 
     /// <summary>
     /// Represents an embedding model endpoint in the Partio system.
@@ -29,6 +28,7 @@ namespace Partio.Core.Models
         private int _HealthyThreshold = 2;
         private int _UnhealthyThreshold = 2;
         private bool _HealthCheckUseAuth = false;
+        private EndpointTokenizationSettings? _Tokenization = null;
         private DateTime _CreatedUtc = DateTime.UtcNow;
         private DateTime _LastUpdateUtc = DateTime.UtcNow;
 
@@ -222,6 +222,15 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
+        /// Optional endpoint-specific tokenization override settings.
+        /// </summary>
+        public EndpointTokenizationSettings? Tokenization
+        {
+            get => _Tokenization;
+            set => _Tokenization = value;
+        }
+
+        /// <summary>
         /// UTC timestamp when the endpoint was created.
         /// </summary>
         public DateTime CreatedUtc
@@ -278,6 +287,13 @@ namespace Partio.Core.Models
             string? tagsJson = row["tags_json"] == DBNull.Value ? null : row["tags_json"].ToString();
             if (!string.IsNullOrEmpty(tagsJson))
                 ep.Tags = new SerializationHelper.Serializer().DeserializeJson<Dictionary<string, string>>(tagsJson) ?? new Dictionary<string, string>();
+
+            if (row.Table.Columns.Contains("tokenization_json"))
+            {
+                string? tokenizationJson = row["tokenization_json"] == DBNull.Value ? null : row["tokenization_json"].ToString();
+                if (!string.IsNullOrEmpty(tokenizationJson))
+                    ep.Tokenization = new SerializationHelper.Serializer().DeserializeJson<EndpointTokenizationSettings>(tokenizationJson);
+            }
 
             return ep;
         }

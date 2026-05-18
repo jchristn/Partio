@@ -21,5 +21,8 @@ namespace Partio.Sdk.Models
 
         [JsonPropertyName("CompletionCalls")]
         public List<CompletionCallDetail>? CompletionCalls { get; set; }
+
+        [JsonPropertyName("TokenizationProfile")]
+        public ResolvedTokenizationProfile? TokenizationProfile { get; set; }
     }
 }

@@ -238,6 +238,47 @@ const defaultHealthFields = {
   HealthCheckUseAuth: false,
 };
 
+function createTokenizationForm(tokenization = null) {
+  return {
+    Enabled: !!tokenization,
+    AutoDetect: tokenization?.AutoDetect ?? true,
+    TokenizerKind: tokenization?.TokenizerKind || '',
+    TokenizerModel: tokenization?.TokenizerModel || '',
+    MaxInputTokens: tokenization?.MaxInputTokens?.toString() || '',
+    ReservedInputTokens: tokenization?.ReservedInputTokens?.toString() || '',
+    BatchLimitMode: tokenization?.BatchLimitMode || '',
+  };
+}
+
+function buildTokenizationPayload(tokenization) {
+  if (!tokenization?.Enabled) return null;
+
+  const payload = {
+    AutoDetect: tokenization.AutoDetect !== false,
+  };
+
+  if (tokenization.TokenizerKind) payload.TokenizerKind = tokenization.TokenizerKind;
+  if (tokenization.TokenizerModel) payload.TokenizerModel = tokenization.TokenizerModel;
+
+  const maxInputTokens = parseInt(tokenization.MaxInputTokens, 10);
+  if (!Number.isNaN(maxInputTokens) && maxInputTokens > 0) payload.MaxInputTokens = maxInputTokens;
+
+  const reservedInputTokens = parseInt(tokenization.ReservedInputTokens, 10);
+  if (!Number.isNaN(reservedInputTokens) && reservedInputTokens >= 0) payload.ReservedInputTokens = reservedInputTokens;
+
+  if (tokenization.BatchLimitMode) payload.BatchLimitMode = tokenization.BatchLimitMode;
+
+  return payload;
+}
+
+function describeTokenization(tokenization) {
+  if (!tokenization) return 'Auto';
+
+  const kind = tokenization.TokenizerKind || 'Auto';
+  const budget = tokenization.MaxInputTokens ? `${tokenization.MaxInputTokens} tok` : 'auto budget';
+  return `${kind} · ${budget}`;
+}
+
 export default function EmbeddingEndpointsView() {
   const { serverUrl, bearerToken } = useApp();
   const api = new PartioApi(serverUrl, bearerToken);
@@ -245,7 +286,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, Tokenization: createTokenizationForm(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -297,7 +338,7 @@ export default function EmbeddingEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, HealthCheckEnabled: false, ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -315,6 +356,7 @@ export default function EmbeddingEndpointsView() {
       ApiKey: item.ApiKey || '',
       Active: item.Active !== false,
       EnableRequestHistory: item.EnableRequestHistory || false,
+      Tokenization: createTokenizationForm(item.Tokenization),
       HealthCheckEnabled: item.HealthCheckEnabled || false,
       HealthCheckUrl: item.HealthCheckUrl || '',
       HealthCheckMethod: item.HealthCheckMethod === 1 ? 'HEAD' : 'GET',
@@ -362,6 +404,7 @@ export default function EmbeddingEndpointsView() {
         HealthyThreshold: parseInt(form.HealthyThreshold) || 2,
         UnhealthyThreshold: parseInt(form.UnhealthyThreshold) || 2,
         HealthCheckUseAuth: form.HealthCheckUseAuth,
+        Tokenization: buildTokenizationPayload(form.Tokenization),
       };
       if (editing) {
         await api.updateEndpoint(editing.Id, { ...editing, ...payload });
@@ -422,6 +465,13 @@ export default function EmbeddingEndpointsView() {
       key: 'ApiFormat',
       label: 'Format',
       tooltip: 'API protocol format: Ollama, OpenAI, Gemini, or vLLM'
+    },
+    {
+      key: 'Tokenization',
+      label: 'Tokenization',
+      tooltip: 'Endpoint override shown here. When unset, Partio resolves tokenization dynamically through probe, provider defaults, and the global fallback.',
+      filterValue: (item) => item.Tokenization ? 'Override' : 'Auto',
+      render: (item) => <span className="tokenization-summary">{describeTokenization(item.Tokenization)}</span>
     },
     {
       key: 'Active',
@@ -598,6 +648,82 @@ export default function EmbeddingEndpointsView() {
                 <TooltipIcon content="Log all embedding requests and responses for debugging and auditing." />
               </label>
             </div>
+          </div>
+
+          <div className="endpoint-form-section">
+            <div className="endpoint-form-section-header">Tokenization</div>
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={form.Tokenization.Enabled}
+                  onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, Enabled: e.target.checked } })}
+                />
+                {' '}Configure Tokenization Override
+                <TooltipIcon content="Override tokenizer family, model budget, and batching semantics for this endpoint. When disabled, Partio resolves tokenization from probe, provider defaults, then the global fallback." />
+              </label>
+            </div>
+            {form.Tokenization.Enabled && (
+              <>
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={form.Tokenization.AutoDetect}
+                      onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, AutoDetect: e.target.checked } })}
+                    />
+                    {' '}Auto-detect Missing Fields
+                    <TooltipIcon content="If enabled, Partio can still probe or fall back for any tokenization field you leave blank here." />
+                  </label>
+                </div>
+                <div className="endpoint-form-row">
+                  <div className="form-group">
+                    <FormFieldLabel text="Tokenizer Kind" tooltip="Tokenizer family used for chunk counting and token-range slicing. Leave blank to let Partio resolve it dynamically." />
+                    <Tooltip content="Tokenizer family used for chunk counting and token-range slicing. Leave blank to let Partio resolve it dynamically." block>
+                      <select value={form.Tokenization.TokenizerKind} onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, TokenizerKind: e.target.value } })}>
+                        <option value="">Automatic</option>
+                        <option value="Cl100kBase">Cl100kBase</option>
+                        <option value="BertWordPiece">BertWordPiece</option>
+                      </select>
+                    </Tooltip>
+                  </div>
+                  <div className="form-group">
+                    <FormFieldLabel text="Tokenizer Model" tooltip="Tokenizer model or vocabulary identifier, such as cl100k_base or bert-base-uncased." />
+                    <Tooltip content="Tokenizer model or vocabulary identifier, such as cl100k_base or bert-base-uncased." block>
+                      <input value={form.Tokenization.TokenizerModel} onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, TokenizerModel: e.target.value } })} placeholder="Automatic" />
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="endpoint-form-row">
+                  <div className="form-group">
+                    <FormFieldLabel text="Max Input Tokens" tooltip="Upstream embedding input limit before any reserved tokens are deducted." />
+                    <Tooltip content="Upstream embedding input limit before any reserved tokens are deducted." block>
+                      <input type="number" min="1" value={form.Tokenization.MaxInputTokens} onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, MaxInputTokens: e.target.value } })} placeholder="Automatic" />
+                    </Tooltip>
+                  </div>
+                  <div className="form-group">
+                    <FormFieldLabel text="Reserved Tokens" tooltip="Tokens reserved before chunking begins, for example when using a context prefix." />
+                    <Tooltip content="Tokens reserved before chunking begins, for example when using a context prefix." block>
+                      <input type="number" min="0" value={form.Tokenization.ReservedInputTokens} onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, ReservedInputTokens: e.target.value } })} placeholder="0" />
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <FormFieldLabel text="Batch Limit Mode" tooltip="How the upstream endpoint enforces token limits for batched embedding inputs." />
+                  <Tooltip content="How the upstream endpoint enforces token limits for batched embedding inputs." block>
+                    <select value={form.Tokenization.BatchLimitMode} onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, BatchLimitMode: e.target.value } })}>
+                      <option value="">Automatic</option>
+                      <option value="PerInput">PerInput</option>
+                      <option value="WholeRequest">WholeRequest</option>
+                      <option value="Unknown">Unknown</option>
+                    </select>
+                  </Tooltip>
+                </div>
+                <div className="tokenization-hint">
+                  {'Resolution order: endpoint override -> provider probe -> provider default -> global fallback.'}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Health Checks Section */}

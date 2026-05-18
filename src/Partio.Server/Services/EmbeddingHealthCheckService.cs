@@ -5,6 +5,7 @@ namespace Partio.Server.Services
     using Partio.Core.Database;
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Tokenization;
     using SyslogLogging;
 
     /// <summary>
@@ -15,6 +16,7 @@ namespace Partio.Server.Services
     {
         private readonly DatabaseDriverBase _Database;
         private readonly LoggingModule _Logging;
+        private readonly TokenizationProfileResolver? _TokenizationResolver;
         private readonly string _Header = "[HealthCheck] ";
         private readonly ConcurrentDictionary<string, EndpointHealthState> _States = new ConcurrentDictionary<string, EndpointHealthState>();
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _CancellationTokens = new ConcurrentDictionary<string, CancellationTokenSource>();
@@ -27,10 +29,12 @@ namespace Partio.Server.Services
         /// </summary>
         /// <param name="database">Database driver.</param>
         /// <param name="logging">Logging module.</param>
-        public EmbeddingHealthCheckService(DatabaseDriverBase database, LoggingModule logging)
+        /// <param name="tokenizationResolver">Optional tokenization resolver for capability cache invalidation on health transitions.</param>
+        public EmbeddingHealthCheckService(DatabaseDriverBase database, LoggingModule logging, TokenizationProfileResolver? tokenizationResolver = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            _TokenizationResolver = tokenizationResolver;
         }
 
         /// <summary>
@@ -347,6 +351,7 @@ namespace Partio.Server.Services
                         state.IsHealthy = true;
                         state.LastHealthyUtc = now;
                         state.LastStateChangeUtc = now;
+                        _TokenizationResolver?.Invalidate(state.EndpointId);
 
                         _Logging.Info(_Header + "endpoint " + state.EndpointId + " (" + state.EndpointName + ") transitioned to HEALTHY");
                     }
@@ -369,6 +374,7 @@ namespace Partio.Server.Services
                         state.IsHealthy = false;
                         state.LastUnhealthyUtc = now;
                         state.LastStateChangeUtc = now;
+                        _TokenizationResolver?.Invalidate(state.EndpointId);
 
                         _Logging.Warn(_Header + "endpoint " + state.EndpointId + " (" + state.EndpointName + ") transitioned to UNHEALTHY: " + (errorMessage ?? "check failed"));
                     }

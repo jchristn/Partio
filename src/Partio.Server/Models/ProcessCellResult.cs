@@ -21,5 +21,15 @@ namespace Partio.Server.Models
         /// Details of HTTP calls made to the upstream completion endpoint for summarization.
         /// </summary>
         public List<CompletionCallDetail> CompletionCalls { get; set; } = new List<CompletionCallDetail>();
+
+        /// <summary>
+        /// Resolved tokenization profile used for chunking and embedding.
+        /// </summary>
+        public ResolvedTokenizationProfile? TokenizationProfile { get; set; }
+
+        /// <summary>
+        /// Per-chunk diagnostics recorded before upstream embedding calls are issued.
+        /// </summary>
+        public List<ChunkProcessingDiagnostic> ChunkDiagnostics { get; set; } = new List<ChunkProcessingDiagnostic>();
     }
 }

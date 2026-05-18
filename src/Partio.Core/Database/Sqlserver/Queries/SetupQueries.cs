@@ -92,6 +92,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     healthy_threshold INT NOT NULL DEFAULT 2,
                     unhealthy_threshold INT NOT NULL DEFAULT 2,
                     health_check_use_auth BIT NOT NULL DEFAULT 0,
+                    tokenization_json NVARCHAR(MAX) NULL,
                     labels_json NVARCHAR(MAX) NULL,
                     tags_json NVARCHAR(MAX) NULL,
                     created_utc NVARCHAR(64) NOT NULL,
@@ -164,6 +165,15 @@ namespace Partio.Core.Database.Sqlserver.Queries
             @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'name')
             BEGIN
                 ALTER TABLE embedding_endpoints ADD name NVARCHAR(256) NULL;
+            END;";
+
+        /// <summary>
+        /// Migration: add tokenization_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddTokenizationJson =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'tokenization_json')
+            BEGIN
+                ALTER TABLE embedding_endpoints ADD tokenization_json NVARCHAR(MAX) NULL;
             END;";
 
         /// <summary>

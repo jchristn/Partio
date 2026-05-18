@@ -1,5 +1,6 @@
 namespace Partio.Core.ThirdParty
 {
+    using Partio.Core.Enums;
     using Partio.Core.Models;
     using PolyPrompt.Clients;
     using PolyPrompt.Models;
@@ -46,6 +47,21 @@ namespace Partio.Core.ThirdParty
             return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
         }
 
+        /// <inheritdoc />
+        public override Task<EmbeddingModelCapabilities?> GetModelCapabilitiesAsync(string model, CancellationToken token = default)
+        {
+            EmbeddingModelCapabilities capabilities = new EmbeddingModelCapabilities
+            {
+                SourceHint = TokenizationProfileSourceEnum.ProviderDefault,
+                MaxInputTokens = 2048,
+                ReservedInputTokens = 0,
+                BatchLimitMode = BatchLimitModeEnum.PerInput
+            };
+            capabilities.ProviderMetadata["CapabilitySource"] = "GeminiModelRegistry";
+            capabilities.ProviderMetadata["Model"] = model;
+            return Task.FromResult<EmbeddingModelCapabilities?>(capabilities);
+        }
+
         private void SyncCallDetails()
         {
             for (; _RecordedCallCount < _Client.CallDetails.Count; _RecordedCallCount++)
@@ -53,6 +69,7 @@ namespace Partio.Core.ThirdParty
                 PolyPrompt.Models.CompletionCallDetail src = _Client.CallDetails[_RecordedCallCount];
                 CallDetails.Add(new EmbeddingCallDetail
                 {
+                    Purpose = "EmbeddingRequest",
                     Url = src.Url,
                     Method = src.Method,
                     RequestHeaders = src.RequestHeaders,

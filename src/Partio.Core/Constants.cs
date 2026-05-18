@@ -23,7 +23,7 @@ namespace Partio.Core
         /// <summary>
         /// Current version string.
         /// </summary>
-        public static readonly string Version = "0.2.0";
+        public static readonly string Version = "0.3.0";
 
         /// <summary>
         /// Settings filename.
@@ -109,5 +109,35 @@ namespace Partio.Core
         /// Response header for the model name.
         /// </summary>
         public static readonly string ModelHeader = "X-Model";
+
+        /// <summary>
+        /// Response header for the resolved tokenizer kind.
+        /// </summary>
+        public static readonly string TokenizerKindHeader = "X-Partio-Tokenizer-Kind";
+
+        /// <summary>
+        /// Response header for the resolved tokenizer model.
+        /// </summary>
+        public static readonly string TokenizerModelHeader = "X-Partio-Tokenizer-Model";
+
+        /// <summary>
+        /// Response header for the resolved tokenization profile source.
+        /// </summary>
+        public static readonly string TokenizerSourceHeader = "X-Partio-Tokenizer-Source";
+
+        /// <summary>
+        /// Response header for the resolved effective input budget.
+        /// </summary>
+        public static readonly string EffectiveInputBudgetHeader = "X-Partio-Effective-Input-Budget";
+
+        /// <summary>
+        /// Response header for the resolved raw maximum input tokens.
+        /// </summary>
+        public static readonly string MaxInputTokensHeader = "X-Partio-Max-Input-Tokens";
+
+        /// <summary>
+        /// Response header for the resolved batch-limit mode.
+        /// </summary>
+        public static readonly string BatchLimitModeHeader = "X-Partio-Batch-Limit-Mode";
     }
 }

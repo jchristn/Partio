@@ -18,6 +18,7 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Request history (`getRequestHistory`, `getRequestHistoryDetail`, `deleteRequestHistory`, `enumerateRequestHistory`)
 
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
 
 ## Prerequisites
 
@@ -39,6 +40,22 @@ import { PartioClient } from './partio-sdk.js';
 
 const client = new PartioClient('http://localhost:8400', 'your-access-key');
 
+const endpoint = await client.createEndpoint({
+  TenantId: 'default',
+  Name: 'Pinned MiniLM',
+  Model: 'all-minilm',
+  Endpoint: 'http://localhost:11434',
+  ApiFormat: 'Ollama',
+  Tokenization: {
+    TokenizerKind: 'BertWordPiece',
+    TokenizerModel: 'bert-base-uncased',
+    MaxInputTokens: 512,
+    ReservedInputTokens: 0,
+    BatchLimitMode: 'PerInput',
+    AutoDetect: true
+  }
+});
+
 const result = await client.process({
   Type: 'Text',
   Text: 'Hello, world!',
@@ -55,6 +72,13 @@ const explorer = await client.exploreCompletionEndpoint({
 });
 
 console.log(`Explorer success: ${explorer.Success}`);
+
+const embeddingExplorer = await client.exploreEmbeddingEndpoint({
+  EndpointId: endpoint.Id,
+  Input: 'Tokenizer diagnostics sample'
+});
+
+console.log(embeddingExplorer.TokenizationProfile.ProfileSource);
 ```
 
 ## Running the Test Harness

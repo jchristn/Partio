@@ -143,7 +143,24 @@ namespace Partio.Sdk.TestHarness
                 string vllmEpId = "";
                 await RunTest("Create Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Test Embedding", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
+                    EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                    {
+                        TenantId = testTenantId,
+                        Name = "Test Embedding",
+                        Model = "test-model",
+                        Endpoint = "http://localhost:11434",
+                        ApiFormat = "Ollama",
+                        HealthCheckEnabled = false,
+                        Tokenization = new EndpointTokenizationSettings
+                        {
+                            TokenizerKind = "BertWordPiece",
+                            TokenizerModel = "bert-base-uncased",
+                            MaxInputTokens = 384,
+                            ReservedInputTokens = 16,
+                            BatchLimitMode = "PerInput",
+                            AutoDetect = true
+                        }
+                    });
                     if (ep == null) throw new Exception("No response");
                     testEpId = ep.Id ?? string.Empty;
                 });
@@ -152,12 +169,35 @@ namespace Partio.Sdk.TestHarness
                 {
                     EmbeddingEndpoint? ep = await admin.GetEndpointAsync(testEpId);
                     if (ep == null || ep.Model != "test-model") throw new Exception("Endpoint mismatch");
+                    if (ep.Tokenization == null) throw new Exception("Expected tokenization override");
+                    if (ep.Tokenization.TokenizerModel != "bert-base-uncased") throw new Exception("Tokenizer model mismatch");
+                    if (ep.Tokenization.MaxInputTokens != 384) throw new Exception("MaxInputTokens mismatch");
                 });
 
                 await RunTest("Update Endpoint", async () =>
                 {
-                    EmbeddingEndpoint? updated = await admin.UpdateEndpointAsync(testEpId, new EmbeddingEndpoint { TenantId = testTenantId, Name = "Updated Embedding", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false });
+                    EmbeddingEndpoint? updated = await admin.UpdateEndpointAsync(testEpId, new EmbeddingEndpoint
+                    {
+                        TenantId = testTenantId,
+                        Name = "Updated Embedding",
+                        Model = "test-model-updated",
+                        Endpoint = "http://localhost:11434",
+                        ApiFormat = "Ollama",
+                        HealthCheckEnabled = false,
+                        Tokenization = new EndpointTokenizationSettings
+                        {
+                            TokenizerKind = "Cl100kBase",
+                            TokenizerModel = "cl100k_base",
+                            MaxInputTokens = 2048,
+                            ReservedInputTokens = 32,
+                            BatchLimitMode = "WholeRequest",
+                            AutoDetect = false
+                        }
+                    });
                     if (updated == null) throw new Exception("Update failed");
+                    if (updated.Tokenization == null) throw new Exception("Expected updated tokenization override");
+                    if (updated.Tokenization.BatchLimitMode != "WholeRequest") throw new Exception("Batch limit mode mismatch");
+                    if (updated.Tokenization.AutoDetect) throw new Exception("AutoDetect should be false");
                 });
 
                 await RunTest("Endpoint Exists (HEAD)", async () =>
@@ -252,6 +292,13 @@ namespace Partio.Sdk.TestHarness
                     if (result == null) throw new Exception("No response");
                     if (result.EndpointId != testEpId) throw new Exception("Endpoint mismatch");
                     if (result.EmbeddingCalls == null || result.EmbeddingCalls.Count == 0) throw new Exception("Expected upstream call details");
+                    if (result.TokenizationProfile == null) throw new Exception("Expected tokenization profile");
+                    if (result.TokenizationProfile.EffectiveInputBudget < 1) throw new Exception("Invalid effective token budget");
+                    if (!string.IsNullOrEmpty(result.RequestHistoryId))
+                    {
+                        RequestHistoryDetail? detail = await admin.GetRequestHistoryDetailAsync(result.RequestHistoryId);
+                        if (detail?.TokenizationProfile == null) throw new Exception("Expected tokenization profile in request history detail");
+                    }
                 });
 
                 await RunTest("Explore Completion Endpoint", async () =>

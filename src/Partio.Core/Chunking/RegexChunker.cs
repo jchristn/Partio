@@ -1,7 +1,7 @@
 namespace Partio.Core.Chunking
 {
     using Partio.Core.Models;
-    using SharpToken;
+    using Partio.Core.Tokenization;
     using System.Text.RegularExpressions;
 
     /// <summary>
@@ -16,30 +16,32 @@ namespace Partio.Core.Chunking
         public static List<string> Chunk(
             string text,
             ChunkingConfiguration config,
-            GptEncoding encoding)
+            ITokenizerAdapter tokenizer,
+            int tokenLimit)
         {
-            // 1. Validate
             if (string.IsNullOrEmpty(text)) return new List<string>();
             if (string.IsNullOrEmpty(config.RegexPattern))
                 throw new ArgumentException("RegexPattern is required when using RegexBased strategy.");
 
-            // 2. Compile with Multiline (so ^ and $ match line boundaries) and a timeout
             Regex regex = new Regex(
                 config.RegexPattern,
                 RegexOptions.Compiled | RegexOptions.Multiline,
                 TimeSpan.FromSeconds(5));
 
-            // 3. Split and discard empty segments
-            string[] segments = regex.Split(text);
-            List<string> filtered = segments
+            List<string> filtered = regex.Split(text)
                 .Select(s => s.Trim())
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .ToList();
 
-            if (filtered.Count == 0) return new List<string> { text };
+            if (filtered.Count == 0) return ChunkingHelpers.ChunkByTokenSpans(text, config, tokenizer, tokenLimit);
 
-            // 4. Each regex-defined segment becomes its own chunk
-            return filtered;
+            return ChunkingHelpers.ChunkUnits(
+                filtered,
+                "\n",
+                tokenLimit,
+                tokenizer,
+                ChunkingHelpers.GetUnitOverlapCount(config),
+                segment => ChunkingHelpers.ChunkByTokenSpans(segment, config, tokenizer, tokenLimit));
         }
     }
 }

@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.2.0" }
+{ "Status": "Healthy", "Version": "0.3.0" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.2.0" }
+{ "Status": "Healthy", "Version": "0.3.0" }
 ```
 
 ---
@@ -52,6 +52,8 @@ Returns the role and tenant of the authenticated caller.
 Process a single semantic cell. Requires bearer token authentication.
 
 **Request Body**: `SemanticCellRequest`
+
+`FixedTokenCount` is interpreted in the selected embedding endpoint's active token space. Partio resolves that tokenization profile in this order: endpoint override, provider probe, provider default, global fallback.
 
 The `Type` field determines which content field is used. Supported types: `Text`, `List`, `Table`, `Code`, `Hyperlink`, `Meta`.
 
@@ -324,6 +326,15 @@ Split at boundaries defined by the `RegexPattern`. Text is split using `Regex.Sp
 }
 ```
 
+Successful embedding responses also include these headers when tokenization resolution is applicable:
+
+| Header | Description |
+|--------|-------------|
+| `X-Partio-Tokenizer-Kind` | Resolved tokenizer family used for chunk counting and slicing |
+| `X-Partio-Tokenizer-Model` | Resolved tokenizer model or vocabulary identifier |
+| `X-Partio-Tokenizer-Source` | Resolution source: `EndpointOverride`, `ProviderProbe`, `ProviderDefault`, or `GlobalFallback` |
+| `X-Partio-Effective-Input-Budget` | Effective per-input token budget after reserved tokens are removed |
+
 **Errors**:
 - `404 Not Found` — EmbeddingEndpointId not found or does not belong to the caller's tenant
 - `400 Bad Request` — Endpoint is inactive, request body is missing/invalid, or strategy is incompatible with atom type
@@ -368,7 +379,7 @@ Example error response for using `Row` strategy on a `Text` type:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | string | `FixedTokenCount` | Chunking strategy to use |
-| `FixedTokenCount` | int | `256` | Tokens per chunk (for FixedTokenCount) |
+| `FixedTokenCount` | int | `256` | Requested chunk budget in the active embedding endpoint's token space |
 | `OverlapCount` | int | `0` | Overlap tokens between chunks |
 | `OverlapPercentage` | float? | `null` | Overlap as percentage (0.0-1.0) |
 | `OverlapStrategy` | string | `SlidingWindow` | Overlap boundary strategy |
@@ -421,11 +432,26 @@ Exercise a configured embedding endpoint through Partio.
     "Dimensions": 768,
     "ResponseTimeMs": 123,
     "RequestHistoryId": "req_xxxx",
-    "EmbeddingCalls": []
+    "EmbeddingCalls": [],
+    "TokenizationProfile": {
+        "TokenizerKind": "Cl100kBase",
+        "TokenizerModel": "cl100k_base",
+        "MaxInputTokens": 8192,
+        "ReservedInputTokens": 0,
+        "EffectiveInputBudget": 8192,
+        "BatchLimitMode": "PerInput",
+        "ProfileSource": "ProviderDefault",
+        "UsedFallback": true,
+        "ProviderMetadata": {
+            "EndpointId": "eep_xxxx",
+            "ApiFormat": "OpenAI",
+            "Model": "text-embedding-3-small"
+        }
+    }
 }
 ```
 
-When the provider call fails, `Success` is `false`, `StatusCode` contains the mapped failure code, `Error` contains the error text, and `EmbeddingCalls` still contains any upstream request/response data captured before the failure.
+When the provider call fails, `Success` is `false`, `StatusCode` contains the mapped failure code, `Error` contains the error text, `EmbeddingCalls` still contains any upstream request/response data captured before the failure, and `TokenizationProfile` still shows the resolved budgeting context when resolution succeeded.
 
 ### POST /v1.0/explorer/completion
 Exercise a configured inference endpoint through Partio.
@@ -629,7 +655,15 @@ Create an embedding endpoint.
     "HealthCheckExpectedStatusCode": 200,
     "HealthyThreshold": 3,
     "UnhealthyThreshold": 3,
-    "HealthCheckUseAuth": false
+    "HealthCheckUseAuth": false,
+    "Tokenization": {
+        "TokenizerKind": "BertWordPiece",
+        "TokenizerModel": "bert-base-uncased",
+        "MaxInputTokens": 512,
+        "ReservedInputTokens": 0,
+        "BatchLimitMode": "PerInput",
+        "AutoDetect": true
+    }
 }
 ```
 
@@ -646,6 +680,19 @@ Create an embedding endpoint.
 | `HealthyThreshold` | int | `3` | Consecutive successes required to transition to healthy |
 | `UnhealthyThreshold` | int | `3` | Consecutive failures required to transition to unhealthy |
 | `HealthCheckUseAuth` | bool | `false` | Include the endpoint's API key in health checks (Bearer for OpenAI/vLLM, `x-goog-api-key` for Gemini) |
+
+#### Tokenization Properties
+
+`Tokenization` is optional. If omitted or incomplete, Partio continues resolution through provider probe, provider defaults, then the server global fallback.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `TokenizerKind` | string? | `null` | Tokenizer family used for chunk counting and token-range slicing |
+| `TokenizerModel` | string? | `null` | Tokenizer model or vocabulary identifier |
+| `MaxInputTokens` | int? | `null` | Upstream maximum accepted input tokens |
+| `ReservedInputTokens` | int? | `null` | Tokens reserved before chunking begins |
+| `BatchLimitMode` | string? | `null` | `PerInput`, `WholeRequest`, or `Unknown` |
+| `AutoDetect` | bool | `true` | Whether Partio should continue probing or falling back for missing fields |
 
 When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs a background loop that periodically checks the endpoint. If the endpoint becomes unhealthy, process requests to it return `502 Bad Gateway`.
 
@@ -807,6 +854,7 @@ Read request/response body detail from filesystem.
 | `ResponseBody` | string? | Outer response body (may be truncated) |
 | `EmbeddingCalls` | array? | Upstream embedding HTTP call details (present only for process requests) |
 | `CompletionCalls` | array? | Upstream completion/inference HTTP call details (present only for requests that use summarization or other completion features) |
+| `TokenizationProfile` | object? | Resolved embedding tokenization profile for process and explorer embedding requests when available |
 
 Each item in the `EmbeddingCalls` or `CompletionCalls` array:
 

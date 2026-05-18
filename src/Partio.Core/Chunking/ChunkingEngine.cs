@@ -2,7 +2,7 @@ namespace Partio.Core.Chunking
 {
     using Partio.Core.Enums;
     using Partio.Core.Models;
-    using SharpToken;
+    using Partio.Core.Tokenization;
     using SyslogLogging;
 
     /// <summary>
@@ -10,27 +10,28 @@ namespace Partio.Core.Chunking
     /// </summary>
     public class ChunkingEngine
     {
-        private readonly GptEncoding _Encoding;
-
         /// <summary>
         /// Initialize a new ChunkingEngine.
         /// </summary>
         /// <param name="logging">Logging module.</param>
         public ChunkingEngine(LoggingModule logging)
         {
-            _Encoding = GptEncoding.GetEncoding("cl100k_base");
         }
 
         /// <summary>
         /// Chunk a semantic cell request into text chunks (before embedding).
         /// </summary>
         /// <param name="request">Semantic cell request.</param>
+        /// <param name="tokenizer">Tokenizer adapter for the active embedding profile.</param>
+        /// <param name="tokenBudget">Effective token budget to enforce while chunking.</param>
         /// <returns>List of chunk results with text but no embeddings yet.</returns>
-        public List<ChunkResult> Chunk(SemanticCellRequest request)
+        public List<ChunkResult> Chunk(SemanticCellRequest request, ITokenizerAdapter tokenizer, int tokenBudget)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
+            if (tokenizer == null) throw new ArgumentNullException(nameof(tokenizer));
+            if (tokenBudget < 1) throw new ArgumentOutOfRangeException(nameof(tokenBudget));
 
-            List<string> rawChunks = GetRawChunks(request);
+            List<string> rawChunks = GetRawChunks(request, tokenizer, tokenBudget);
 
             List<ChunkResult> results = new List<ChunkResult>();
 
@@ -44,7 +45,7 @@ namespace Partio.Core.Chunking
             return results;
         }
 
-        private List<string> GetRawChunks(SemanticCellRequest request)
+        private List<string> GetRawChunks(SemanticCellRequest request, ITokenizerAdapter tokenizer, int tokenBudget)
         {
             ChunkingConfiguration config = request.ChunkingConfiguration;
 
@@ -54,58 +55,66 @@ namespace Partio.Core.Chunking
                 case AtomTypeEnum.Code:
                 case AtomTypeEnum.Hyperlink:
                 case AtomTypeEnum.Meta:
-                    return ChunkText(request.Text ?? string.Empty, config);
+                    return ChunkText(request.Text ?? string.Empty, config, tokenizer, tokenBudget);
 
                 case AtomTypeEnum.List:
-                    return ChunkList(request, config);
+                    return ChunkList(request, config, tokenizer, tokenBudget);
 
                 case AtomTypeEnum.Table:
-                    return ChunkTable(request, config);
+                    return ChunkTable(request, config, tokenizer, tokenBudget);
 
                 case AtomTypeEnum.Binary:
                 case AtomTypeEnum.Image:
                     if (!string.IsNullOrEmpty(request.Text))
-                        return ChunkText(request.Text, config);
+                        return ChunkText(request.Text, config, tokenizer, tokenBudget);
                     return new List<string>();
 
                 case AtomTypeEnum.Unknown:
                 default:
                     if (!string.IsNullOrEmpty(request.Text))
-                        return ChunkText(request.Text, config);
+                        return ChunkText(request.Text, config, tokenizer, tokenBudget);
                     return new List<string>();
             }
         }
 
-        private List<string> ChunkText(string text, ChunkingConfiguration config)
+        private List<string> ChunkText(string text, ChunkingConfiguration config, ITokenizerAdapter tokenizer, int tokenBudget)
         {
             if (string.IsNullOrEmpty(text)) return new List<string>();
 
             switch (config.Strategy)
             {
                 case ChunkStrategyEnum.FixedTokenCount:
-                    return FixedTokenChunker.Chunk(text, config, _Encoding);
+                    return FixedTokenChunker.Chunk(text, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.SentenceBased:
-                    return SentenceChunker.Chunk(text, config, _Encoding);
+                    return SentenceChunker.Chunk(text, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.ParagraphBased:
-                    return ParagraphChunker.Chunk(text, config, _Encoding);
+                    return ParagraphChunker.Chunk(text, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.RegexBased:
-                    return RegexChunker.Chunk(text, config, _Encoding);
+                    return RegexChunker.Chunk(text, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.WholeList:
-                    return new List<string> { text };
+                    if (tokenizer.CountTokens(text) <= tokenBudget)
+                        return new List<string> { text };
+                    return ChunkingHelpers.ChunkByTokenSpans(text, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.ListEntry:
-                    return text.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+                    return ChunkingHelpers.ChunkUnits(
+                        text.Split('\n').Where(line => !string.IsNullOrWhiteSpace(line)).ToList(),
+                        "\n",
+                        tokenBudget,
+                        tokenizer,
+                        0,
+                        line => ChunkingHelpers.ChunkByTokenSpans(line, config, tokenizer, tokenBudget));
 
                 default:
-                    return FixedTokenChunker.Chunk(text, config, _Encoding);
+                    return FixedTokenChunker.Chunk(text, config, tokenizer, tokenBudget);
             }
         }
 
-        private List<string> ChunkList(SemanticCellRequest request, ChunkingConfiguration config)
+        private List<string> ChunkList(SemanticCellRequest request, ChunkingConfiguration config, ITokenizerAdapter tokenizer, int tokenBudget)
         {
             List<string>? items = request.OrderedList ?? request.UnorderedList;
             if (items == null || items.Count == 0) return new List<string>();
@@ -115,41 +124,41 @@ namespace Partio.Core.Chunking
             switch (config.Strategy)
             {
                 case ChunkStrategyEnum.WholeList:
-                    return WholeListChunker.Chunk(items, ordered);
+                    return WholeListChunker.Chunk(items, config, ordered, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.ListEntry:
-                    return ListEntryChunker.Chunk(items);
+                    return ListEntryChunker.Chunk(items, config, tokenizer, tokenBudget);
 
                 default:
                     string serialized = SerializeList(items, ordered);
-                    return ChunkText(serialized, config);
+                    return ChunkText(serialized, config, tokenizer, tokenBudget);
             }
         }
 
-        private List<string> ChunkTable(SemanticCellRequest request, ChunkingConfiguration config)
+        private List<string> ChunkTable(SemanticCellRequest request, ChunkingConfiguration config, ITokenizerAdapter tokenizer, int tokenBudget)
         {
             if (request.Table == null || request.Table.Count == 0) return new List<string>();
 
             switch (config.Strategy)
             {
                 case ChunkStrategyEnum.Row:
-                    return TableChunker.ChunkByRow(request.Table);
+                    return TableChunker.ChunkByRow(request.Table, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.RowWithHeaders:
-                    return TableChunker.ChunkByRowWithHeaders(request.Table);
+                    return TableChunker.ChunkByRowWithHeaders(request.Table, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.RowGroupWithHeaders:
-                    return TableChunker.ChunkByRowGroupWithHeaders(request.Table, config.RowGroupSize);
+                    return TableChunker.ChunkByRowGroupWithHeaders(request.Table, config.RowGroupSize, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.KeyValuePairs:
-                    return TableChunker.ChunkByKeyValuePairs(request.Table);
+                    return TableChunker.ChunkByKeyValuePairs(request.Table, config, tokenizer, tokenBudget);
 
                 case ChunkStrategyEnum.WholeTable:
-                    return TableChunker.ChunkWholeTable(request.Table);
+                    return TableChunker.ChunkWholeTable(request.Table, config.RowGroupSize, config, tokenizer, tokenBudget);
 
                 default:
                     string serialized = SerializeTable(request.Table);
-                    return ChunkText(serialized, config);
+                    return ChunkText(serialized, config, tokenizer, tokenBudget);
             }
         }
 

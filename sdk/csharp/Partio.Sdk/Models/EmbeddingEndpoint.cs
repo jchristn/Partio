@@ -58,6 +58,9 @@ namespace Partio.Sdk.Models
         [JsonPropertyName("HealthCheckUseAuth")]
         public bool HealthCheckUseAuth { get; set; } = false;
 
+        [JsonPropertyName("Tokenization")]
+        public EndpointTokenizationSettings? Tokenization { get; set; }
+
         [JsonPropertyName("Labels")]
         public List<string>? Labels { get; set; }
 

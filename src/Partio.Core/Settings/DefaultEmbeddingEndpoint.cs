@@ -1,6 +1,7 @@
 namespace Partio.Core.Settings
 {
     using Partio.Core.Enums;
+    using Partio.Core.Models;
 
     /// <summary>
     /// Default embedding endpoint configuration seeded for new tenants.
@@ -12,6 +13,7 @@ namespace Partio.Core.Settings
         private string _Endpoint = "http://localhost:11434";
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
         private string? _ApiKey = null;
+        private EndpointTokenizationSettings? _Tokenization = null;
 
         /// <summary>
         /// Human-readable name for the endpoint.
@@ -56,6 +58,15 @@ namespace Partio.Core.Settings
         {
             get => _ApiKey;
             set => _ApiKey = value;
+        }
+
+        /// <summary>
+        /// Optional tokenization override settings to seed onto the endpoint.
+        /// </summary>
+        public EndpointTokenizationSettings? Tokenization
+        {
+            get => _Tokenization;
+            set => _Tokenization = value;
         }
     }
 }

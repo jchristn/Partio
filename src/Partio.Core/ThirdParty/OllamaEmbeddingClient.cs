@@ -1,6 +1,9 @@
 namespace Partio.Core.ThirdParty
 {
+    using System.Text;
+    using System.Text.Json;
     using System.Text.RegularExpressions;
+    using Partio.Core.Enums;
     using Partio.Core.Models;
     using PolyPrompt.Clients;
     using PolyPrompt.Models;
@@ -48,22 +51,69 @@ namespace Partio.Core.ThirdParty
         }
 
         /// <inheritdoc />
-        public override async Task<int?> GetModelContextLengthAsync(string model, CancellationToken token = default)
+        public override async Task<EmbeddingModelCapabilities?> GetModelCapabilitiesAsync(string model, CancellationToken token = default)
         {
-            ModelInformation? info = await _Client.GetModelInformationAsync(model, token).ConfigureAwait(false);
-            SyncCallDetails();
-            if (info == null) return null;
+            string url = _Endpoint.TrimEnd('/') + "/api/show";
+            string requestBodyJson = "{\"model\":\"" + JsonEncodedText.Encode(model).ToString() + "\",\"verbose\":false}";
+            using StringContent content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json");
+            EmbeddingHttpResult result = await PostAndRecordAsync(url, content, requestBodyJson, "CapabilityProbe", token).ConfigureAwait(false);
 
-            if (info.InputTokenLimit.HasValue) return info.InputTokenLimit.Value;
+            if (!result.Response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(result.ResponseBody))
+                return null;
 
-            if (info.Metadata.TryGetValue("parameters", out string? parameters) && !string.IsNullOrEmpty(parameters))
+            using JsonDocument doc = JsonDocument.Parse(result.ResponseBody);
+            JsonElement root = doc.RootElement;
+
+            EmbeddingModelCapabilities capabilities = new EmbeddingModelCapabilities();
+            capabilities.SourceHint = TokenizationProfileSourceEnum.ProviderProbe;
+            capabilities.BatchLimitMode = BatchLimitModeEnum.Unknown;
+            capabilities.ProviderMetadata["CapabilitySource"] = "OllamaShow";
+            capabilities.ProviderMetadata["BatchLimitModeSource"] = "Unverified";
+
+            string? parameters = TryGetString(root, "parameters");
+            if (!string.IsNullOrEmpty(parameters))
             {
                 Match match = Regex.Match(parameters, @"num_ctx\s+(\d+)");
                 if (match.Success && int.TryParse(match.Groups[1].Value, out int numCtx))
-                    return numCtx;
+                    capabilities.MaxInputTokens = numCtx;
             }
 
-            return null;
+            if (root.TryGetProperty("model_info", out JsonElement modelInfo))
+            {
+                string? architecture = TryGetString(modelInfo, "general.architecture");
+                if (!string.IsNullOrEmpty(architecture))
+                    capabilities.ProviderMetadata["Architecture"] = architecture;
+
+                string? tokenizerFamily = TryGetString(modelInfo, "tokenizer.ggml.model");
+                if (!string.IsNullOrEmpty(tokenizerFamily))
+                    capabilities.ProviderMetadata["TokenizerFamily"] = tokenizerFamily;
+
+                int? contextLength = TryGetInt(modelInfo, "bert.context_length")
+                    ?? TryGetInt(modelInfo, "gemma.context_length")
+                    ?? TryGetInt(modelInfo, "llama.context_length")
+                    ?? TryGetInt(modelInfo, "qwen2.context_length");
+                if (contextLength.HasValue && !capabilities.MaxInputTokens.HasValue)
+                    capabilities.MaxInputTokens = contextLength.Value;
+
+                if (!string.IsNullOrEmpty(tokenizerFamily)
+                    && tokenizerFamily.Equals("bert", StringComparison.OrdinalIgnoreCase))
+                {
+                    capabilities.TokenizerKind = TokenizerKindEnum.BertWordPiece;
+                    capabilities.TokenizerModel = "bert-base-uncased";
+                }
+            }
+
+            if (capabilities.MaxInputTokens.HasValue)
+                capabilities.ProviderMetadata["MaxInputTokens"] = capabilities.MaxInputTokens.Value.ToString();
+
+            return capabilities;
+        }
+
+        /// <inheritdoc />
+        public override async Task<int?> GetModelContextLengthAsync(string model, CancellationToken token = default)
+        {
+            EmbeddingModelCapabilities? capabilities = await GetModelCapabilitiesAsync(model, token).ConfigureAwait(false);
+            return capabilities?.MaxInputTokens;
         }
 
         private void SyncCallDetails()
@@ -73,6 +123,7 @@ namespace Partio.Core.ThirdParty
                 PolyPrompt.Models.CompletionCallDetail src = _Client.CallDetails[_RecordedCallCount];
                 CallDetails.Add(new EmbeddingCallDetail
                 {
+                    Purpose = "EmbeddingRequest",
                     Url = src.Url,
                     Method = src.Method,
                     RequestHeaders = src.RequestHeaders,
@@ -86,6 +137,36 @@ namespace Partio.Core.ThirdParty
                     TimestampUtc = src.TimestampUtc
                 });
             }
+        }
+
+        private static string? TryGetString(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out JsonElement property))
+                return null;
+
+            return property.ValueKind switch
+            {
+                JsonValueKind.String => property.GetString(),
+                JsonValueKind.Number => property.GetRawText(),
+                JsonValueKind.True => bool.TrueString,
+                JsonValueKind.False => bool.FalseString,
+                _ => property.GetRawText()
+            };
+        }
+
+        private static int? TryGetInt(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out JsonElement property))
+                return null;
+
+            if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out int directValue))
+                return directValue;
+
+            if (property.ValueKind == JsonValueKind.String
+                && int.TryParse(property.GetString(), out int stringValue))
+                return stringValue;
+
+            return null;
         }
     }
 }

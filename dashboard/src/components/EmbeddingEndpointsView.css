@@ -196,3 +196,14 @@
   color: var(--text-primary);
   text-align: right;
 }
+
+.tokenization-summary {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.tokenization-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
