@@ -29,14 +29,16 @@ namespace Partio.Core.Chunking
 
             while (position < totalTokens)
             {
-                int count = Math.Min(tokenLimit, totalTokens - position);
-                string chunkText = tokenizer.SliceByTokenRange(text, position, count);
-                if (!string.IsNullOrWhiteSpace(chunkText))
-                    chunks.Add(chunkText);
+                int requestedTokenCount = Math.Min(tokenLimit, totalTokens - position);
+                TokenSlice slice = CreateStrictTokenSlice(text, position, requestedTokenCount, tokenizer, tokenLimit);
+                if (slice.TokenCount <= 0) break;
 
-                if (position + count >= totalTokens) break;
+                if (!string.IsNullOrWhiteSpace(slice.Text))
+                    chunks.Add(slice.Text);
 
-                int advance = tokenLimit - overlapTokens;
+                if (position + slice.TokenCount >= totalTokens) break;
+
+                int advance = slice.TokenCount - overlapTokens;
                 if (advance <= 0) advance = 1;
 
                 if (config.OverlapStrategy == OverlapStrategyEnum.SentenceBoundaryAware && overlapTokens > 0)
@@ -56,6 +58,37 @@ namespace Partio.Core.Chunking
             }
 
             return chunks;
+        }
+
+        private static TokenSlice CreateStrictTokenSlice(
+            string text,
+            int startTokenIndex,
+            int requestedTokenCount,
+            ITokenizerAdapter tokenizer,
+            int tokenLimit)
+        {
+            if (requestedTokenCount <= 0) return new TokenSlice(string.Empty, 0);
+
+            int candidateTokenCount = requestedTokenCount;
+            while (candidateTokenCount > 0)
+            {
+                string chunkText = tokenizer.SliceByTokenRange(text, startTokenIndex, candidateTokenCount);
+                if (string.IsNullOrWhiteSpace(chunkText))
+                {
+                    candidateTokenCount--;
+                    continue;
+                }
+
+                int actualTokenCount = tokenizer.CountTokens(chunkText);
+                if (actualTokenCount > 0 && actualTokenCount <= tokenLimit)
+                    return new TokenSlice(chunkText, actualTokenCount);
+
+                candidateTokenCount = actualTokenCount > 0
+                    ? Math.Min(candidateTokenCount - 1, actualTokenCount - 1)
+                    : candidateTokenCount - 1;
+            }
+
+            return new TokenSlice(string.Empty, 0);
         }
 
         public static List<string> ChunkUnits(
@@ -211,5 +244,7 @@ namespace Partio.Core.Chunking
 
             return tokenPosition;
         }
+
+        private readonly record struct TokenSlice(string Text, int TokenCount);
     }
 }

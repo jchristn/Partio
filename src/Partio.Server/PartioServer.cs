@@ -73,6 +73,7 @@ namespace Partio.Server
 
             // 4. First run initialization
             await InitializeFirstRunAsync().ConfigureAwait(false);
+            await ReconcileDefaultEmbeddingEndpointAsync().ConfigureAwait(false);
 
             // 5. Initialize services
             _AuthService = new AuthenticationService(_Settings, _Database, _Logging);
@@ -761,6 +762,96 @@ namespace Partio.Server
             Console.WriteLine();
         }
 
+        private static async Task ReconcileDefaultEmbeddingEndpointAsync()
+        {
+            if (_Settings.DefaultEmbeddingEndpoints == null || _Settings.DefaultEmbeddingEndpoints.Count < 1)
+                return;
+
+            DefaultEmbeddingEndpoint configuredDefault = _Settings.DefaultEmbeddingEndpoints[0];
+            EmbeddingEndpoint? existing = await _Database.EmbeddingEndpoint.ReadByIdAsync("default").ConfigureAwait(false);
+            if (existing == null)
+                existing = await _Database.EmbeddingEndpoint.ReadByModelAsync("default", configuredDefault.Model).ConfigureAwait(false);
+
+            if (existing == null)
+            {
+                EmbeddingEndpoint created = BuildConfiguredDefaultEmbeddingEndpoint(configuredDefault);
+                await _Database.EmbeddingEndpoint.CreateAsync(created).ConfigureAwait(false);
+                _Logging.Info(_Header + "created default embedding endpoint from settings for tenant default");
+                return;
+            }
+
+            if (!string.Equals(existing.TenantId, "default", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            EndpointTokenizationSettings? configuredTokenization = CloneTokenizationSettings(configuredDefault.Tokenization);
+            bool changed =
+                !string.Equals(existing.Name, configuredDefault.Name, StringComparison.Ordinal)
+                || !string.Equals(existing.Model, configuredDefault.Model, StringComparison.Ordinal)
+                || !string.Equals(existing.Endpoint, configuredDefault.Endpoint, StringComparison.Ordinal)
+                || existing.ApiFormat != configuredDefault.ApiFormat
+                || !string.Equals(existing.ApiKey, configuredDefault.ApiKey, StringComparison.Ordinal)
+                || !TokenizationSettingsEqual(existing.Tokenization, configuredTokenization);
+
+            if (!changed) return;
+
+            existing.Name = configuredDefault.Name;
+            existing.Model = configuredDefault.Model;
+            existing.Endpoint = configuredDefault.Endpoint;
+            existing.ApiFormat = configuredDefault.ApiFormat;
+            existing.ApiKey = configuredDefault.ApiKey;
+            existing.Tokenization = configuredTokenization;
+            EmbeddingEndpoint.ApplyHealthCheckDefaults(existing);
+
+            await _Database.EmbeddingEndpoint.UpdateAsync(existing).ConfigureAwait(false);
+            _Logging.Info(_Header + "reconciled default embedding endpoint from settings for tenant default");
+        }
+
+        private static EmbeddingEndpoint BuildConfiguredDefaultEmbeddingEndpoint(DefaultEmbeddingEndpoint configuredDefault)
+        {
+            EmbeddingEndpoint endpoint = new EmbeddingEndpoint();
+            endpoint.Id = "default";
+            endpoint.TenantId = "default";
+            endpoint.Name = configuredDefault.Name;
+            endpoint.Model = configuredDefault.Model;
+            endpoint.Endpoint = configuredDefault.Endpoint;
+            endpoint.ApiFormat = configuredDefault.ApiFormat;
+            endpoint.ApiKey = configuredDefault.ApiKey;
+            endpoint.Tokenization = CloneTokenizationSettings(configuredDefault.Tokenization);
+            endpoint.HealthCheckEnabled = true;
+            EmbeddingEndpoint.ApplyHealthCheckDefaults(endpoint);
+            return endpoint;
+        }
+
+        private static EndpointTokenizationSettings? CloneTokenizationSettings(EndpointTokenizationSettings? settings)
+        {
+            if (settings == null) return null;
+
+            return new EndpointTokenizationSettings
+            {
+                TokenizerKind = settings.TokenizerKind,
+                TokenizerModel = settings.TokenizerModel,
+                MaxInputTokens = settings.MaxInputTokens,
+                ReservedInputTokens = settings.ReservedInputTokens,
+                EffectiveInputBudget = settings.EffectiveInputBudget,
+                BatchLimitMode = settings.BatchLimitMode,
+                AutoDetect = settings.AutoDetect
+            };
+        }
+
+        private static bool TokenizationSettingsEqual(EndpointTokenizationSettings? left, EndpointTokenizationSettings? right)
+        {
+            if (ReferenceEquals(left, right)) return true;
+            if (left == null || right == null) return false;
+
+            return left.TokenizerKind == right.TokenizerKind
+                && string.Equals(left.TokenizerModel, right.TokenizerModel, StringComparison.Ordinal)
+                && left.MaxInputTokens == right.MaxInputTokens
+                && left.ReservedInputTokens == right.ReservedInputTokens
+                && left.EffectiveInputBudget == right.EffectiveInputBudget
+                && left.BatchLimitMode == right.BatchLimitMode
+                && left.AutoDetect == right.AutoDetect;
+        }
+
         #endregion
 
         #region Health
@@ -844,12 +935,11 @@ namespace Partio.Server
                 if (inflight != null)
                 {
                     inflight.Stopwatch.Stop();
-                    inflight.DetailRecorded = true;
                     string requestJson = _Serializer.SerializeJson(cellReq, false);
                     string responseJson = _Serializer.SerializeJson(cellResult.Response, false);
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                    await RecordDetailedHistoryAsync(
                         inflight.Entry,
                         200,
                         inflight.Stopwatch.Elapsed.TotalMilliseconds,
@@ -860,6 +950,7 @@ namespace Partio.Server
                         cellResult.EmbeddingCalls,
                         cellResult.CompletionCalls,
                         BuildTokenizationDetail(cellResult.TokenizationProfile, cellResult.ChunkDiagnostics)).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
                 }
 
                 return cellResult.Response;
@@ -870,12 +961,11 @@ namespace Partio.Server
                 if (inflight != null)
                 {
                     inflight.Stopwatch.Stop();
-                    inflight.DetailRecorded = true;
                     int statusCode = MapExceptionToStatusCode(ex is ProcessCellException && ex.InnerException != null ? ex.InnerException : ex);
                     string? requestBody = cellReq != null ? _Serializer.SerializeJson(cellReq, false) : null;
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                    await RecordDetailedHistoryAsync(
                         inflight.Entry,
                         statusCode,
                         inflight.Stopwatch.Elapsed.TotalMilliseconds,
@@ -886,6 +976,7 @@ namespace Partio.Server
                         partialResult?.EmbeddingCalls,
                         partialResult?.CompletionCalls,
                         BuildTokenizationDetail(partialResult?.TokenizationProfile, partialResult?.ChunkDiagnostics)).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
                 }
                 throw ex is ProcessCellException && ex.InnerException != null ? ex.InnerException : ex;
             }
@@ -909,15 +1000,21 @@ namespace Partio.Server
                 cellReqs = req.GetData<List<SemanticCellRequest>>();
                 if (cellReqs == null || cellReqs.Count == 0) throw new ArgumentException("Request body must contain at least one cell.");
 
-                // Resolve embedding endpoint from the first cell's config (all cells share the same endpoint in batch)
-                string embeddingEndpointId = cellReqs[0].EmbeddingConfiguration.EmbeddingEndpointId;
-                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(embeddingEndpointId, auth).ConfigureAwait(false);
-
-                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
-                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+                Dictionary<string, EmbeddingEndpoint> endpointCache = new Dictionary<string, EmbeddingEndpoint>(StringComparer.OrdinalIgnoreCase);
+                HashSet<string> endpointIdsUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                HashSet<string> modelsUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (SemanticCellRequest cellReq in cellReqs)
                 {
+                    string embeddingEndpointId = cellReq.EmbeddingConfiguration.EmbeddingEndpointId;
+                    if (!endpointCache.TryGetValue(embeddingEndpointId, out EmbeddingEndpoint? endpoint))
+                    {
+                        endpoint = await ResolveEmbeddingEndpointFromBody(embeddingEndpointId, auth).ConfigureAwait(false);
+                        endpointCache[embeddingEndpointId] = endpoint;
+                    }
+
+                    endpointIdsUsed.Add(endpoint.Id);
+                    modelsUsed.Add(endpoint.Model);
                     ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
                     responses.Add(cellResult.Response);
                     allEmbeddingCalls.AddRange(cellResult.EmbeddingCalls);
@@ -926,17 +1023,21 @@ namespace Partio.Server
                     tokenizationProfile ??= cellResult.TokenizationProfile;
                 }
 
+                if (endpointIdsUsed.Count == 1)
+                    req.Http.Response.Headers[Constants.EndpointIdHeader] = endpointIdsUsed.First();
+                if (modelsUsed.Count == 1)
+                    req.Http.Response.Headers[Constants.ModelHeader] = modelsUsed.First();
+
                 ApplyTokenizationProfileHeaders(req.Http.Response.Headers, tokenizationProfile);
 
                 if (inflight != null)
                 {
                     inflight.Stopwatch.Stop();
-                    inflight.DetailRecorded = true;
                     string requestJson = _Serializer.SerializeJson(cellReqs, false);
                     string responseJson = _Serializer.SerializeJson(responses, false);
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                    await RecordDetailedHistoryAsync(
                         inflight.Entry,
                         200,
                         inflight.Stopwatch.Elapsed.TotalMilliseconds,
@@ -947,6 +1048,7 @@ namespace Partio.Server
                         allEmbeddingCalls,
                         allCompletionCalls,
                         BuildTokenizationDetail(tokenizationProfile, allChunkDiagnostics)).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
                 }
 
                 return responses;
@@ -965,12 +1067,11 @@ namespace Partio.Server
                 if (inflight != null)
                 {
                     inflight.Stopwatch.Stop();
-                    inflight.DetailRecorded = true;
                     int statusCode = MapExceptionToStatusCode(ex is ProcessCellException && ex.InnerException != null ? ex.InnerException : ex);
                     string? requestBody = cellReqs != null ? _Serializer.SerializeJson(cellReqs, false) : null;
                     Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                    await _RequestHistoryService!.UpdateWithResponseAsync(
+                    await RecordDetailedHistoryAsync(
                         inflight.Entry,
                         statusCode,
                         inflight.Stopwatch.Elapsed.TotalMilliseconds,
@@ -983,6 +1084,7 @@ namespace Partio.Server
                         BuildTokenizationDetail(
                             tokenizationProfile ?? partialResult?.TokenizationProfile,
                             allChunkDiagnostics.Count > 0 ? allChunkDiagnostics : partialResult?.ChunkDiagnostics)).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
                 }
                 throw ex is ProcessCellException && ex.InnerException != null ? ex.InnerException : ex;
             }
@@ -1007,6 +1109,34 @@ namespace Partio.Server
                     "Endpoint " + endpoint.Id + " (" + endpoint.Model + ") is currently unhealthy");
 
             return endpoint;
+        }
+
+        private static async Task RecordDetailedHistoryAsync(
+            RequestHistoryEntry entry,
+            int statusCode,
+            double responseTimeMs,
+            string? requestBody,
+            string? responseBody,
+            Dictionary<string, string>? requestHeaders = null,
+            Dictionary<string, string>? responseHeaders = null,
+            List<EmbeddingCallDetail>? embeddingCalls = null,
+            List<CompletionCallDetail>? completionCalls = null,
+            Dictionary<string, object?>? additionalDetail = null)
+        {
+            if (_RequestHistoryService == null)
+                return;
+
+            await _RequestHistoryService.UpdateWithResponseAsync(
+                entry,
+                statusCode,
+                responseTimeMs,
+                requestBody,
+                responseBody,
+                requestHeaders,
+                responseHeaders,
+                embeddingCalls,
+                completionCalls,
+                additionalDetail).ConfigureAwait(false);
         }
 
         private static async Task<CompletionEndpoint> ResolveCompletionEndpointFromBody(string id, AuthContext auth)
@@ -1059,6 +1189,7 @@ namespace Partio.Server
 
                 using EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
                 response.TokenizationProfile = await _TokenizationResolver.ResolveAsync(endpoint, endpoint.Model, client).ConfigureAwait(false);
+                ApplyRuntimeEmbeddingSafeguards(endpoint, response.TokenizationProfile);
                 ApplyTokenizationProfileHeaders(req.Http.Response.Headers, response.TokenizationProfile);
                 int startCallIndex = client.CallDetails.Count;
 
@@ -1066,13 +1197,19 @@ namespace Partio.Server
                 {
                     List<float> embedding = await client.EmbedAsync(explorerReq.Input, endpoint.Model).ConfigureAwait(false);
                     if (response.TokenizationProfile != null)
+                    {
+                        BatchLimitModeEnum appliedBatchLimitMode = response.TokenizationProfile.BatchLimitMode == BatchLimitModeEnum.Unknown
+                            ? BatchLimitModeEnum.WholeRequest
+                            : response.TokenizationProfile.BatchLimitMode;
                         AnnotateEmbeddingRequestCalls(
                             client,
                             startCallIndex,
                             new List<string> { explorerReq.Input },
                             TokenizerAdapterFactory.Create(response.TokenizationProfile),
                             response.TokenizationProfile,
+                            appliedBatchLimitMode,
                             null);
+                    }
                     if (explorerReq.L2Normalization)
                         embedding = client.NormalizeL2(embedding);
 
@@ -1088,12 +1225,11 @@ namespace Partio.Server
                     if (inflight != null)
                     {
                         inflight.Stopwatch.Stop();
-                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                        await RecordDetailedHistoryAsync(
                             inflight.Entry,
                             200,
                             inflight.Stopwatch.Elapsed.TotalMilliseconds,
@@ -1104,6 +1240,7 @@ namespace Partio.Server
                             response.EmbeddingCalls,
                             null,
                             BuildTokenizationDetail(response.TokenizationProfile)).ConfigureAwait(false);
+                        inflight.DetailRecorded = true;
                     }
 
                     return response;
@@ -1118,12 +1255,16 @@ namespace Partio.Server
                     response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                     if (response.TokenizationProfile != null)
                     {
+                        BatchLimitModeEnum appliedBatchLimitMode = response.TokenizationProfile.BatchLimitMode == BatchLimitModeEnum.Unknown
+                            ? BatchLimitModeEnum.WholeRequest
+                            : response.TokenizationProfile.BatchLimitMode;
                         AnnotateEmbeddingRequestCalls(
                             client,
                             startCallIndex,
                             new List<string> { explorerReq.Input ?? string.Empty },
                             TokenizerAdapterFactory.Create(response.TokenizationProfile),
                             response.TokenizationProfile,
+                            appliedBatchLimitMode,
                             "Upstream embedding request failed.");
                     }
                     response.EmbeddingCalls = client.CallDetails.ToList();
@@ -1131,12 +1272,11 @@ namespace Partio.Server
                     if (inflight != null)
                     {
                         inflight.Stopwatch.Stop();
-                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                        await RecordDetailedHistoryAsync(
                             inflight.Entry,
                             response.StatusCode,
                             inflight.Stopwatch.Elapsed.TotalMilliseconds,
@@ -1147,6 +1287,7 @@ namespace Partio.Server
                             response.EmbeddingCalls,
                             null,
                             BuildTokenizationDetail(response.TokenizationProfile)).ConfigureAwait(false);
+                        inflight.DetailRecorded = true;
                     }
 
                     return response;
@@ -1222,13 +1363,13 @@ namespace Partio.Server
                     if (inflight != null)
                     {
                         inflight.Stopwatch.Stop();
-                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                        await RecordDetailedHistoryAsync(
                             inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                        inflight.DetailRecorded = true;
                     }
 
                     return response;
@@ -1246,13 +1387,13 @@ namespace Partio.Server
                     if (inflight != null)
                     {
                         inflight.Stopwatch.Stop();
-                        inflight.DetailRecorded = true;
                         string requestJson = _Serializer.SerializeJson(explorerReq, false);
                         string responseJson = _Serializer.SerializeJson(response, false);
                         Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
                         Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
-                        await _RequestHistoryService!.UpdateWithResponseAsync(
+                        await RecordDetailedHistoryAsync(
                             inflight.Entry, response.StatusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                        inflight.DetailRecorded = true;
                     }
 
                     return response;
@@ -1351,6 +1492,7 @@ namespace Partio.Server
                 using (client = CreateEmbeddingClient(endpoint))
                 {
                     ResolvedTokenizationProfile profile = await _TokenizationResolver.ResolveAsync(endpoint, model, client).ConfigureAwait(false);
+                    ApplyRuntimeEmbeddingSafeguards(endpoint, profile);
                     cellResult.TokenizationProfile = profile;
                     ITokenizerAdapter tokenizer = TokenizerAdapterFactory.Create(profile);
 
@@ -1422,6 +1564,7 @@ namespace Partio.Server
             }
 
             List<ChunkResult> chunks = _ChunkingEngine.Chunk(request, tokenizer, tokenBudget);
+            chunks = NormalizeChunksForEmbeddingBudget(chunks, tokenizer, tokenBudget);
 
             // Set CellGUID on each chunk
             foreach (ChunkResult chunk in chunks)
@@ -1508,22 +1651,34 @@ namespace Partio.Server
         {
             if (textsToEmbed == null || textsToEmbed.Count == 0) return new List<List<float>>();
 
-            if (profile.BatchLimitMode != BatchLimitModeEnum.WholeRequest)
+            BatchLimitModeEnum appliedBatchLimitMode = profile.BatchLimitMode == BatchLimitModeEnum.Unknown
+                ? BatchLimitModeEnum.WholeRequest
+                : profile.BatchLimitMode;
+
+            if (appliedBatchLimitMode == BatchLimitModeEnum.PerInput)
             {
-                int startCallIndex = client.CallDetails.Count;
                 try
                 {
-                    List<List<float>> embeddings = await client.EmbedBatchAsync(textsToEmbed, model).ConfigureAwait(false);
-                    AnnotateEmbeddingRequestCalls(client, startCallIndex, textsToEmbed, tokenizer, profile, null);
-                    return embeddings;
+                    return await EmbedBatchOnceAsync(textsToEmbed, client, model, profile, tokenizer, appliedBatchLimitMode).ConfigureAwait(false);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    AnnotateEmbeddingRequestCalls(client, startCallIndex, textsToEmbed, tokenizer, profile, "Upstream embedding request failed.");
-                    throw;
+                    if (!IsContextLengthExceeded(ex))
+                        throw;
                 }
             }
 
+            return await EmbedWithWholeRequestBudgetAsync(textsToEmbed, client, model, profile, tokenizer, appliedBatchLimitMode).ConfigureAwait(false);
+        }
+
+        private static async Task<List<List<float>>> EmbedWithWholeRequestBudgetAsync(
+            List<string> textsToEmbed,
+            EmbeddingClientBase client,
+            string model,
+            ResolvedTokenizationProfile profile,
+            ITokenizerAdapter tokenizer,
+            BatchLimitModeEnum appliedBatchLimitMode)
+        {
             List<List<float>> allEmbeddings = new List<List<float>>();
             int index = 0;
             while (index < textsToEmbed.Count)
@@ -1553,21 +1708,269 @@ namespace Partio.Server
                     index++;
                 }
 
-                int startCallIndex = client.CallDetails.Count;
-                try
-                {
-                    List<List<float>> embeddings = await client.EmbedBatchAsync(batch, model).ConfigureAwait(false);
-                    AnnotateEmbeddingRequestCalls(client, startCallIndex, batch, tokenizer, profile, null);
-                    allEmbeddings.AddRange(embeddings);
-                }
-                catch
-                {
-                    AnnotateEmbeddingRequestCalls(client, startCallIndex, batch, tokenizer, profile, "Upstream embedding request failed.");
-                    throw;
-                }
+                List<List<float>> embeddings = await EmbedBatchWithContextFallbackAsync(
+                    batch,
+                    client,
+                    model,
+                    profile,
+                    tokenizer,
+                    appliedBatchLimitMode).ConfigureAwait(false);
+                allEmbeddings.AddRange(embeddings);
             }
 
             return allEmbeddings;
+        }
+
+        private static async Task<List<List<float>>> EmbedBatchWithContextFallbackAsync(
+            List<string> inputs,
+            EmbeddingClientBase client,
+            string model,
+            ResolvedTokenizationProfile profile,
+            ITokenizerAdapter tokenizer,
+            BatchLimitModeEnum appliedBatchLimitMode)
+        {
+            try
+            {
+                return await EmbedBatchOnceAsync(inputs, client, model, profile, tokenizer, appliedBatchLimitMode).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                if (!IsContextLengthExceeded(ex))
+                    throw;
+
+                if (inputs.Count > 1)
+                {
+                    (List<string> left, List<string> right) = SplitInputsForRetry(inputs, tokenizer);
+                    List<List<float>> leftEmbeddings = await EmbedBatchWithContextFallbackAsync(
+                        left,
+                        client,
+                        model,
+                        profile,
+                        tokenizer,
+                        appliedBatchLimitMode).ConfigureAwait(false);
+                    List<List<float>> rightEmbeddings = await EmbedBatchWithContextFallbackAsync(
+                        right,
+                        client,
+                        model,
+                        profile,
+                        tokenizer,
+                        appliedBatchLimitMode).ConfigureAwait(false);
+                    leftEmbeddings.AddRange(rightEmbeddings);
+                    return leftEmbeddings;
+                }
+
+                return new List<List<float>>
+                {
+                    await EmbedSingleInputWithContextFallbackAsync(
+                        inputs[0],
+                        client,
+                        model,
+                        profile,
+                        tokenizer,
+                        appliedBatchLimitMode).ConfigureAwait(false)
+                };
+            }
+        }
+
+        private static async Task<List<float>> EmbedSingleInputWithContextFallbackAsync(
+            string input,
+            EmbeddingClientBase client,
+            string model,
+            ResolvedTokenizationProfile profile,
+            ITokenizerAdapter tokenizer,
+            BatchLimitModeEnum appliedBatchLimitMode)
+        {
+            int tokenCount = tokenizer.CountTokens(input);
+            if (tokenCount <= 1)
+                throw new InvalidOperationException("A single-token embedding input was rejected for exceeding context length.");
+
+            int splitBudget = Math.Min(profile.EffectiveInputBudget - 1, Math.Max(1, tokenCount / 2));
+            if (splitBudget >= tokenCount)
+                splitBudget = tokenCount - 1;
+            if (splitBudget < 1)
+                throw new InvalidOperationException("Unable to shrink a rejected embedding input below the current token budget.");
+
+            ChunkingConfiguration splitConfig = new ChunkingConfiguration
+            {
+                Strategy = ChunkStrategyEnum.FixedTokenCount,
+                FixedTokenCount = splitBudget,
+                OverlapCount = 0
+            };
+
+            List<string> splitInputs = FixedTokenChunker.Chunk(input, splitConfig, tokenizer, splitBudget);
+            if (splitInputs.Count <= 1)
+                throw new InvalidOperationException("Failed to split a rejected embedding input into smaller token-safe spans.");
+
+            List<List<float>> splitEmbeddings = new List<List<float>>();
+            foreach (string splitInput in splitInputs)
+            {
+                List<List<float>> result = await EmbedBatchWithContextFallbackAsync(
+                    new List<string> { splitInput },
+                    client,
+                    model,
+                    profile,
+                    tokenizer,
+                    appliedBatchLimitMode).ConfigureAwait(false);
+                splitEmbeddings.Add(result[0]);
+            }
+
+            return AverageEmbeddings(splitEmbeddings);
+        }
+
+        private static async Task<List<List<float>>> EmbedBatchOnceAsync(
+            List<string> inputs,
+            EmbeddingClientBase client,
+            string model,
+            ResolvedTokenizationProfile profile,
+            ITokenizerAdapter tokenizer,
+            BatchLimitModeEnum appliedBatchLimitMode)
+        {
+            int startCallIndex = client.CallDetails.Count;
+            try
+            {
+                List<List<float>> embeddings = await client.EmbedBatchAsync(inputs, model).ConfigureAwait(false);
+                AnnotateEmbeddingRequestCalls(client, startCallIndex, inputs, tokenizer, profile, appliedBatchLimitMode, null);
+                return embeddings;
+            }
+            catch
+            {
+                AnnotateEmbeddingRequestCalls(client, startCallIndex, inputs, tokenizer, profile, appliedBatchLimitMode, "Upstream embedding request failed.");
+                throw;
+            }
+        }
+
+        private static (List<string> Left, List<string> Right) SplitInputsForRetry(
+            List<string> inputs,
+            ITokenizerAdapter tokenizer)
+        {
+            if (inputs == null || inputs.Count < 2)
+                throw new ArgumentException("At least two inputs are required to split a batch.");
+
+            int totalTokens = inputs.Sum(tokenizer.CountTokens);
+            int targetLeftTokens = Math.Max(1, totalTokens / 2);
+            int runningTokens = 0;
+            int splitIndex = 0;
+
+            while (splitIndex < inputs.Count - 1)
+            {
+                runningTokens += tokenizer.CountTokens(inputs[splitIndex]);
+                splitIndex++;
+                if (runningTokens >= targetLeftTokens)
+                    break;
+            }
+
+            if (splitIndex <= 0 || splitIndex >= inputs.Count)
+                splitIndex = Math.Max(1, inputs.Count / 2);
+
+            return (
+                inputs.Take(splitIndex).ToList(),
+                inputs.Skip(splitIndex).ToList());
+        }
+
+        private static List<float> AverageEmbeddings(List<List<float>> embeddings)
+        {
+            if (embeddings == null || embeddings.Count == 0)
+                return new List<float>();
+
+            List<List<float>> nonNullEmbeddings = embeddings
+                .Where(embedding => embedding != null)
+                .ToList();
+            if (nonNullEmbeddings.Count == 0)
+                return new List<float>();
+
+            int dimension = nonNullEmbeddings[0].Count;
+            if (dimension == 0)
+                return new List<float>();
+
+            if (nonNullEmbeddings.Any(embedding => embedding.Count != dimension))
+                throw new InvalidOperationException("Embedding fallback produced vectors with mismatched dimensions.");
+
+            float[] sums = new float[dimension];
+            foreach (List<float> embedding in nonNullEmbeddings)
+            {
+                for (int i = 0; i < dimension; i++)
+                    sums[i] += embedding[i];
+            }
+
+            float divisor = nonNullEmbeddings.Count;
+            return sums.Select(value => value / divisor).ToList();
+        }
+
+        private static bool IsContextLengthExceeded(Exception ex)
+        {
+            Exception? current = ex;
+            while (current != null)
+            {
+                string message = current.Message ?? string.Empty;
+                if (message.IndexOf("context length", StringComparison.OrdinalIgnoreCase) >= 0
+                    || message.IndexOf("input length exceeds", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+
+                current = current.InnerException;
+            }
+
+            return false;
+        }
+
+        private static void ApplyRuntimeEmbeddingSafeguards(EmbeddingEndpoint endpoint, ResolvedTokenizationProfile profile)
+        {
+            if (endpoint.ApiFormat != ApiFormatEnum.Ollama)
+                return;
+            if (profile.TokenizerKind != TokenizerKindEnum.BertWordPiece)
+                return;
+
+            bool explicitPerInputOverride = endpoint.Tokenization?.AutoDetect == false
+                && endpoint.Tokenization?.BatchLimitMode == BatchLimitModeEnum.PerInput;
+            if (explicitPerInputOverride || profile.BatchLimitMode == BatchLimitModeEnum.WholeRequest)
+                return;
+
+            profile.BatchLimitMode = BatchLimitModeEnum.WholeRequest;
+            profile.ProviderMetadata["RuntimeBatchLimitModeOverride"] = BatchLimitModeEnum.WholeRequest.ToString();
+            profile.ProviderMetadata["RuntimeBatchLimitModeOverrideReason"] = "ConservativeOllamaBertSafety";
+        }
+
+        private static List<ChunkResult> NormalizeChunksForEmbeddingBudget(
+            List<ChunkResult> chunks,
+            ITokenizerAdapter tokenizer,
+            int tokenBudget)
+        {
+            if (chunks == null || chunks.Count == 0)
+                return chunks ?? new List<ChunkResult>();
+
+            ChunkingConfiguration splitConfig = new ChunkingConfiguration
+            {
+                Strategy = ChunkStrategyEnum.FixedTokenCount,
+                FixedTokenCount = tokenBudget,
+                OverlapCount = 0
+            };
+
+            List<ChunkResult> normalized = new List<ChunkResult>();
+            foreach (ChunkResult chunk in chunks)
+            {
+                string chunkText = chunk.Text ?? string.Empty;
+                if (tokenizer.CountTokens(chunkText) <= tokenBudget)
+                {
+                    normalized.Add(chunk);
+                    continue;
+                }
+
+                List<string> splitTexts = FixedTokenChunker.Chunk(chunkText, splitConfig, tokenizer, tokenBudget);
+                if (splitTexts.Count <= 1)
+                {
+                    normalized.Add(chunk);
+                    continue;
+                }
+
+                normalized.AddRange(splitTexts.Select(splitText => new ChunkResult
+                {
+                    CellGUID = chunk.CellGUID,
+                    Text = splitText
+                }));
+            }
+
+            return normalized;
         }
 
         private static string ResolveInputText(SemanticCellRequest request)
@@ -1671,6 +2074,7 @@ namespace Partio.Server
             List<string> inputs,
             ITokenizerAdapter tokenizer,
             ResolvedTokenizationProfile profile,
+            BatchLimitModeEnum appliedBatchLimitMode,
             string? failureHint)
         {
             if (client.CallDetails.Count <= startCallIndex) return;
@@ -1701,7 +2105,7 @@ namespace Partio.Server
                     + profile.EffectiveInputBudget
                     + " tokens.";
             }
-            else if (profile.BatchLimitMode == BatchLimitModeEnum.WholeRequest
+            else if (appliedBatchLimitMode == BatchLimitModeEnum.WholeRequest
                 && inputDetails.Sum(detail => detail.TokenCount) > profile.EffectiveInputBudget)
             {
                 resolvedFailureHint = "The batched request exceeded the whole-request token budget of "
@@ -1718,7 +2122,7 @@ namespace Partio.Server
                 detail.BatchTokenCount = inputDetails.Sum(d => d.TokenCount);
                 detail.EffectiveInputBudget = profile.EffectiveInputBudget;
                 detail.MaxInputTokens = profile.MaxInputTokens;
-                detail.BatchLimitMode = profile.BatchLimitMode;
+                detail.BatchLimitMode = appliedBatchLimitMode;
                 detail.FailedInputIndices = failedInputIndices.Count > 0 ? failedInputIndices : null;
                 detail.FailureReasonHint = resolvedFailureHint;
             }

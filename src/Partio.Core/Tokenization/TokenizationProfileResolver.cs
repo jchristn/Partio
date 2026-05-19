@@ -13,6 +13,13 @@ namespace Partio.Core.Tokenization
     /// </summary>
     public class TokenizationProfileResolver
     {
+        private static readonly string[] CalibrationProbeCorpora = new[]
+        {
+            "Calibration sample 01. The quick brown fox reviews clinical notes, numbered steps, and percentages like 15.2% or 1 - 3 days. URLs such as https://example.test/path?a=1 are included alongside dosage references like 100 U/10 mL and section numbers 4.2.",
+            "PDF-style sample with symbols: \u00AE BOTOX, 2 \u00B0C to 8 \u00B0C, bullets \u2022 one \u2022 two, ranges 256 - 295 days, parentheses (U), slashes, commas, hyphenated terms, and mixed CASE headings.\nNEW ZEALAND DATA SHEET\nPage 1 of 37.",
+            "1. Initial dose: 1.25 U to 2.5 U. 2. Follow-up: re-examine 7 - 14 days later. A | B | C columns, itemized lists, quoted text like \"booster\" injections, and labels such as adverse-event, post-treatment, and over-active-bladder are included."
+        };
+
         private readonly ServerSettings _Settings;
         private readonly LoggingModule _Logging;
         private readonly ConcurrentDictionary<string, CacheEntry> _CapabilityCache = new ConcurrentDictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
@@ -43,7 +50,7 @@ namespace Partio.Core.Tokenization
             if (string.IsNullOrWhiteSpace(model)) throw new ArgumentNullException(nameof(model));
             if (client == null) throw new ArgumentNullException(nameof(client));
 
-            EndpointTokenizationSettings? overrideSettings = endpoint.Tokenization;
+            EndpointTokenizationSettings? overrideSettings = NormalizeOverrideSettings(endpoint.Tokenization);
             bool allowDynamicResolution = overrideSettings?.AutoDetect != false;
 
             bool usedCapabilityData = false;
@@ -301,8 +308,8 @@ namespace Partio.Core.Tokenization
                             ReservedInputTokens = fallbackReservedTokens,
                             EffectiveInputBudget = fallbackEffectiveBudget,
                             BatchLimitMode = capabilities?.BatchLimitMode == BatchLimitModeEnum.Unknown
-                                ? (_Settings.TokenizationDefaults.Ollama?.BatchLimitMode ?? BatchLimitModeEnum.PerInput)
-                                : (capabilities?.BatchLimitMode ?? _Settings.TokenizationDefaults.Ollama?.BatchLimitMode ?? BatchLimitModeEnum.PerInput),
+                                ? (_Settings.TokenizationDefaults.Ollama?.BatchLimitMode ?? BatchLimitModeEnum.WholeRequest)
+                                : (capabilities?.BatchLimitMode ?? _Settings.TokenizationDefaults.Ollama?.BatchLimitMode ?? BatchLimitModeEnum.WholeRequest),
                             AutoDetect = true
                         };
                     }
@@ -360,6 +367,36 @@ namespace Partio.Core.Tokenization
                 && settings.TokenizerKind.HasValue
                 && !string.IsNullOrWhiteSpace(settings.TokenizerModel)
                 && settings.MaxInputTokens.HasValue;
+        }
+
+        private static EndpointTokenizationSettings? NormalizeOverrideSettings(EndpointTokenizationSettings? settings)
+        {
+            if (settings == null) return null;
+
+            EndpointTokenizationSettings normalized = new EndpointTokenizationSettings
+            {
+                TokenizerKind = settings.TokenizerKind,
+                TokenizerModel = settings.TokenizerModel,
+                MaxInputTokens = settings.MaxInputTokens,
+                ReservedInputTokens = settings.ReservedInputTokens,
+                EffectiveInputBudget = settings.EffectiveInputBudget,
+                BatchLimitMode = settings.BatchLimitMode,
+                AutoDetect = settings.AutoDetect
+            };
+
+            if (normalized.MaxInputTokens.HasValue)
+            {
+                if (!normalized.EffectiveInputBudget.HasValue && normalized.ReservedInputTokens.HasValue)
+                {
+                    normalized.EffectiveInputBudget = Math.Max(1, normalized.MaxInputTokens.Value - normalized.ReservedInputTokens.Value);
+                }
+                else if (normalized.EffectiveInputBudget.HasValue && !normalized.ReservedInputTokens.HasValue)
+                {
+                    normalized.ReservedInputTokens = Math.Max(0, normalized.MaxInputTokens.Value - normalized.EffectiveInputBudget.Value);
+                }
+            }
+
+            return normalized;
         }
 
         private static T? GetValue<T>(
@@ -534,15 +571,12 @@ namespace Partio.Core.Tokenization
             while (low <= high)
             {
                 int candidate = low + ((high - low) / 2);
-                bool success = await ProbeBatchAsync(
+                bool success = await ProbeBudgetAcrossCorporaAsync(
                     client,
                     model,
                     tokenizer,
-                    new List<int> { candidate },
-                    "CalibrationBudgetProbe",
+                    candidate,
                     maxInputTokens,
-                    maxInputTokens,
-                    BatchLimitModeEnum.PerInput,
                     token).ConfigureAwait(false);
 
                 if (success)
@@ -568,15 +602,19 @@ namespace Partio.Core.Tokenization
             BatchLimitModeEnum fallbackMode,
             CancellationToken token)
         {
-            int candidateTokens = Math.Min(effectiveInputBudget, Math.Max(1, (maxInputTokens / 2) + 1));
-            if ((candidateTokens * 2) <= maxInputTokens)
+            int candidateTokens = Math.Max(1, effectiveInputBudget);
+            List<string> probeInputs = BuildCalibrationProbeTexts(tokenizer, candidateTokens)
+                .Take(2)
+                .ToList();
+
+            if (probeInputs.Count < 2)
                 return fallbackMode;
 
-            bool success = await ProbeBatchAsync(
+            bool success = await ProbeInputsAsync(
                 client,
                 model,
                 tokenizer,
-                new List<int> { candidateTokens, candidateTokens },
+                probeInputs,
                 "CalibrationBatchModeProbe",
                 effectiveInputBudget,
                 maxInputTokens,
@@ -586,18 +624,46 @@ namespace Partio.Core.Tokenization
             return success ? BatchLimitModeEnum.PerInput : BatchLimitModeEnum.WholeRequest;
         }
 
-        private async Task<bool> ProbeBatchAsync(
+        private async Task<bool> ProbeBudgetAcrossCorporaAsync(
             EmbeddingClientBase client,
             string model,
             ITokenizerAdapter tokenizer,
-            List<int> inputTokenCounts,
+            int candidateTokens,
+            int maxInputTokens,
+            CancellationToken token)
+        {
+            List<string> probeInputs = BuildCalibrationProbeTexts(tokenizer, candidateTokens);
+            for (int i = 0; i < probeInputs.Count; i++)
+            {
+                bool success = await ProbeInputsAsync(
+                    client,
+                    model,
+                    tokenizer,
+                    new List<string> { probeInputs[i] },
+                    "CalibrationBudgetProbe#" + (i + 1),
+                    candidateTokens,
+                    maxInputTokens,
+                    BatchLimitModeEnum.PerInput,
+                    token).ConfigureAwait(false);
+
+                if (!success)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private async Task<bool> ProbeInputsAsync(
+            EmbeddingClientBase client,
+            string model,
+            ITokenizerAdapter tokenizer,
+            List<string> inputs,
             string purpose,
             int effectiveInputBudget,
             int maxInputTokens,
             BatchLimitModeEnum batchLimitMode,
             CancellationToken token)
         {
-            List<string> inputs = inputTokenCounts.Select(count => BuildExactTokenText(tokenizer, count)).ToList();
             int existingCallCount = client.CallDetails.Count;
 
             try
@@ -631,9 +697,28 @@ namespace Partio.Core.Tokenization
             }
         }
 
-        private static string BuildExactTokenText(ITokenizerAdapter tokenizer, int tokenCount)
+        private static List<string> BuildCalibrationProbeTexts(ITokenizerAdapter tokenizer, int tokenCount)
+        {
+            List<string> texts = new List<string>();
+            foreach (string corpus in CalibrationProbeCorpora)
+            {
+                string text = BuildCalibrationTextFromCorpus(tokenizer, tokenCount, corpus);
+                if (!string.IsNullOrWhiteSpace(text))
+                    texts.Add(text);
+            }
+
+            if (texts.Count < 1)
+                texts.Add(BuildCalibrationTextFromCorpus(tokenizer, tokenCount, "calibrationtoken"));
+
+            return texts
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static string BuildCalibrationTextFromCorpus(ITokenizerAdapter tokenizer, int tokenCount, string corpus)
         {
             if (tokenCount <= 0) return string.Empty;
+            if (string.IsNullOrWhiteSpace(corpus)) corpus = "calibrationtoken";
 
             StringBuilder builder = new StringBuilder();
             string candidate = string.Empty;
@@ -641,7 +726,7 @@ namespace Partio.Core.Tokenization
             while (tokenizer.CountTokens(candidate) < tokenCount)
             {
                 if (builder.Length > 0) builder.Append(' ');
-                builder.Append("calibrationtoken");
+                builder.Append(corpus);
                 candidate = tokenizer.SliceByTokenRange(builder.ToString(), 0, tokenCount).Trim();
             }
 

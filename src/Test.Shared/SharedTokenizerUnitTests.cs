@@ -147,6 +147,81 @@ namespace Test.Shared
                 }
             }));
 
+            tests.Add(SharedNamedTestCase.CreateAsync("Tokenization resolver: endpoint override derives effective budget from reserved tokens", async () =>
+            {
+                ServerSettings settings = new ServerSettings();
+                LoggingModule logging = CreateLogging();
+                TokenizationProfileResolver resolver = new TokenizationProfileResolver(settings, logging);
+
+                EmbeddingEndpoint endpoint = new EmbeddingEndpoint
+                {
+                    Id = "eep_override_derived_budget",
+                    TenantId = "default",
+                    Model = "all-minilm",
+                    Endpoint = "http://localhost:11434",
+                    ApiFormat = ApiFormatEnum.Ollama,
+                    Tokenization = new EndpointTokenizationSettings
+                    {
+                        TokenizerKind = TokenizerKindEnum.BertWordPiece,
+                        TokenizerModel = "bert-base-uncased",
+                        MaxInputTokens = 256,
+                        ReservedInputTokens = 6,
+                        BatchLimitMode = BatchLimitModeEnum.PerInput,
+                        AutoDetect = false
+                    }
+                };
+
+                FakeEmbeddingClient client = new FakeEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, logging)
+                {
+                    Capabilities = new EmbeddingModelCapabilities
+                    {
+                        SourceHint = TokenizationProfileSourceEnum.ProviderProbe,
+                        TokenizerKind = TokenizerKindEnum.BertWordPiece,
+                        TokenizerModel = "bert-base-uncased",
+                        MaxInputTokens = 256,
+                        BatchLimitMode = BatchLimitModeEnum.Unknown
+                    }
+                };
+
+                ResolvedTokenizationProfile profile = await resolver.ResolveAsync(endpoint, endpoint.Model, client).ConfigureAwait(false);
+                if (profile.ProfileSource != TokenizationProfileSourceEnum.EndpointOverride)
+                    throw new Exception("Expected EndpointOverride source.");
+                if (profile.MaxInputTokens != 256)
+                    throw new Exception("Expected max input tokens 256, got " + profile.MaxInputTokens);
+                if (profile.ReservedInputTokens != 6)
+                    throw new Exception("Expected reserved token count 6, got " + profile.ReservedInputTokens);
+                if (profile.EffectiveInputBudget != 250)
+                    throw new Exception("Expected derived effective budget 250, got " + profile.EffectiveInputBudget);
+            }));
+
+            tests.Add(SharedNamedTestCase.CreateSync("BERT token slicing: regression sample never exceeds requested token count", () =>
+            {
+                ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
+                string text = string.Join(" ", Enumerable.Repeat(
+                    "1521-0081/69/2/200-235$25.00 HARMACOLOGICAL REVIEWS pharmacology section GL-1 GL-2 XEOMIN Placebo Week 4 mean change from baseline at maximum frown Units/kg (N=87) (N=176) Ashworth Scale LS Mean Difference versus placebo p<0.001 ophthalmology dosing table chronic sialorrhea upper limb spasticity postmarketing experience and contraindications.",
+                    10));
+                int totalTokens = tokenizer.CountTokens(text);
+                int[] startPositions = new[] { 0, 19, 57, 101, 143 };
+                int[] requestedCounts = new[] { 32, 64, 128, 192, 256 };
+
+                foreach (int start in startPositions.Where(pos => pos < totalTokens))
+                {
+                    foreach (int requested in requestedCounts)
+                    {
+                        int available = Math.Min(requested, totalTokens - start);
+                        string slice = tokenizer.SliceByTokenRange(text, start, available);
+                        int actual = tokenizer.CountTokens(slice);
+                        if (actual > available)
+                        {
+                            throw new Exception("Slice exceeded requested token count. Start=" + start
+                                + ", Requested=" + available
+                                + ", Actual=" + actual
+                                + ", Slice=" + slice);
+                        }
+                    }
+                }
+            }));
+
             tests.Add(SharedNamedTestCase.CreateSync("Sentence chunker: oversized single sentence descends into in-budget token spans", () =>
             {
                 ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
