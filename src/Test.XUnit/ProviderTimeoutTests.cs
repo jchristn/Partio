@@ -135,6 +135,48 @@ namespace Test.XUnit
             await firstTask;
         }
 
+        [Fact]
+        public async Task OllamaEmbeddingClientCanBeReusedAcrossMultipleCalls()
+        {
+            using SlowOllamaCompatibleServer provider = new SlowOllamaCompatibleServer();
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using OllamaEmbeddingClient client = new OllamaEmbeddingClient(provider.BaseUrl, null, logging, 5000);
+
+            List<List<float>> first = await client.EmbedBatchAsync(new List<string> { "first input" }, "all-minilm");
+            List<List<float>> second = await client.EmbedBatchAsync(new List<string> { "second input" }, "all-minilm");
+
+            await provider.WaitForEmbeddingRequestCountAsync(2);
+
+            Assert.Single(first);
+            Assert.Single(second);
+            Assert.Equal(2, provider.EmbeddingRequestCount);
+            Assert.Equal(2, client.CallDetails.Count(d => d.Success));
+        }
+
+        [Fact]
+        public async Task OllamaCompletionClientSupportsParallelCallsOnSharedInstance()
+        {
+            using SlowOllamaCompatibleServer provider = new SlowOllamaCompatibleServer(chatDelayMs: 200);
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using OllamaCompletionClient client = new OllamaCompletionClient(provider.BaseUrl, null, logging, 5000, "cep_test", 2);
+
+            Task<string?> firstTask = client.GenerateCompletionAsync("first prompt", "gemma3:4b", 64, 5000);
+            await provider.WaitForChatRequestCountAsync(1);
+
+            Task<string?> secondTask = client.GenerateCompletionAsync("second prompt", "gemma3:4b", 64, 5000);
+            string?[] results = await Task.WhenAll(firstTask, secondTask);
+
+            await provider.WaitForChatRequestCountAsync(2);
+
+            Assert.All(results, result => Assert.Equal("Stub Ollama response.", result));
+            Assert.Equal(2, provider.ChatRequestCount);
+            Assert.Equal(2, client.CallDetails.Count(d => d.Success));
+        }
+
         private sealed class TimeoutPostEmbeddingClient : EmbeddingClientBase
         {
             public TimeoutPostEmbeddingClient(string endpoint, LoggingModule logging, int maximumTimeoutMs)
