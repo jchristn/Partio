@@ -251,6 +251,12 @@ namespace Partio.Server
                         if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
                         throw new WebserverException(ApiResultEnum.NotAuthorized, ex.Message);
                     }
+                    catch (ProviderConcurrencyLimitException ex)
+                    {
+                        statusCode = 429;
+                        if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                        await SendApiErrorAsync(ctx, 429, "TooManyRequests", ex.Message).ConfigureAwait(false);
+                    }
                     catch (ProviderOperationTimeoutException ex)
                     {
                         statusCode = 504;
@@ -715,6 +721,7 @@ namespace Partio.Server
                 ep.ApiFormat = defaultEp.ApiFormat;
                 ep.ApiKey = defaultEp.ApiKey;
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
+                ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.HealthCheckEnabled = true;
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
@@ -735,6 +742,7 @@ namespace Partio.Server
                 cep.ApiFormat = defaultIep.ApiFormat;
                 cep.ApiKey = defaultIep.ApiKey;
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
+                cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
                 cep.HealthCheckEnabled = true;
                 CompletionEndpoint.ApplyHealthCheckDefaults(cep);
                 await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);
@@ -799,6 +807,7 @@ namespace Partio.Server
                 || existing.ApiFormat != configuredDefault.ApiFormat
                 || !string.Equals(existing.ApiKey, configuredDefault.ApiKey, StringComparison.Ordinal)
                 || existing.MaximumTimeoutMs != configuredDefault.MaximumTimeoutMs
+                || existing.MaxConcurrentRequests != configuredDefault.MaxConcurrentRequests
                 || !TokenizationSettingsEqual(existing.Tokenization, configuredTokenization);
 
             if (!changed) return;
@@ -809,6 +818,7 @@ namespace Partio.Server
             existing.ApiFormat = configuredDefault.ApiFormat;
             existing.ApiKey = configuredDefault.ApiKey;
             existing.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
+            existing.MaxConcurrentRequests = configuredDefault.MaxConcurrentRequests;
             existing.Tokenization = configuredTokenization;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(existing);
 
@@ -827,6 +837,7 @@ namespace Partio.Server
             endpoint.ApiFormat = configuredDefault.ApiFormat;
             endpoint.ApiKey = configuredDefault.ApiKey;
             endpoint.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
+            endpoint.MaxConcurrentRequests = configuredDefault.MaxConcurrentRequests;
             endpoint.Tokenization = CloneTokenizationSettings(configuredDefault.Tokenization);
             endpoint.HealthCheckEnabled = true;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(endpoint);
@@ -1258,6 +1269,54 @@ namespace Partio.Server
                 }
                 catch (Exception ex)
                 {
+                    if (ex is ProviderConcurrencyLimitException)
+                    {
+                        sw.Stop();
+
+                        response.Success = false;
+                        response.StatusCode = 429;
+                        response.Error = ex.Message;
+                        response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                        if (response.TokenizationProfile != null)
+                        {
+                            BatchLimitModeEnum appliedBatchLimitMode = response.TokenizationProfile.BatchLimitMode == BatchLimitModeEnum.Unknown
+                                ? BatchLimitModeEnum.WholeRequest
+                                : response.TokenizationProfile.BatchLimitMode;
+                            AnnotateEmbeddingRequestCalls(
+                                client,
+                                startCallIndex,
+                                new List<string> { explorerReq.Input ?? string.Empty },
+                                TokenizerAdapterFactory.Create(response.TokenizationProfile),
+                                response.TokenizationProfile,
+                                appliedBatchLimitMode,
+                                "Upstream embedding request failed.");
+                        }
+                        response.EmbeddingCalls = client.CallDetails.ToList();
+
+                        if (inflight != null)
+                        {
+                            inflight.Stopwatch.Stop();
+                            string requestJson = _Serializer.SerializeJson(explorerReq, false);
+                            string responseJson = _Serializer.SerializeJson(response, false);
+                            Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                            Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                            await RecordDetailedHistoryAsync(
+                                inflight.Entry,
+                                response.StatusCode,
+                                inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                                requestJson,
+                                responseJson,
+                                reqHeaders,
+                                respHeaders,
+                                response.EmbeddingCalls,
+                                null,
+                                BuildTokenizationDetail(response.TokenizationProfile)).ConfigureAwait(false);
+                            inflight.DetailRecorded = true;
+                        }
+
+                        throw;
+                    }
+
                     sw.Stop();
 
                     response.Success = false;
@@ -1303,6 +1362,10 @@ namespace Partio.Server
 
                     return response;
                 }
+            }
+            catch (ProviderConcurrencyLimitException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -1387,6 +1450,39 @@ namespace Partio.Server
                 }
                 catch (Exception ex)
                 {
+                    if (ex is ProviderConcurrencyLimitException)
+                    {
+                        sw.Stop();
+
+                        response.Success = false;
+                        response.StatusCode = 429;
+                        response.Error = ex.Message;
+                        response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                        response.CompletionCalls = client.CallDetails.ToList();
+
+                        if (inflight != null)
+                        {
+                            inflight.Stopwatch.Stop();
+                            string requestJson = _Serializer.SerializeJson(explorerReq, false);
+                            string responseJson = _Serializer.SerializeJson(response, false);
+                            Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                            Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                            await RecordDetailedHistoryAsync(
+                                inflight.Entry,
+                                response.StatusCode,
+                                inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                                requestJson,
+                                responseJson,
+                                reqHeaders,
+                                respHeaders,
+                                null,
+                                response.CompletionCalls).ConfigureAwait(false);
+                            inflight.DetailRecorded = true;
+                        }
+
+                        throw;
+                    }
+
                     sw.Stop();
 
                     response.Success = false;
@@ -1409,6 +1505,10 @@ namespace Partio.Server
 
                     return response;
                 }
+            }
+            catch (ProviderConcurrencyLimitException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -2030,6 +2130,7 @@ namespace Partio.Server
             if (ex is KeyNotFoundException) return 404;
             if (ex is ArgumentException || ex is ArgumentNullException) return 400;
             if (ex is UnauthorizedAccessException) return 401;
+            if (ex is ProviderConcurrencyLimitException) return 429;
             if (ex is EndpointUnhealthyException) return 502;
             if (ex is ProviderOperationTimeoutException) return 504;
             return 500;
@@ -2169,12 +2270,12 @@ namespace Partio.Server
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    return new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
+                    return new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    return new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
+                    return new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
                 case ApiFormatEnum.Gemini:
-                    return new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
+                    return new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -2185,12 +2286,12 @@ namespace Partio.Server
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    return new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
+                    return new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    return new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
+                    return new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
                 case ApiFormatEnum.Gemini:
-                    return new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
+                    return new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -2232,6 +2333,7 @@ namespace Partio.Server
                 ep.ApiFormat = defaultEp.ApiFormat;
                 ep.ApiKey = defaultEp.ApiKey;
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
+                ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.HealthCheckEnabled = true;
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
@@ -2249,6 +2351,7 @@ namespace Partio.Server
                 cep.ApiFormat = defaultIep.ApiFormat;
                 cep.ApiKey = defaultIep.ApiKey;
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
+                cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
                 cep.HealthCheckEnabled = true;
                 CompletionEndpoint.ApplyHealthCheckDefaults(cep);
                 CompletionEndpoint createdCep = await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);

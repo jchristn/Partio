@@ -96,7 +96,8 @@
             "Endpoint": "http://localhost:11434",
             "ApiFormat": "Ollama",
             "ApiKey": null,
-            "MaximumTimeoutMs": 60000
+            "MaximumTimeoutMs": 60000,
+            "MaxConcurrentRequests": 2
         }
     ],
     "DefaultInferenceEndpoints": [
@@ -105,7 +106,8 @@
             "Model": "gemma3:4b",
             "Endpoint": "http://localhost:11434",
             "ApiFormat": "Ollama",
-            "MaximumTimeoutMs": 60000
+            "MaximumTimeoutMs": 60000,
+            "MaxConcurrentRequests": 2
         }
     ]
 }

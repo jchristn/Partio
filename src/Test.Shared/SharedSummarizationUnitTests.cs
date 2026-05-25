@@ -180,6 +180,14 @@ namespace Test.Shared
                 await Task.CompletedTask;
             }));
 
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: MaxConcurrentRequests defaults to 2", async () =>
+            {
+                CompletionEndpoint ep = new CompletionEndpoint();
+                if (ep.MaxConcurrentRequests != 2)
+                    throw new Exception("Expected MaxConcurrentRequests=2, got " + ep.MaxConcurrentRequests);
+                await Task.CompletedTask;
+            }));
+
             tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckExpectedStatusCode defaults to 200", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
@@ -221,6 +229,7 @@ namespace Test.Shared
                 ep.ApiKey = "sk-test-key";
                 ep.Model = "gpt-4o";
                 ep.MaximumTimeoutMs = 90000;
+                ep.MaxConcurrentRequests = 4;
                 ep.Labels = new List<string> { "prod", "llm" };
                 ep.Tags = new Dictionary<string, string> { { "region", "us-east" } };
 
@@ -231,6 +240,7 @@ namespace Test.Shared
                 if (ep.ApiKey != "sk-test-key") throw new Exception("ApiKey not preserved");
                 if (ep.Model != "gpt-4o") throw new Exception("Model not preserved");
                 if (ep.MaximumTimeoutMs != 90000) throw new Exception("MaximumTimeoutMs not preserved");
+                if (ep.MaxConcurrentRequests != 4) throw new Exception("MaxConcurrentRequests not preserved");
                 if (ep.Labels == null || ep.Labels.Count != 2) throw new Exception("Labels not preserved");
                 if (ep.Tags == null || !ep.Tags.ContainsKey("region")) throw new Exception("Tags not preserved");
                 await Task.CompletedTask;
@@ -241,6 +251,14 @@ namespace Test.Shared
                 EmbeddingEndpoint ep = new EmbeddingEndpoint();
                 if (ep.MaximumTimeoutMs != 60000)
                     throw new Exception("Expected MaximumTimeoutMs=60000, got " + ep.MaximumTimeoutMs);
+                await Task.CompletedTask;
+            }));
+
+            tests.Add(SharedNamedTestCase.CreateAsync("EmbeddingEndpoint: MaxConcurrentRequests defaults to 2", async () =>
+            {
+                EmbeddingEndpoint ep = new EmbeddingEndpoint();
+                if (ep.MaxConcurrentRequests != 2)
+                    throw new Exception("Expected MaxConcurrentRequests=2, got " + ep.MaxConcurrentRequests);
                 await Task.CompletedTask;
             }));
 

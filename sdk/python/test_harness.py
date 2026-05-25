@@ -143,6 +143,7 @@ def main():
                 "ApiFormat": "Ollama",
                 "HealthCheckEnabled": False,
                 "MaximumTimeoutMs": 61000,
+                "MaxConcurrentRequests": 3,
                 "Tokenization": {
                     "TokenizerKind": "BertWordPiece",
                     "TokenizerModel": "bert-base-uncased",
@@ -154,6 +155,7 @@ def main():
             })
             assert ep and "Id" in ep
             assert ep.get("MaximumTimeoutMs") == 61000
+            assert ep.get("MaxConcurrentRequests") == 3
             test_ep_id = ep["Id"]
         run_test("Create Endpoint", test_create_endpoint)
 
@@ -161,6 +163,7 @@ def main():
             ep = client.get_endpoint(test_ep_id)
             assert ep and ep["Model"] == "test-model"
             assert ep.get("MaximumTimeoutMs") == 61000
+            assert ep.get("MaxConcurrentRequests") == 3
             assert ep.get("Tokenization"), "Expected tokenization override"
             assert ep["Tokenization"].get("TokenizerModel") == "bert-base-uncased"
             assert ep["Tokenization"].get("MaxInputTokens") == 384
@@ -175,6 +178,7 @@ def main():
                 "ApiFormat": "Ollama",
                 "HealthCheckEnabled": False,
                 "MaximumTimeoutMs": 91000,
+                "MaxConcurrentRequests": 5,
                 "Tokenization": {
                     "TokenizerKind": "Cl100kBase",
                     "TokenizerModel": "cl100k_base",
@@ -186,6 +190,7 @@ def main():
             })
             assert updated is not None
             assert updated.get("MaximumTimeoutMs") == 91000
+            assert updated.get("MaxConcurrentRequests") == 5
             assert updated.get("Tokenization"), "Expected updated tokenization override"
             assert updated["Tokenization"].get("BatchLimitMode") == "WholeRequest"
             assert updated["Tokenization"].get("AutoDetect") is False
@@ -217,9 +222,10 @@ def main():
         # Completion Endpoint CRUD
         def test_create_completion_endpoint():
             nonlocal test_cep_id
-            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Test Inference", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 61000})
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Test Inference", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 61000, "MaxConcurrentRequests": 3})
             assert cep and "Id" in cep
             assert cep.get("MaximumTimeoutMs") == 61000
+            assert cep.get("MaxConcurrentRequests") == 3
             test_cep_id = cep["Id"]
         run_test("Create Completion Endpoint", test_create_completion_endpoint)
 
@@ -227,12 +233,14 @@ def main():
             cep = client.get_completion_endpoint(test_cep_id)
             assert cep and cep["Model"] == "test-model"
             assert cep.get("MaximumTimeoutMs") == 61000
+            assert cep.get("MaxConcurrentRequests") == 3
         run_test("Read Completion Endpoint", test_read_completion_endpoint)
 
         def test_update_completion_endpoint():
-            updated = client.update_completion_endpoint(test_cep_id, {"TenantId": test_tenant_id, "Name": "Updated Inference", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 91000})
+            updated = client.update_completion_endpoint(test_cep_id, {"TenantId": test_tenant_id, "Name": "Updated Inference", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 91000, "MaxConcurrentRequests": 5})
             assert updated is not None
             assert updated.get("MaximumTimeoutMs") == 91000
+            assert updated.get("MaxConcurrentRequests") == 5
         run_test("Update Completion Endpoint", test_update_completion_endpoint)
 
         def test_completion_endpoint_exists():

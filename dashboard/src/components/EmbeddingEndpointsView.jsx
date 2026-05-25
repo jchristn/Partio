@@ -239,26 +239,20 @@ const defaultHealthFields = {
 };
 
 const defaultMaximumTimeoutMs = 60000;
-const defaultMaximumTimeoutSeconds = '60';
+const defaultMaxConcurrentRequests = 2;
 
-function millisecondsToTimeoutSeconds(value) {
-  if (value === null || value === undefined || value === '') return defaultMaximumTimeoutSeconds;
+function parsePositiveInteger(value, fallback) {
   const parsed = parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultMaximumTimeoutSeconds;
-  if (parsed <= 0) return '1';
-  return Math.max(1, Math.ceil(parsed / 1000)).toString();
-}
-
-function timeoutSecondsToMilliseconds(value) {
-  if (value === null || value === undefined || value === '') return defaultMaximumTimeoutMs;
-  const parsedSeconds = parseInt(value, 10);
-  if (Number.isNaN(parsedSeconds)) return defaultMaximumTimeoutMs;
-  if (parsedSeconds <= 0) return 1000;
-  return Math.max(1, parsedSeconds) * 1000;
+  if (Number.isNaN(parsed) || parsed < 1) return fallback;
+  return parsed;
 }
 
 function formatMaximumTimeout(value) {
-  return `${millisecondsToTimeoutSeconds(value || defaultMaximumTimeoutMs)}s`;
+  return `${parsePositiveInteger(value, defaultMaximumTimeoutMs)} ms`;
+}
+
+function formatMaxConcurrentRequests(value) {
+  return parsePositiveInteger(value, defaultMaxConcurrentRequests).toString();
 }
 
 function createTokenizationForm(tokenization = null) {
@@ -309,7 +303,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutSeconds: defaultMaximumTimeoutSeconds, Tokenization: createTokenizationForm(), ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -361,7 +355,7 @@ export default function EmbeddingEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutSeconds: defaultMaximumTimeoutSeconds, HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -379,7 +373,8 @@ export default function EmbeddingEndpointsView() {
       ApiKey: item.ApiKey || '',
       Active: item.Active !== false,
       EnableRequestHistory: item.EnableRequestHistory || false,
-      MaximumTimeoutSeconds: millisecondsToTimeoutSeconds(item.MaximumTimeoutMs || defaultMaximumTimeoutMs),
+      MaximumTimeoutMs: (item.MaximumTimeoutMs || defaultMaximumTimeoutMs).toString(),
+      MaxConcurrentRequests: (item.MaxConcurrentRequests || defaultMaxConcurrentRequests).toString(),
       Tokenization: createTokenizationForm(item.Tokenization),
       HealthCheckEnabled: item.HealthCheckEnabled || false,
       HealthCheckUrl: item.HealthCheckUrl || '',
@@ -419,7 +414,8 @@ export default function EmbeddingEndpointsView() {
         ApiKey: form.ApiKey || null,
         Active: form.Active,
         EnableRequestHistory: form.EnableRequestHistory,
-        MaximumTimeoutMs: timeoutSecondsToMilliseconds(form.MaximumTimeoutSeconds),
+        MaximumTimeoutMs: parsePositiveInteger(form.MaximumTimeoutMs, defaultMaximumTimeoutMs),
+        MaxConcurrentRequests: parsePositiveInteger(form.MaxConcurrentRequests, defaultMaxConcurrentRequests),
         HealthCheckEnabled: form.HealthCheckEnabled,
         HealthCheckUrl: form.HealthCheckUrl || null,
         HealthCheckMethod: form.HealthCheckMethod === 'HEAD' ? 1 : 0,
@@ -493,10 +489,17 @@ export default function EmbeddingEndpointsView() {
     },
     {
       key: 'MaximumTimeoutMs',
-      label: 'Max Timeout',
-      tooltip: 'Maximum upstream embedding-provider timeout enforced by Partio for this endpoint.',
+      label: 'Req Timeout',
+      tooltip: 'Maximum upstream embedding-provider request timeout enforced by Partio for this endpoint, in milliseconds.',
       filterValue: (item) => formatMaximumTimeout(item.MaximumTimeoutMs),
       render: (item) => <span className="timeout-summary">{formatMaximumTimeout(item.MaximumTimeoutMs)}</span>
+    },
+    {
+      key: 'MaxConcurrentRequests',
+      label: 'Max Concurrent',
+      tooltip: 'Maximum concurrent upstream embedding-provider requests allowed for this endpoint.',
+      filterValue: (item) => formatMaxConcurrentRequests(item.MaxConcurrentRequests),
+      render: (item) => <span className="timeout-summary">{formatMaxConcurrentRequests(item.MaxConcurrentRequests)}</span>
     },
     {
       key: 'Tokenization',
@@ -680,15 +683,19 @@ export default function EmbeddingEndpointsView() {
                 <TooltipIcon content="Log all embedding requests and responses for debugging and auditing." />
               </label>
             </div>
-            <div className="form-group">
-              <FormFieldLabel text="Maximum Provider Timeout" tooltip="Upper bound for upstream embedding calls. Enter whole seconds here; Partio stores milliseconds internally and clamps backend values to positive non-zero integers." />
-              <Tooltip content="Upper bound for upstream embedding calls. Enter whole seconds here; Partio stores milliseconds internally and clamps backend values to positive non-zero integers." block>
-                <div className="timeout-input-wrapper">
-                  <input type="number" min="1" step="1" value={form.MaximumTimeoutSeconds} onChange={e => setForm({ ...form, MaximumTimeoutSeconds: e.target.value })} />
-                  <span className="timeout-input-suffix">seconds</span>
-                </div>
-              </Tooltip>
-              <div className="timeout-field-hint">Stored as {timeoutSecondsToMilliseconds(form.MaximumTimeoutSeconds).toLocaleString()} ms. This cap applies to embedding provider calls and is separate from health checks.</div>
+            <div className="endpoint-form-row">
+              <div className="form-group">
+                <FormFieldLabel text="Request Timeout (ms)" tooltip="Upper bound for upstream embedding calls in milliseconds. Backend values are stored in milliseconds and clamped to positive non-zero integers." />
+                <Tooltip content="Upper bound for upstream embedding calls in milliseconds. Backend values are stored in milliseconds and clamped to positive non-zero integers." block>
+                  <input type="number" min="1" step="1" value={form.MaximumTimeoutMs} onChange={e => setForm({ ...form, MaximumTimeoutMs: e.target.value })} />
+                </Tooltip>
+              </div>
+              <div className="form-group">
+                <FormFieldLabel text="Max Concurrent Requests" tooltip="Maximum concurrent upstream embedding-provider requests allowed for this endpoint. When the limit is reached, Partio returns HTTP 429." />
+                <Tooltip content="Maximum concurrent upstream embedding-provider requests allowed for this endpoint. When the limit is reached, Partio returns HTTP 429." block>
+                  <input type="number" min="1" step="1" value={form.MaxConcurrentRequests} onChange={e => setForm({ ...form, MaxConcurrentRequests: e.target.value })} />
+                </Tooltip>
+              </div>
             </div>
           </div>
 

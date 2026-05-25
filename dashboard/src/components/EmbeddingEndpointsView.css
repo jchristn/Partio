@@ -208,39 +208,6 @@
   color: var(--text-primary);
 }
 
-.timeout-input-wrapper {
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-}
-
-.timeout-input-wrapper input {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.timeout-input-suffix {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 12px;
-  border: 1px solid var(--border-color);
-  border-left: none;
-  border-top-right-radius: var(--radius);
-  border-bottom-right-radius: var(--radius);
-  background: var(--bg-color);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.timeout-field-hint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
 .tokenization-hint {
   font-size: 12px;
   color: var(--text-secondary);

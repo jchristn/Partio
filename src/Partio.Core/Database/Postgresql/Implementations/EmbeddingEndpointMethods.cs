@@ -41,7 +41,7 @@ namespace Partio.Core.Database.Postgresql.Implementations
 
             string query =
                 "INSERT INTO embedding_endpoints (id, tenant_id, name, model, endpoint, api_format, api_key, active, enable_request_history, " +
-                "health_check_enabled, health_check_url, health_check_method, health_check_interval_ms, health_check_timeout_ms, maximum_timeout_ms, " +
+                "health_check_enabled, health_check_url, health_check_method, health_check_interval_ms, health_check_timeout_ms, maximum_timeout_ms, max_concurrent_requests, " +
                 "health_check_expected_status, healthy_threshold, unhealthy_threshold, health_check_use_auth, tokenization_json, " +
                 "labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
                 "'" + _Driver.Sanitize(endpoint.Id) + "', " +
@@ -59,6 +59,7 @@ namespace Partio.Core.Database.Postgresql.Implementations
                 endpoint.HealthCheckIntervalMs + ", " +
                 endpoint.HealthCheckTimeoutMs + ", " +
                 endpoint.MaximumTimeoutMs + ", " +
+                endpoint.MaxConcurrentRequests + ", " +
                 endpoint.HealthCheckExpectedStatusCode + ", " +
                 endpoint.HealthyThreshold + ", " +
                 endpoint.UnhealthyThreshold + ", " +
@@ -143,6 +144,7 @@ namespace Partio.Core.Database.Postgresql.Implementations
                 "health_check_interval_ms = " + endpoint.HealthCheckIntervalMs + ", " +
                 "health_check_timeout_ms = " + endpoint.HealthCheckTimeoutMs + ", " +
                 "maximum_timeout_ms = " + endpoint.MaximumTimeoutMs + ", " +
+                "max_concurrent_requests = " + endpoint.MaxConcurrentRequests + ", " +
                 "health_check_expected_status = " + endpoint.HealthCheckExpectedStatusCode + ", " +
                 "healthy_threshold = " + endpoint.HealthyThreshold + ", " +
                 "unhealthy_threshold = " + endpoint.UnhealthyThreshold + ", " +

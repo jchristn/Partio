@@ -72,7 +72,11 @@ namespace Partio.Core.Database.Sqlserver
             catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddMaximumTimeoutMs, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddMaxConcurrentRequests, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddMaximumTimeoutMs, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddMaxConcurrentRequests, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
 
             Tenant = new TenantMethods(this, _Logging);

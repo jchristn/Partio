@@ -12,7 +12,7 @@ namespace Test.XUnit
     public class ProviderTimeoutTests
     {
         [Fact]
-        public void EndpointAndSettingsTimeoutsDefaultAndClamp()
+        public void EndpointAndSettingsProviderLimitsDefaultAndClamp()
         {
             EmbeddingEndpoint embeddingEndpoint = new EmbeddingEndpoint();
             CompletionEndpoint completionEndpoint = new CompletionEndpoint();
@@ -23,16 +23,28 @@ namespace Test.XUnit
             Assert.Equal(60000, completionEndpoint.MaximumTimeoutMs);
             Assert.Equal(60000, defaultEmbeddingEndpoint.MaximumTimeoutMs);
             Assert.Equal(60000, defaultInferenceEndpoint.MaximumTimeoutMs);
+            Assert.Equal(2, embeddingEndpoint.MaxConcurrentRequests);
+            Assert.Equal(2, completionEndpoint.MaxConcurrentRequests);
+            Assert.Equal(2, defaultEmbeddingEndpoint.MaxConcurrentRequests);
+            Assert.Equal(2, defaultInferenceEndpoint.MaxConcurrentRequests);
 
             embeddingEndpoint.MaximumTimeoutMs = 0;
             completionEndpoint.MaximumTimeoutMs = -42;
             defaultEmbeddingEndpoint.MaximumTimeoutMs = 0;
             defaultInferenceEndpoint.MaximumTimeoutMs = -1;
+            embeddingEndpoint.MaxConcurrentRequests = 0;
+            completionEndpoint.MaxConcurrentRequests = -42;
+            defaultEmbeddingEndpoint.MaxConcurrentRequests = 0;
+            defaultInferenceEndpoint.MaxConcurrentRequests = -1;
 
             Assert.Equal(1, embeddingEndpoint.MaximumTimeoutMs);
             Assert.Equal(1, completionEndpoint.MaximumTimeoutMs);
             Assert.Equal(1, defaultEmbeddingEndpoint.MaximumTimeoutMs);
             Assert.Equal(1, defaultInferenceEndpoint.MaximumTimeoutMs);
+            Assert.Equal(1, embeddingEndpoint.MaxConcurrentRequests);
+            Assert.Equal(1, completionEndpoint.MaxConcurrentRequests);
+            Assert.Equal(1, defaultEmbeddingEndpoint.MaxConcurrentRequests);
+            Assert.Equal(1, defaultInferenceEndpoint.MaxConcurrentRequests);
         }
 
         [Fact]
@@ -84,6 +96,45 @@ namespace Test.XUnit
             Assert.Equal(504, statusCode);
         }
 
+        [Fact]
+        public void PartioServerMapsProviderConcurrencyLimitTo429()
+        {
+            MethodInfo? mapMethod = typeof(Partio.Server.PartioServer).GetMethod(
+                "MapExceptionToStatusCode",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.NotNull(mapMethod);
+
+            int statusCode = (int)mapMethod!.Invoke(null, new object[] { new ProviderConcurrencyLimitException("eep_test", 1, "too many requests") })!;
+            Assert.Equal(429, statusCode);
+        }
+
+        [Fact]
+        public async Task EmbeddingClientsRejectWhenConcurrentLimitReached()
+        {
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using ConcurrencyProbeEmbeddingClient first = new ConcurrencyProbeEmbeddingClient("http://localhost", logging, "eep_test", 1);
+            using ConcurrencyProbeEmbeddingClient second = new ConcurrencyProbeEmbeddingClient("http://localhost", logging, "eep_test", 1);
+
+            TaskCompletionSource<bool> entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            Task firstTask = first.HoldSlotAsync(entered, release.Task);
+            await entered.Task;
+
+            ProviderConcurrencyLimitException ex = await Assert.ThrowsAsync<ProviderConcurrencyLimitException>(
+                () => second.TryAcquireAndReleaseAsync());
+
+            Assert.Equal(1, ex.MaxConcurrentRequests);
+            Assert.NotEmpty(second.CallDetails);
+            Assert.True(second.CallDetails[0].Error?.IndexOf("max concurrent request", StringComparison.OrdinalIgnoreCase) >= 0);
+
+            release.TrySetResult(true);
+            await firstTask;
+        }
+
         private sealed class TimeoutPostEmbeddingClient : EmbeddingClientBase
         {
             public TimeoutPostEmbeddingClient(string endpoint, LoggingModule logging, int maximumTimeoutMs)
@@ -127,6 +178,45 @@ namespace Test.XUnit
                     timeoutMs,
                     token).ConfigureAwait(false);
                 return result.ResponseBody;
+            }
+        }
+
+        private sealed class ConcurrencyProbeEmbeddingClient : EmbeddingClientBase
+        {
+            public ConcurrencyProbeEmbeddingClient(string endpoint, LoggingModule logging, string concurrencyKey, int maxConcurrentRequests)
+                : base(endpoint, null, logging, 60000, concurrencyKey, maxConcurrentRequests)
+            {
+            }
+
+            public async Task HoldSlotAsync(TaskCompletionSource<bool> entered, Task releaseTask)
+            {
+                using IDisposable lease = AcquireRequestSlot();
+                entered.TrySetResult(true);
+                await releaseTask.ConfigureAwait(false);
+            }
+
+            public Task TryAcquireAndReleaseAsync()
+            {
+                try
+                {
+                    using IDisposable lease = AcquireRequestSlot();
+                    return Task.CompletedTask;
+                }
+                catch (ProviderConcurrencyLimitException ex)
+                {
+                    RecordRejectedCall("EmbeddingRequest", _Endpoint, "POST", ex.Message);
+                    return Task.FromException(ex);
+                }
+            }
+
+            public override Task<List<float>> EmbedAsync(string text, string model, CancellationToken token = default)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
+            {
+                throw new NotSupportedException();
             }
         }
     }

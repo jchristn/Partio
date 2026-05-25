@@ -19,7 +19,7 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
 Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
-Use `MaximumTimeoutMs` on embedding or completion endpoints to cap upstream provider calls per endpoint. Process routes that hit this cap raise `PartioError` with status code `504`.
+Use `MaximumTimeoutMs` and `MaxConcurrentRequests` on embedding or completion endpoints to cap upstream provider calls per endpoint. Process routes that hit the timeout cap raise `PartioError` with status code `504`; concurrency-limit rejections raise `PartioError` with status code `429`.
 
 ## Prerequisites
 
@@ -54,6 +54,7 @@ with PartioClient("http://localhost:8400", "your-access-key") as client:
         "Endpoint": "http://localhost:11434",
         "ApiFormat": "Ollama",
         "MaximumTimeoutMs": 60000,
+        "MaxConcurrentRequests": 2,
         "Tokenization": {
             "TokenizerKind": "BertWordPiece",
             "TokenizerModel": "bert-base-uncased",
@@ -87,7 +88,7 @@ with PartioClient("http://localhost:8400", "your-access-key") as client:
     print(embedding_explorer["TokenizationProfile"]["ProfileSource"])
 ```
 
-Explorer requests still return `200 OK`; when the upstream provider times out, inspect the explorer payload `StatusCode` for `504`.
+Explorer requests still return `200 OK` for provider-level failures reported in the response payload, but concurrency-limit rejections return HTTP `429`.
 
 ## Running the Test Harness
 

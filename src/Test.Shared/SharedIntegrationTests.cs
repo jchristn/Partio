@@ -246,10 +246,12 @@ namespace Test.Shared
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
-                    MaximumTimeoutMs = 61000
+                    MaximumTimeoutMs = 61000,
+                    MaxConcurrentRequests = 3
                 });
                 if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No endpoint returned");
                 if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
+                if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch on create");
                 _TestEpId = ep.Id;
             }
         }
@@ -262,6 +264,7 @@ namespace Test.Shared
                 if (ep == null) throw new Exception("Endpoint not found");
                 if (ep.Model != "test-model") throw new Exception("Model mismatch");
                 if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
+                if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
             }
         }
 
@@ -276,10 +279,12 @@ namespace Test.Shared
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
-                    MaximumTimeoutMs = 91000
+                    MaximumTimeoutMs = 91000,
+                    MaxConcurrentRequests = 5
                 });
                 if (updated == null) throw new Exception("Update failed");
                 if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
+                if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch on update");
             }
         }
 
@@ -352,10 +357,12 @@ namespace Test.Shared
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
-                    MaximumTimeoutMs = 61000
+                    MaximumTimeoutMs = 61000,
+                    MaxConcurrentRequests = 3
                 });
                 if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
                 if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
+                if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch on create");
                 _TestCepId = cep.Id;
             }
         }
@@ -368,6 +375,7 @@ namespace Test.Shared
                 if (cep == null) throw new Exception("Endpoint not found");
                 if (cep.Model != "test-model") throw new Exception("Model mismatch");
                 if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
+                if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
             }
         }
 
@@ -383,10 +391,12 @@ namespace Test.Shared
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
-                    MaximumTimeoutMs = 91000
+                    MaximumTimeoutMs = 91000,
+                    MaxConcurrentRequests = 5
                 });
                 if (updated == null) throw new Exception("Update failed");
                 if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
+                if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch on update");
             }
         }
 
@@ -525,6 +535,126 @@ namespace Test.Shared
                     throw new Exception("Expected timeout error text");
                 if (result.CompletionCalls == null || result.CompletionCalls.Count == 0)
                     throw new Exception("Expected recorded upstream completion call details");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestExploreEmbeddingConcurrencyLimitStatusAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(embeddingDelayMs: 1200);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            EmbeddingEndpoint? endpoint = null;
+
+            try
+            {
+                endpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Concurrency Explorer Embedding",
+                    Model = "text-embedding-3-small",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000,
+                    MaxConcurrentRequests = 1
+                });
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No concurrency test embedding endpoint returned");
+
+                Task<EndpointExplorerEmbeddingResponse?> firstTask = admin.ExploreEmbeddingEndpointAsync(new EndpointExplorerEmbeddingRequest
+                {
+                    EndpointId = endpoint.Id,
+                    Input = "First concurrency test payload"
+                });
+
+                await provider.WaitForEmbeddingRequestCountAsync(1).ConfigureAwait(false);
+
+                try
+                {
+                    await admin.ExploreEmbeddingEndpointAsync(new EndpointExplorerEmbeddingRequest
+                    {
+                        EndpointId = endpoint.Id,
+                        Input = "Second concurrency test payload"
+                    }).ConfigureAwait(false);
+
+                    throw new Exception("Expected PartioException with 429");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 429)
+                {
+                    if (ex.Message.IndexOf("max concurrent request", StringComparison.OrdinalIgnoreCase) < 0)
+                        throw new Exception("Expected concurrency error message, got: " + ex.Message);
+                }
+
+                EndpointExplorerEmbeddingResponse? first = await firstTask.ConfigureAwait(false);
+                if (first == null || !first.Success)
+                    throw new Exception("First explorer request should have succeeded");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestExploreCompletionConcurrencyLimitStatusAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 1200);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Concurrency Explorer Inference",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000,
+                    MaxConcurrentRequests = 1
+                });
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No concurrency test completion endpoint returned");
+
+                Task<EndpointExplorerCompletionResponse?> firstTask = admin.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
+                {
+                    EndpointId = endpoint.Id,
+                    Prompt = "First concurrency completion payload",
+                    TimeoutMs = 5000
+                });
+
+                await provider.WaitForCompletionRequestCountAsync(1).ConfigureAwait(false);
+
+                try
+                {
+                    await admin.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
+                    {
+                        EndpointId = endpoint.Id,
+                        Prompt = "Second concurrency completion payload",
+                        TimeoutMs = 5000
+                    }).ConfigureAwait(false);
+
+                    throw new Exception("Expected PartioException with 429");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 429)
+                {
+                    if (ex.Message.IndexOf("max concurrent request", StringComparison.OrdinalIgnoreCase) < 0)
+                        throw new Exception("Expected concurrency error message, got: " + ex.Message);
+                }
+
+                EndpointExplorerCompletionResponse? first = await firstTask.ConfigureAwait(false);
+                if (first == null || !first.Success)
+                    throw new Exception("First completion explorer request should have succeeded");
             }
             finally
             {
@@ -1048,6 +1178,8 @@ namespace Test.Shared
             // Endpoint Explorer
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Embedding Endpoint", async () => await TestExploreEmbeddingEndpointAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Endpoint", async () => await TestExploreCompletionEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Explore Embedding Concurrency Limit (429)", async () => await TestExploreEmbeddingConcurrencyLimitStatusAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Concurrency Limit (429)", async () => await TestExploreCompletionConcurrencyLimitStatusAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Timeout Status (504)", async () => await TestExploreCompletionTimeoutStatusAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Process Embedding Timeout (504)", async () => await TestProcessEmbeddingTimeoutAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Process Summarization Timeout (504)", async () => await TestProcessSummarizationTimeoutAsync()));

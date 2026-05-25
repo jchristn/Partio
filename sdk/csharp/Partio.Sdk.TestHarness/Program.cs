@@ -152,6 +152,7 @@ namespace Partio.Sdk.TestHarness
                         ApiFormat = "Ollama",
                         HealthCheckEnabled = false,
                         MaximumTimeoutMs = 61000,
+                        MaxConcurrentRequests = 3,
                         Tokenization = new EndpointTokenizationSettings
                         {
                             TokenizerKind = "BertWordPiece",
@@ -164,6 +165,7 @@ namespace Partio.Sdk.TestHarness
                     });
                     if (ep == null) throw new Exception("No response");
                     if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
+                    if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
                     testEpId = ep.Id ?? string.Empty;
                 });
 
@@ -172,6 +174,7 @@ namespace Partio.Sdk.TestHarness
                     EmbeddingEndpoint? ep = await admin.GetEndpointAsync(testEpId);
                     if (ep == null || ep.Model != "test-model") throw new Exception("Endpoint mismatch");
                     if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
+                    if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
                     if (ep.Tokenization == null) throw new Exception("Expected tokenization override");
                     if (ep.Tokenization.TokenizerModel != "bert-base-uncased") throw new Exception("Tokenizer model mismatch");
                     if (ep.Tokenization.MaxInputTokens != 384) throw new Exception("MaxInputTokens mismatch");
@@ -188,6 +191,7 @@ namespace Partio.Sdk.TestHarness
                         ApiFormat = "Ollama",
                         HealthCheckEnabled = false,
                         MaximumTimeoutMs = 91000,
+                        MaxConcurrentRequests = 5,
                         Tokenization = new EndpointTokenizationSettings
                         {
                             TokenizerKind = "Cl100kBase",
@@ -200,6 +204,7 @@ namespace Partio.Sdk.TestHarness
                     });
                     if (updated == null) throw new Exception("Update failed");
                     if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch");
+                    if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch");
                     if (updated.Tokenization == null) throw new Exception("Expected updated tokenization override");
                     if (updated.Tokenization.BatchLimitMode != "WholeRequest") throw new Exception("Batch limit mode mismatch");
                     if (updated.Tokenization.AutoDetect) throw new Exception("AutoDetect should be false");
@@ -244,9 +249,10 @@ namespace Partio.Sdk.TestHarness
                 string vllmCepId = "";
                 await RunTest("Create Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 61000 });
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 61000, MaxConcurrentRequests = 3 });
                     if (cep == null) throw new Exception("No response");
                     if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
+                    if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
                     testCepId = cep.Id ?? string.Empty;
                 });
 
@@ -255,13 +261,15 @@ namespace Partio.Sdk.TestHarness
                     CompletionEndpoint? cep = await admin.GetCompletionEndpointAsync(testCepId);
                     if (cep == null || cep.Model != "test-model") throw new Exception("Endpoint mismatch");
                     if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
+                    if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
                 });
 
                 await RunTest("Update Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint { TenantId = testTenantId, Name = "Updated Inference", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 91000 });
+                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint { TenantId = testTenantId, Name = "Updated Inference", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 91000, MaxConcurrentRequests = 5 });
                     if (updated == null) throw new Exception("Update failed");
                     if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch");
+                    if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch");
                 });
 
                 await RunTest("Completion Endpoint Exists (HEAD)", async () =>

@@ -89,6 +89,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     health_check_interval_ms INT NOT NULL DEFAULT 5000,
                     health_check_timeout_ms INT NOT NULL DEFAULT 2000,
                     maximum_timeout_ms INT NOT NULL DEFAULT 60000,
+                    max_concurrent_requests INT NOT NULL DEFAULT 2,
                     health_check_expected_status INT NOT NULL DEFAULT 200,
                     healthy_threshold INT NOT NULL DEFAULT 2,
                     unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -124,6 +125,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     health_check_interval_ms INT NOT NULL DEFAULT 5000,
                     health_check_timeout_ms INT NOT NULL DEFAULT 2000,
                     maximum_timeout_ms INT NOT NULL DEFAULT 60000,
+                    max_concurrent_requests INT NOT NULL DEFAULT 2,
                     health_check_expected_status INT NOT NULL DEFAULT 200,
                     healthy_threshold INT NOT NULL DEFAULT 2,
                     unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -188,12 +190,30 @@ namespace Partio.Core.Database.Sqlserver.Queries
             END;";
 
         /// <summary>
+        /// Migration: add max_concurrent_requests column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddMaxConcurrentRequests =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'max_concurrent_requests')
+            BEGIN
+                ALTER TABLE embedding_endpoints ADD max_concurrent_requests INT NOT NULL DEFAULT 2;
+            END;";
+
+        /// <summary>
         /// Migration: add maximum_timeout_ms column to completion_endpoints for existing databases.
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaximumTimeoutMs =
             @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'maximum_timeout_ms')
             BEGIN
                 ALTER TABLE completion_endpoints ADD maximum_timeout_ms INT NOT NULL DEFAULT 60000;
+            END;";
+
+        /// <summary>
+        /// Migration: add max_concurrent_requests column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddMaxConcurrentRequests =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'max_concurrent_requests')
+            BEGIN
+                ALTER TABLE completion_endpoints ADD max_concurrent_requests INT NOT NULL DEFAULT 2;
             END;";
 
         /// <summary>

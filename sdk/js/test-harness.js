@@ -138,6 +138,7 @@ await runTest('Create Endpoint', async () => {
     ApiFormat: 'Ollama',
     HealthCheckEnabled: false,
     MaximumTimeoutMs: 61000,
+    MaxConcurrentRequests: 3,
     Tokenization: {
       TokenizerKind: 'BertWordPiece',
       TokenizerModel: 'bert-base-uncased',
@@ -149,6 +150,7 @@ await runTest('Create Endpoint', async () => {
   });
   if (!ep || !ep.Id) throw new Error('No response');
   if (ep.MaximumTimeoutMs !== 61000) throw new Error('MaximumTimeoutMs mismatch');
+  if (ep.MaxConcurrentRequests !== 3) throw new Error('MaxConcurrentRequests mismatch');
   testEpId = ep.Id;
 });
 
@@ -156,6 +158,7 @@ await runTest('Read Endpoint', async () => {
   const ep = await client.getEndpoint(testEpId);
   if (!ep || ep.Model !== 'test-model') throw new Error('Mismatch');
   if (ep.MaximumTimeoutMs !== 61000) throw new Error('MaximumTimeoutMs mismatch');
+  if (ep.MaxConcurrentRequests !== 3) throw new Error('MaxConcurrentRequests mismatch');
   if (!ep.Tokenization) throw new Error('Expected tokenization override');
   if (ep.Tokenization.TokenizerModel !== 'bert-base-uncased') throw new Error('Tokenizer model mismatch');
   if (ep.Tokenization.MaxInputTokens !== 384) throw new Error('MaxInputTokens mismatch');
@@ -170,6 +173,7 @@ await runTest('Update Endpoint', async () => {
     ApiFormat: 'Ollama',
     HealthCheckEnabled: false,
     MaximumTimeoutMs: 91000,
+    MaxConcurrentRequests: 5,
     Tokenization: {
       TokenizerKind: 'Cl100kBase',
       TokenizerModel: 'cl100k_base',
@@ -181,6 +185,7 @@ await runTest('Update Endpoint', async () => {
   });
   if (!updated) throw new Error('Update failed');
   if (updated.MaximumTimeoutMs !== 91000) throw new Error('MaximumTimeoutMs mismatch');
+  if (updated.MaxConcurrentRequests !== 5) throw new Error('MaxConcurrentRequests mismatch');
   if (!updated.Tokenization) throw new Error('Expected updated tokenization override');
   if (updated.Tokenization.BatchLimitMode !== 'WholeRequest') throw new Error('Batch limit mode mismatch');
   if (updated.Tokenization.AutoDetect !== false) throw new Error('AutoDetect should be false');
@@ -209,9 +214,10 @@ await runTest('Create vLLM Embedding Endpoint', async () => {
 
 // Completion Endpoint CRUD
 await runTest('Create Completion Endpoint', async () => {
-  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 61000 });
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 61000, MaxConcurrentRequests: 3 });
   if (!cep || !cep.Id) throw new Error('No response');
   if (cep.MaximumTimeoutMs !== 61000) throw new Error('MaximumTimeoutMs mismatch');
+  if (cep.MaxConcurrentRequests !== 3) throw new Error('MaxConcurrentRequests mismatch');
   testCepId = cep.Id;
 });
 
@@ -219,12 +225,14 @@ await runTest('Read Completion Endpoint', async () => {
   const cep = await client.getCompletionEndpoint(testCepId);
   if (!cep || cep.Model !== 'test-model') throw new Error('Mismatch');
   if (cep.MaximumTimeoutMs !== 61000) throw new Error('MaximumTimeoutMs mismatch');
+  if (cep.MaxConcurrentRequests !== 3) throw new Error('MaxConcurrentRequests mismatch');
 });
 
 await runTest('Update Completion Endpoint', async () => {
-  const updated = await client.updateCompletionEndpoint(testCepId, { TenantId: testTenantId, Name: 'Updated Inference', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 91000 });
+  const updated = await client.updateCompletionEndpoint(testCepId, { TenantId: testTenantId, Name: 'Updated Inference', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 91000, MaxConcurrentRequests: 5 });
   if (!updated) throw new Error('Update failed');
   if (updated.MaximumTimeoutMs !== 91000) throw new Error('MaximumTimeoutMs mismatch');
+  if (updated.MaxConcurrentRequests !== 5) throw new Error('MaxConcurrentRequests mismatch');
 });
 
 await runTest('Completion Endpoint Exists (HEAD)', async () => {

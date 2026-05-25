@@ -41,6 +41,16 @@ namespace Partio.Core.ThirdParty
         protected readonly int _MaximumTimeoutMs;
 
         /// <summary>
+        /// Endpoint key used for concurrency limiting.
+        /// </summary>
+        protected readonly string _ConcurrencyKey;
+
+        /// <summary>
+        /// Maximum concurrent upstream provider requests for the endpoint.
+        /// </summary>
+        protected readonly int _MaxConcurrentRequests;
+
+        /// <summary>
         /// Recorded details of HTTP calls made to upstream embedding endpoints.
         /// </summary>
         public List<EmbeddingCallDetail> CallDetails { get; } = new List<EmbeddingCallDetail>();
@@ -52,12 +62,22 @@ namespace Partio.Core.ThirdParty
         /// <param name="apiKey">API key (nullable).</param>
         /// <param name="logging">Logging module.</param>
         /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
-        protected EmbeddingClientBase(string endpoint, string? apiKey, LoggingModule logging, int maximumTimeoutMs)
+        /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
+        /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
+        protected EmbeddingClientBase(
+            string endpoint,
+            string? apiKey,
+            LoggingModule logging,
+            int maximumTimeoutMs,
+            string? concurrencyKey = null,
+            int maxConcurrentRequests = 2)
         {
             _Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
             _ApiKey = apiKey;
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _MaximumTimeoutMs = maximumTimeoutMs <= 0 ? 1 : maximumTimeoutMs;
+            _ConcurrencyKey = !string.IsNullOrWhiteSpace(concurrencyKey) ? concurrencyKey : endpoint;
+            _MaxConcurrentRequests = maxConcurrentRequests < 1 ? 1 : maxConcurrentRequests;
             _HttpClient = new HttpClient();
         }
 
@@ -159,9 +179,11 @@ namespace Partio.Core.ThirdParty
             detail.RequestHeaders = reqHeaders;
 
             Stopwatch sw = Stopwatch.StartNew();
+            IDisposable? concurrencyLease = null;
 
             try
             {
+                concurrencyLease = AcquireRequestSlot();
                 using CancellationTokenSource timeoutCts = new CancellationTokenSource(_MaximumTimeoutMs);
                 using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
 
@@ -194,6 +216,15 @@ namespace Partio.Core.ThirdParty
                 result.ResponseBody = responseBody;
                 return result;
             }
+            catch (ProviderConcurrencyLimitException ex)
+            {
+                sw.Stop();
+                detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                detail.Success = false;
+                detail.Error = ex.Message;
+                CallDetails.Add(detail);
+                throw;
+            }
             catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
             {
                 sw.Stop();
@@ -221,6 +252,41 @@ namespace Partio.Core.ThirdParty
                 CallDetails.Add(detail);
                 throw;
             }
+            finally
+            {
+                concurrencyLease?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Acquire a slot from the endpoint concurrency limiter.
+        /// </summary>
+        protected IDisposable AcquireRequestSlot()
+        {
+            return ProviderConcurrencyLimiter.Acquire(_ConcurrencyKey, _MaxConcurrentRequests);
+        }
+
+        /// <summary>
+        /// Record a rejected upstream call when the endpoint concurrency limiter denies the request.
+        /// </summary>
+        protected void RecordRejectedCall(string? purpose, string url, string method, string error)
+        {
+            Dictionary<string, string> reqHeaders = new Dictionary<string, string>();
+            foreach (KeyValuePair<string, IEnumerable<string>> header in _HttpClient.DefaultRequestHeaders)
+            {
+                reqHeaders[header.Key] = string.Join(", ", header.Value);
+            }
+
+            CallDetails.Add(new EmbeddingCallDetail
+            {
+                Purpose = purpose,
+                Url = url,
+                Method = method,
+                RequestHeaders = reqHeaders,
+                TimestampUtc = DateTime.UtcNow,
+                Success = false,
+                Error = error
+            });
         }
 
         /// <summary>

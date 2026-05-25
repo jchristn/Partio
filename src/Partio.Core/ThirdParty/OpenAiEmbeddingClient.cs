@@ -21,8 +21,16 @@ namespace Partio.Core.ThirdParty
         /// <param name="apiKey">API key.</param>
         /// <param name="logging">Logging module.</param>
         /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
-        public OpenAiEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging, int maximumTimeoutMs)
-            : base(endpoint, apiKey, logging, maximumTimeoutMs)
+        /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
+        /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
+        public OpenAiEmbeddingClient(
+            string endpoint,
+            string? apiKey,
+            LoggingModule logging,
+            int maximumTimeoutMs,
+            string? concurrencyKey = null,
+            int maxConcurrentRequests = 2)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests)
         {
             _Header = "[OpenAiEmbedding] ";
             _Client = new PolyPromptOpenAiClient(endpoint, apiKey, logging);
@@ -42,9 +50,17 @@ namespace Partio.Core.ThirdParty
             PolyPromptEmbeddingOptions options = new PolyPromptEmbeddingOptions { Model = model };
             _Client.TimeoutMs = _MaximumTimeoutMs;
             PolyPrompt.Models.EmbeddingResponse response;
+            IDisposable? concurrencyLease = null;
             try
             {
+                concurrencyLease = AcquireRequestSlot();
                 response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
+            }
+            catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
+            {
+                RecordRejectedCall("EmbeddingRequest", _Endpoint.TrimEnd('/'), "POST", ex.Message);
+                SyncCallDetails();
+                throw;
             }
             catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
             {
@@ -61,6 +77,10 @@ namespace Partio.Core.ThirdParty
                     "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
                     _MaximumTimeoutMs,
                     ex);
+            }
+            finally
+            {
+                concurrencyLease?.Dispose();
             }
             SyncCallDetails();
 

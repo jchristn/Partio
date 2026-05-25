@@ -14,6 +14,7 @@ namespace Partio.Core.Settings
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
         private string? _ApiKey = null;
         private int _MaximumTimeoutMs = 60000;
+        private int _MaxConcurrentRequests = 2;
         private EndpointTokenizationSettings? _Tokenization = null;
 
         /// <summary>
@@ -68,6 +69,15 @@ namespace Partio.Core.Settings
         {
             get => _MaximumTimeoutMs;
             set => _MaximumTimeoutMs = value <= 0 ? 1 : value;
+        }
+
+        /// <summary>
+        /// Maximum concurrent upstream provider requests allowed for the seeded endpoint.
+        /// </summary>
+        public int MaxConcurrentRequests
+        {
+            get => _MaxConcurrentRequests;
+            set => _MaxConcurrentRequests = value < 1 ? 1 : value;
         }
 
         /// <summary>

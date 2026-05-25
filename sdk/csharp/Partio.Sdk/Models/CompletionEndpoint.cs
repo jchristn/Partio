@@ -49,6 +49,9 @@ namespace Partio.Sdk.Models
         [JsonPropertyName("MaximumTimeoutMs")]
         public int MaximumTimeoutMs { get; set; } = 60000;
 
+        [JsonPropertyName("MaxConcurrentRequests")]
+        public int MaxConcurrentRequests { get; set; } = 2;
+
         [JsonPropertyName("HealthCheckExpectedStatusCode")]
         public int HealthCheckExpectedStatusCode { get; set; } = 200;
 

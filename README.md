@@ -385,7 +385,8 @@ Partio is configured via `partio.json`, created automatically on first run.
       "Model": "nomic-embed-text",
       "Endpoint": "http://localhost:11434",
       "ApiFormat": "Ollama",
-      "MaximumTimeoutMs": 60000
+      "MaximumTimeoutMs": 60000,
+      "MaxConcurrentRequests": 2
     }
   ],
   "DefaultInferenceEndpoints": [
@@ -393,13 +394,14 @@ Partio is configured via `partio.json`, created automatically on first run.
       "Model": "gemma3:4b",
       "Endpoint": "http://localhost:11434",
       "ApiFormat": "Ollama",
-      "MaximumTimeoutMs": 60000
+      "MaximumTimeoutMs": 60000,
+      "MaxConcurrentRequests": 2
     }
   ]
 }
 ```
 
-Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `MaximumTimeoutMs`, stored in milliseconds and clamped server-side to a positive non-zero integer.
+Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `MaximumTimeoutMs`, stored in milliseconds and clamped server-side to a positive non-zero integer, plus `MaxConcurrentRequests`, clamped to `>= 1` with a default of `2`.
 
 ### Database Options
 
@@ -435,7 +437,7 @@ EndpointExplorerCompletionResponse? explorer = await client.ExploreCompletionEnd
 });
 ```
 
-Embedding endpoint CRUD in the C# SDK now includes `Tokenization`, endpoint models expose `MaximumTimeoutMs`, and explorer responses include `TokenizationProfile`. When a process route times out upstream, the SDK throws `PartioException` with HTTP status `504`.
+Embedding endpoint CRUD in the C# SDK now includes `Tokenization`, endpoint models expose `MaximumTimeoutMs` and `MaxConcurrentRequests`, and explorer responses include `TokenizationProfile`. When a process route times out upstream, the SDK throws `PartioException` with HTTP status `504`; when an endpoint is already at its concurrency ceiling, Partio returns HTTP `429`.
 
 ### Python
 
@@ -450,6 +452,7 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
         "Endpoint": "http://localhost:11434",
         "ApiFormat": "Ollama",
         "MaximumTimeoutMs": 60000,
+        "MaxConcurrentRequests": 2,
         "Tokenization": {
             "TokenizerKind": "BertWordPiece",
             "TokenizerModel": "bert-base-uncased",
@@ -488,6 +491,7 @@ const endpoint = await client.createEndpoint({
   Endpoint: 'http://localhost:11434',
   ApiFormat: 'Ollama',
   MaximumTimeoutMs: 60000,
+  MaxConcurrentRequests: 2,
   Tokenization: {
     TokenizerKind: 'BertWordPiece',
     TokenizerModel: 'bert-base-uncased',

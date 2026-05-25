@@ -2,6 +2,7 @@ namespace Partio.Core.Summarization
 {
     using System.Text.RegularExpressions;
     using Partio.Core.Enums;
+    using Partio.Core.Exceptions;
     using Partio.Core.Models;
     using Partio.Core.ThirdParty;
     using SyslogLogging;
@@ -397,6 +398,10 @@ namespace Partio.Core.Summarization
                 catch (InvalidOperationException)
                 {
                     throw; // Global failure limit — propagate
+                }
+                catch (ProviderConcurrencyLimitException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {

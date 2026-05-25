@@ -78,6 +78,7 @@ namespace Partio.Core.Database.Postgresql.Queries
                 health_check_interval_ms INTEGER NOT NULL DEFAULT 5000,
                 health_check_timeout_ms INTEGER NOT NULL DEFAULT 2000,
                 maximum_timeout_ms INTEGER NOT NULL DEFAULT 60000,
+                max_concurrent_requests INTEGER NOT NULL DEFAULT 2,
                 health_check_expected_status INTEGER NOT NULL DEFAULT 200,
                 healthy_threshold INTEGER NOT NULL DEFAULT 2,
                 unhealthy_threshold INTEGER NOT NULL DEFAULT 2,
@@ -110,6 +111,7 @@ namespace Partio.Core.Database.Postgresql.Queries
                 health_check_interval_ms INTEGER NOT NULL DEFAULT 5000,
                 health_check_timeout_ms INTEGER NOT NULL DEFAULT 2000,
                 maximum_timeout_ms INTEGER NOT NULL DEFAULT 60000,
+                max_concurrent_requests INTEGER NOT NULL DEFAULT 2,
                 health_check_expected_status INTEGER NOT NULL DEFAULT 200,
                 healthy_threshold INTEGER NOT NULL DEFAULT 2,
                 unhealthy_threshold INTEGER NOT NULL DEFAULT 2,
@@ -161,10 +163,22 @@ namespace Partio.Core.Database.Postgresql.Queries
             @"ALTER TABLE embedding_endpoints ADD COLUMN IF NOT EXISTS maximum_timeout_ms INTEGER NOT NULL DEFAULT 60000;";
 
         /// <summary>
+        /// Migration: add max_concurrent_requests column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddMaxConcurrentRequests =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN IF NOT EXISTS max_concurrent_requests INTEGER NOT NULL DEFAULT 2;";
+
+        /// <summary>
         /// Migration: add maximum_timeout_ms column to completion_endpoints for existing databases.
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaximumTimeoutMs =
             @"ALTER TABLE completion_endpoints ADD COLUMN IF NOT EXISTS maximum_timeout_ms INTEGER NOT NULL DEFAULT 60000;";
+
+        /// <summary>
+        /// Migration: add max_concurrent_requests column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddMaxConcurrentRequests =
+            @"ALTER TABLE completion_endpoints ADD COLUMN IF NOT EXISTS max_concurrent_requests INTEGER NOT NULL DEFAULT 2;";
 
         /// <summary>
         /// All table creation queries in dependency order.

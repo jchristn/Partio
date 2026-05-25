@@ -1,9 +1,11 @@
 namespace Test.Shared
 {
+    using System.Diagnostics;
     using System.Net;
     using System.Net.Sockets;
     using System.Text;
     using System.Text.Json;
+    using System.Threading;
 
     /// <summary>
     /// Minimal OpenAI-compatible test server used to simulate slow upstream providers.
@@ -25,6 +27,14 @@ namespace Test.Shared
         public string EmbeddingModel { get; set; } = "text-embedding-3-small";
 
         public string CompletionModel { get; set; } = "gpt-4.1-mini";
+
+        public int EmbeddingRequestCount => Volatile.Read(ref _EmbeddingRequestCount);
+
+        public int CompletionRequestCount => Volatile.Read(ref _CompletionRequestCount);
+
+        private int _EmbeddingRequestCount = 0;
+
+        private int _CompletionRequestCount = 0;
 
         public SlowOpenAiCompatibleServer(int embeddingDelayMs = 0, int completionDelayMs = 0, int modelsDelayMs = 0)
         {
@@ -121,6 +131,7 @@ namespace Test.Shared
 
                     if (request.Method == "POST" && request.Path == "/v1/embeddings")
                     {
+                        Interlocked.Increment(ref _EmbeddingRequestCount);
                         await DelayIfNeededAsync(EmbeddingDelayMs, token).ConfigureAwait(false);
                         await WriteJsonResponseAsync(stream, 200, BuildEmbeddingResponse(request.Body)).ConfigureAwait(false);
                         return;
@@ -128,6 +139,7 @@ namespace Test.Shared
 
                     if (request.Method == "POST" && request.Path == "/v1/chat/completions")
                     {
+                        Interlocked.Increment(ref _CompletionRequestCount);
                         await DelayIfNeededAsync(CompletionDelayMs, token).ConfigureAwait(false);
                         await WriteJsonResponseAsync(stream, 200, new
                         {
@@ -218,6 +230,16 @@ namespace Test.Shared
             return new RawHttpRequest(method, path, body);
         }
 
+        public async Task WaitForEmbeddingRequestCountAsync(int minCount, int timeoutMs = 5000)
+        {
+            await WaitForCountAsync(() => EmbeddingRequestCount, minCount, timeoutMs).ConfigureAwait(false);
+        }
+
+        public async Task WaitForCompletionRequestCountAsync(int minCount, int timeoutMs = 5000)
+        {
+            await WaitForCountAsync(() => CompletionRequestCount, minCount, timeoutMs).ConfigureAwait(false);
+        }
+
         private static object BuildEmbeddingResponse(string requestBody)
         {
             int inputCount = CountEmbeddingInputs(requestBody);
@@ -261,6 +283,20 @@ namespace Test.Shared
             {
                 return 1;
             }
+        }
+
+        private static async Task WaitForCountAsync(Func<int> getCount, int minCount, int timeoutMs)
+        {
+            Stopwatch sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                if (getCount() >= minCount)
+                    return;
+
+                await Task.Delay(10).ConfigureAwait(false);
+            }
+
+            throw new TimeoutException("Timed out waiting for upstream request count " + minCount + ".");
         }
 
         private static async Task DelayIfNeededAsync(int delayMs, CancellationToken token)
