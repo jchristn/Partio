@@ -32,7 +32,7 @@ namespace Partio.Core.Database.Mysql.Implementations
 
             string query =
                 "INSERT INTO completion_endpoints (id, tenant_id, name, endpoint, api_format, api_key, model, active, enable_request_history, " +
-                "health_check_enabled, health_check_url, health_check_method, health_check_interval_ms, health_check_timeout_ms, " +
+                "health_check_enabled, health_check_url, health_check_method, health_check_interval_ms, health_check_timeout_ms, maximum_timeout_ms, " +
                 "health_check_expected_status, healthy_threshold, unhealthy_threshold, health_check_use_auth, " +
                 "labels_json, tags_json, created_utc, last_update_utc) VALUES (" +
                 "'" + _Driver.Sanitize(endpoint.Id) + "', " +
@@ -49,6 +49,7 @@ namespace Partio.Core.Database.Mysql.Implementations
                 (int)endpoint.HealthCheckMethod + ", " +
                 endpoint.HealthCheckIntervalMs + ", " +
                 endpoint.HealthCheckTimeoutMs + ", " +
+                endpoint.MaximumTimeoutMs + ", " +
                 endpoint.HealthCheckExpectedStatusCode + ", " +
                 endpoint.HealthyThreshold + ", " +
                 endpoint.UnhealthyThreshold + ", " +
@@ -101,6 +102,7 @@ namespace Partio.Core.Database.Mysql.Implementations
                 "health_check_method = " + (int)endpoint.HealthCheckMethod + ", " +
                 "health_check_interval_ms = " + endpoint.HealthCheckIntervalMs + ", " +
                 "health_check_timeout_ms = " + endpoint.HealthCheckTimeoutMs + ", " +
+                "maximum_timeout_ms = " + endpoint.MaximumTimeoutMs + ", " +
                 "health_check_expected_status = " + endpoint.HealthCheckExpectedStatusCode + ", " +
                 "healthy_threshold = " + endpoint.HealthyThreshold + ", " +
                 "unhealthy_threshold = " + endpoint.UnhealthyThreshold + ", " +

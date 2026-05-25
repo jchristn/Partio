@@ -238,6 +238,29 @@ const defaultHealthFields = {
   HealthCheckUseAuth: false,
 };
 
+const defaultMaximumTimeoutMs = 60000;
+const defaultMaximumTimeoutSeconds = '60';
+
+function millisecondsToTimeoutSeconds(value) {
+  if (value === null || value === undefined || value === '') return defaultMaximumTimeoutSeconds;
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed)) return defaultMaximumTimeoutSeconds;
+  if (parsed <= 0) return '1';
+  return Math.max(1, Math.ceil(parsed / 1000)).toString();
+}
+
+function timeoutSecondsToMilliseconds(value) {
+  if (value === null || value === undefined || value === '') return defaultMaximumTimeoutMs;
+  const parsedSeconds = parseInt(value, 10);
+  if (Number.isNaN(parsedSeconds)) return defaultMaximumTimeoutMs;
+  if (parsedSeconds <= 0) return 1000;
+  return Math.max(1, parsedSeconds) * 1000;
+}
+
+function formatMaximumTimeout(value) {
+  return `${millisecondsToTimeoutSeconds(value || defaultMaximumTimeoutMs)}s`;
+}
+
 export default function CompletionEndpointsView() {
   const { serverUrl, bearerToken } = useApp();
   const api = new PartioApi(serverUrl, bearerToken);
@@ -245,7 +268,7 @@ export default function CompletionEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutSeconds: defaultMaximumTimeoutSeconds, ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -296,7 +319,7 @@ export default function CompletionEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, HealthCheckEnabled: true, ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutSeconds: defaultMaximumTimeoutSeconds, HealthCheckEnabled: true, ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -314,6 +337,7 @@ export default function CompletionEndpointsView() {
       ApiKey: item.ApiKey || '',
       Active: item.Active !== false,
       EnableRequestHistory: item.EnableRequestHistory || false,
+      MaximumTimeoutSeconds: millisecondsToTimeoutSeconds(item.MaximumTimeoutMs || defaultMaximumTimeoutMs),
       HealthCheckEnabled: item.HealthCheckEnabled || false,
       HealthCheckUrl: item.HealthCheckUrl || '',
       HealthCheckMethod: item.HealthCheckMethod === 1 ? 'HEAD' : 'GET',
@@ -352,6 +376,7 @@ export default function CompletionEndpointsView() {
         ApiKey: form.ApiKey || null,
         Active: form.Active,
         EnableRequestHistory: form.EnableRequestHistory,
+        MaximumTimeoutMs: timeoutSecondsToMilliseconds(form.MaximumTimeoutSeconds),
         HealthCheckEnabled: form.HealthCheckEnabled,
         HealthCheckUrl: form.HealthCheckUrl || null,
         HealthCheckMethod: form.HealthCheckMethod === 'HEAD' ? 1 : 0,
@@ -421,6 +446,13 @@ export default function CompletionEndpointsView() {
       key: 'ApiFormat',
       label: 'Format',
       tooltip: 'API protocol format: Ollama, OpenAI, Gemini, or vLLM'
+    },
+    {
+      key: 'MaximumTimeoutMs',
+      label: 'Max Timeout',
+      tooltip: 'Maximum upstream inference-provider timeout enforced by Partio for this endpoint.',
+      filterValue: (item) => formatMaximumTimeout(item.MaximumTimeoutMs),
+      render: (item) => <span className="timeout-summary">{formatMaximumTimeout(item.MaximumTimeoutMs)}</span>
     },
     {
       key: 'Active',
@@ -596,6 +628,16 @@ export default function CompletionEndpointsView() {
                 {' '}Enable Request History
                 <TooltipIcon content="Log all completion requests and responses for debugging and auditing." />
               </label>
+            </div>
+            <div className="form-group">
+              <FormFieldLabel text="Maximum Provider Timeout" tooltip="Upper bound for upstream inference calls. Enter whole seconds here; Partio stores milliseconds internally and clamps backend values to positive non-zero integers." />
+              <Tooltip content="Upper bound for upstream inference calls. Enter whole seconds here; Partio stores milliseconds internally and clamps backend values to positive non-zero integers." block>
+                <div className="timeout-input-wrapper">
+                  <input type="number" min="1" step="1" value={form.MaximumTimeoutSeconds} onChange={e => setForm({ ...form, MaximumTimeoutSeconds: e.target.value })} />
+                  <span className="timeout-input-suffix">seconds</span>
+                </div>
+              </Tooltip>
+              <div className="timeout-field-hint">Stored as {timeoutSecondsToMilliseconds(form.MaximumTimeoutSeconds).toLocaleString()} ms. This cap applies to inference provider calls and is separate from health checks.</div>
             </div>
           </div>
 

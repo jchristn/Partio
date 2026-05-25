@@ -251,11 +251,17 @@ namespace Partio.Server
                         if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
                         throw new WebserverException(ApiResultEnum.NotAuthorized, ex.Message);
                     }
+                    catch (ProviderOperationTimeoutException ex)
+                    {
+                        statusCode = 504;
+                        if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
+                        await SendApiErrorAsync(ctx, 504, "GatewayTimeout", ex.Message).ConfigureAwait(false);
+                    }
                     catch (EndpointUnhealthyException ex)
                     {
-                        statusCode = 500;
+                        statusCode = 502;
                         if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "exception: " + ex.Message);
-                        throw new WebserverException(ApiResultEnum.InternalError, ex.Message);
+                        await SendApiErrorAsync(ctx, 502, "BadGateway", ex.Message).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -708,6 +714,7 @@ namespace Partio.Server
                 ep.Endpoint = defaultEp.Endpoint;
                 ep.ApiFormat = defaultEp.ApiFormat;
                 ep.ApiKey = defaultEp.ApiKey;
+                ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.HealthCheckEnabled = true;
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
@@ -727,6 +734,7 @@ namespace Partio.Server
                 cep.Endpoint = defaultIep.Endpoint;
                 cep.ApiFormat = defaultIep.ApiFormat;
                 cep.ApiKey = defaultIep.ApiKey;
+                cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.HealthCheckEnabled = true;
                 CompletionEndpoint.ApplyHealthCheckDefaults(cep);
                 await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);
@@ -790,6 +798,7 @@ namespace Partio.Server
                 || !string.Equals(existing.Endpoint, configuredDefault.Endpoint, StringComparison.Ordinal)
                 || existing.ApiFormat != configuredDefault.ApiFormat
                 || !string.Equals(existing.ApiKey, configuredDefault.ApiKey, StringComparison.Ordinal)
+                || existing.MaximumTimeoutMs != configuredDefault.MaximumTimeoutMs
                 || !TokenizationSettingsEqual(existing.Tokenization, configuredTokenization);
 
             if (!changed) return;
@@ -799,6 +808,7 @@ namespace Partio.Server
             existing.Endpoint = configuredDefault.Endpoint;
             existing.ApiFormat = configuredDefault.ApiFormat;
             existing.ApiKey = configuredDefault.ApiKey;
+            existing.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
             existing.Tokenization = configuredTokenization;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(existing);
 
@@ -816,6 +826,7 @@ namespace Partio.Server
             endpoint.Endpoint = configuredDefault.Endpoint;
             endpoint.ApiFormat = configuredDefault.ApiFormat;
             endpoint.ApiKey = configuredDefault.ApiKey;
+            endpoint.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
             endpoint.Tokenization = CloneTokenizationSettings(configuredDefault.Tokenization);
             endpoint.HealthCheckEnabled = true;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(endpoint);
@@ -2020,7 +2031,24 @@ namespace Partio.Server
             if (ex is ArgumentException || ex is ArgumentNullException) return 400;
             if (ex is UnauthorizedAccessException) return 401;
             if (ex is EndpointUnhealthyException) return 502;
+            if (ex is ProviderOperationTimeoutException) return 504;
             return 500;
+        }
+
+        private static async Task SendApiErrorAsync(HttpContextBase ctx, int statusCode, string error, string message)
+        {
+            ctx.Response.StatusCode = statusCode;
+            ctx.Response.ContentType = Constants.JsonContentType;
+
+            ApiErrorResponse response = new ApiErrorResponse
+            {
+                Error = error,
+                Message = message,
+                StatusCode = statusCode,
+                TimestampUtc = DateTime.UtcNow
+            };
+
+            await ctx.Response.Send(_Serializer.SerializeJson(response, false)).ConfigureAwait(false);
         }
 
         private static Dictionary<string, string> ExtractHeaders(System.Collections.Specialized.NameValueCollection? headers)
@@ -2141,12 +2169,12 @@ namespace Partio.Server
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    return new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                    return new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    return new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                    return new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
                 case ApiFormatEnum.Gemini:
-                    return new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                    return new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -2157,12 +2185,12 @@ namespace Partio.Server
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    return new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                    return new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    return new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                    return new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
                 case ApiFormatEnum.Gemini:
-                    return new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging);
+                    return new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs);
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -2203,6 +2231,7 @@ namespace Partio.Server
                 ep.Endpoint = defaultEp.Endpoint;
                 ep.ApiFormat = defaultEp.ApiFormat;
                 ep.ApiKey = defaultEp.ApiKey;
+                ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.HealthCheckEnabled = true;
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
@@ -2219,6 +2248,7 @@ namespace Partio.Server
                 cep.Endpoint = defaultIep.Endpoint;
                 cep.ApiFormat = defaultIep.ApiFormat;
                 cep.ApiKey = defaultIep.ApiKey;
+                cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.HealthCheckEnabled = true;
                 CompletionEndpoint.ApplyHealthCheckDefaults(cep);
                 CompletionEndpoint createdCep = await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);

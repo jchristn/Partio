@@ -172,6 +172,14 @@ namespace Test.Shared
                 await Task.CompletedTask;
             }));
 
+            tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: MaximumTimeoutMs defaults to 60000", async () =>
+            {
+                CompletionEndpoint ep = new CompletionEndpoint();
+                if (ep.MaximumTimeoutMs != 60000)
+                    throw new Exception("Expected MaximumTimeoutMs=60000, got " + ep.MaximumTimeoutMs);
+                await Task.CompletedTask;
+            }));
+
             tests.Add(SharedNamedTestCase.CreateAsync("CompletionEndpoint: HealthCheckExpectedStatusCode defaults to 200", async () =>
             {
                 CompletionEndpoint ep = new CompletionEndpoint();
@@ -212,6 +220,7 @@ namespace Test.Shared
                 ep.ApiFormat = "OpenAI";
                 ep.ApiKey = "sk-test-key";
                 ep.Model = "gpt-4o";
+                ep.MaximumTimeoutMs = 90000;
                 ep.Labels = new List<string> { "prod", "llm" };
                 ep.Tags = new Dictionary<string, string> { { "region", "us-east" } };
 
@@ -221,8 +230,17 @@ namespace Test.Shared
                 if (ep.ApiFormat != "OpenAI") throw new Exception("ApiFormat not preserved");
                 if (ep.ApiKey != "sk-test-key") throw new Exception("ApiKey not preserved");
                 if (ep.Model != "gpt-4o") throw new Exception("Model not preserved");
+                if (ep.MaximumTimeoutMs != 90000) throw new Exception("MaximumTimeoutMs not preserved");
                 if (ep.Labels == null || ep.Labels.Count != 2) throw new Exception("Labels not preserved");
                 if (ep.Tags == null || !ep.Tags.ContainsKey("region")) throw new Exception("Tags not preserved");
+                await Task.CompletedTask;
+            }));
+
+            tests.Add(SharedNamedTestCase.CreateAsync("EmbeddingEndpoint: MaximumTimeoutMs defaults to 60000", async () =>
+            {
+                EmbeddingEndpoint ep = new EmbeddingEndpoint();
+                if (ep.MaximumTimeoutMs != 60000)
+                    throw new Exception("Expected MaximumTimeoutMs=60000, got " + ep.MaximumTimeoutMs);
                 await Task.CompletedTask;
             }));
 

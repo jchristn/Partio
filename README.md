@@ -97,6 +97,7 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Request history and audit logging** with automatic cleanup, filesystem body persistence, configurable retention, and upstream embedding call capture (request/response headers, bodies, timing, and status for each call to the embedding provider)
 - **Bearer token authentication** with global admin API keys and tenant-scoped credentials
 - **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return 502)
+- **Per-endpoint provider timeout caps** with a default 60-second ceiling for embedding and inference calls, configurable in the API and dashboard and enforced independently from health checks
 - **Batch processing** for submitting multiple semantic cells in a single request
 - **Optional summarization** with LLM-powered cell summarization before chunking and embedding, supporting top-down and bottom-up strategies
 - **Completion endpoint management** for configuring LLM inference endpoints (Ollama, OpenAI, Gemini, vLLM) with health checks
@@ -383,13 +384,22 @@ Partio is configured via `partio.json`, created automatically on first run.
     {
       "Model": "nomic-embed-text",
       "Endpoint": "http://localhost:11434",
-      "ApiFormat": "Ollama"
+      "ApiFormat": "Ollama",
+      "MaximumTimeoutMs": 60000
+    }
+  ],
+  "DefaultInferenceEndpoints": [
+    {
+      "Model": "gemma3:4b",
+      "Endpoint": "http://localhost:11434",
+      "ApiFormat": "Ollama",
+      "MaximumTimeoutMs": 60000
     }
   ]
 }
 ```
 
-Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields.
+Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `MaximumTimeoutMs`, stored in milliseconds and clamped server-side to a positive non-zero integer.
 
 ### Database Options
 
@@ -420,11 +430,12 @@ SemanticCellResponse? response = await client.ProcessAsync(new SemanticCellReque
 EndpointExplorerCompletionResponse? explorer = await client.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
 {
     EndpointId = "cep_YOUR_ENDPOINT_ID",
-    Prompt = "Explain what Partio does in one short paragraph."
+    Prompt = "Explain what Partio does in one short paragraph.",
+    TimeoutMs = 60000
 });
 ```
 
-Embedding endpoint CRUD in the C# SDK now includes `Tokenization` and explorer responses include `TokenizationProfile`.
+Embedding endpoint CRUD in the C# SDK now includes `Tokenization`, endpoint models expose `MaximumTimeoutMs`, and explorer responses include `TokenizationProfile`. When a process route times out upstream, the SDK throws `PartioException` with HTTP status `504`.
 
 ### Python
 
@@ -438,6 +449,7 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
         "Model": "all-minilm",
         "Endpoint": "http://localhost:11434",
         "ApiFormat": "Ollama",
+        "MaximumTimeoutMs": 60000,
         "Tokenization": {
             "TokenizerKind": "BertWordPiece",
             "TokenizerModel": "bert-base-uncased",
@@ -456,9 +468,12 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
     })
     explorer = client.explore_completion_endpoint({
         "EndpointId": "cep_YOUR_ENDPOINT_ID",
-        "Prompt": "Explain what Partio does in one short paragraph."
+        "Prompt": "Explain what Partio does in one short paragraph.",
+        "TimeoutMs": 60000
     })
 ```
+
+Timeout failures from process routes raise `PartioError`/`PartioException` with status code `504`. Explorer responses stay `200 OK` and report the upstream timeout through the payload `StatusCode`.
 
 ### JavaScript
 
@@ -472,6 +487,7 @@ const endpoint = await client.createEndpoint({
   Model: 'all-minilm',
   Endpoint: 'http://localhost:11434',
   ApiFormat: 'Ollama',
+  MaximumTimeoutMs: 60000,
   Tokenization: {
     TokenizerKind: 'BertWordPiece',
     TokenizerModel: 'bert-base-uncased',
@@ -491,7 +507,8 @@ const result = await client.process({
 
 const explorer = await client.exploreCompletionEndpoint({
   EndpointId: 'cep_YOUR_ENDPOINT_ID',
-  Prompt: 'Explain what Partio does in one short paragraph.'
+  Prompt: 'Explain what Partio does in one short paragraph.',
+  TimeoutMs: 60000
 });
 ```
 

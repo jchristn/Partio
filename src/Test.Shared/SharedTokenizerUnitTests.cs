@@ -473,7 +473,7 @@ namespace Test.Shared
             public BatchLimitModeEnum SimulatedBatchMode { get; set; } = BatchLimitModeEnum.PerInput;
 
             public FakeEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging)
-                : base(endpoint, apiKey, logging)
+                : base(endpoint, apiKey, logging, 60000)
             {
             }
 

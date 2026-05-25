@@ -25,6 +25,7 @@ namespace Partio.Core.Models
         private HealthCheckMethodEnum _HealthCheckMethod = HealthCheckMethodEnum.GET;
         private int _HealthCheckIntervalMs = 5000;
         private int _HealthCheckTimeoutMs = 2000;
+        private int _MaximumTimeoutMs = 60000;
         private int _HealthCheckExpectedStatusCode = 200;
         private int _HealthyThreshold = 2;
         private int _UnhealthyThreshold = 2;
@@ -184,6 +185,15 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
+        /// Maximum upstream provider request timeout in milliseconds.
+        /// </summary>
+        public int MaximumTimeoutMs
+        {
+            get => _MaximumTimeoutMs;
+            set => _MaximumTimeoutMs = value <= 0 ? 1 : value;
+        }
+
+        /// <summary>
         /// HTTP status code that indicates a successful health check.
         /// </summary>
         public int HealthCheckExpectedStatusCode
@@ -265,6 +275,8 @@ namespace Partio.Core.Models
             ep.HealthCheckMethod = (HealthCheckMethodEnum)Convert.ToInt32(row["health_check_method"]);
             ep.HealthCheckIntervalMs = Convert.ToInt32(row["health_check_interval_ms"]);
             ep.HealthCheckTimeoutMs = Convert.ToInt32(row["health_check_timeout_ms"]);
+            if (row.Table.Columns.Contains("maximum_timeout_ms") && row["maximum_timeout_ms"] != DBNull.Value)
+                ep.MaximumTimeoutMs = Convert.ToInt32(row["maximum_timeout_ms"]);
             ep.HealthCheckExpectedStatusCode = Convert.ToInt32(row["health_check_expected_status"]);
             ep.HealthyThreshold = Convert.ToInt32(row["healthy_threshold"]);
             ep.UnhealthyThreshold = Convert.ToInt32(row["unhealthy_threshold"]);

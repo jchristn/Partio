@@ -18,6 +18,7 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 - Request history (`GetRequestHistoryAsync`, `GetRequestHistoryDetailAsync`, `DeleteRequestHistoryAsync`, `EnumerateRequestHistoryAsync`)
 
 Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+Endpoint models also expose `MaximumTimeoutMs`, the per-endpoint cap enforced for upstream provider calls. Process routes that hit this cap return HTTP `504`, surfaced by the SDK as `PartioException`.
 
 ## Prerequisites
 
@@ -60,10 +61,23 @@ Console.WriteLine($"Chunks: {result.Chunks.Count}");
 var explorer = await client.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
 {
     EndpointId = "cep_your_completion_endpoint_id",
-    Prompt = "Explain what Partio does in one short paragraph."
+    Prompt = "Explain what Partio does in one short paragraph.",
+    TimeoutMs = 60000
 });
 
 Console.WriteLine($"Explorer success: {explorer?.Success}");
+```
+
+```csharp
+EmbeddingEndpoint? endpoint = await client.CreateEndpointAsync(new EmbeddingEndpoint
+{
+    TenantId = "default",
+    Name = "Pinned MiniLM",
+    Model = "all-minilm",
+    Endpoint = "http://localhost:11434",
+    ApiFormat = "Ollama",
+    MaximumTimeoutMs = 60000
+});
 ```
 
 ## Running the Test Harness

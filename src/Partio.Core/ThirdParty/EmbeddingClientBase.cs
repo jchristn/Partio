@@ -1,6 +1,7 @@
 namespace Partio.Core.ThirdParty
 {
     using System.Diagnostics;
+    using Partio.Core.Exceptions;
     using Partio.Core.Models;
     using SyslogLogging;
 
@@ -35,6 +36,11 @@ namespace Partio.Core.ThirdParty
         protected string _Header = "[EmbeddingClient] ";
 
         /// <summary>
+        /// Maximum upstream provider request timeout in milliseconds.
+        /// </summary>
+        protected readonly int _MaximumTimeoutMs;
+
+        /// <summary>
         /// Recorded details of HTTP calls made to upstream embedding endpoints.
         /// </summary>
         public List<EmbeddingCallDetail> CallDetails { get; } = new List<EmbeddingCallDetail>();
@@ -45,11 +51,13 @@ namespace Partio.Core.ThirdParty
         /// <param name="endpoint">Endpoint URL.</param>
         /// <param name="apiKey">API key (nullable).</param>
         /// <param name="logging">Logging module.</param>
-        protected EmbeddingClientBase(string endpoint, string? apiKey, LoggingModule logging)
+        /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
+        protected EmbeddingClientBase(string endpoint, string? apiKey, LoggingModule logging, int maximumTimeoutMs)
         {
             _Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
             _ApiKey = apiKey;
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            _MaximumTimeoutMs = maximumTimeoutMs <= 0 ? 1 : maximumTimeoutMs;
             _HttpClient = new HttpClient();
         }
 
@@ -154,8 +162,11 @@ namespace Partio.Core.ThirdParty
 
             try
             {
-                HttpResponseMessage response = await _HttpClient.PostAsync(url, content, token).ConfigureAwait(false);
-                string responseBody = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+                using CancellationTokenSource timeoutCts = new CancellationTokenSource(_MaximumTimeoutMs);
+                using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
+
+                HttpResponseMessage response = await _HttpClient.PostAsync(url, content, linkedCts.Token).ConfigureAwait(false);
+                string responseBody = await response.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
 
                 sw.Stop();
 
@@ -183,6 +194,24 @@ namespace Partio.Core.ThirdParty
                 result.ResponseBody = responseBody;
                 return result;
             }
+            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+            {
+                sw.Stop();
+                detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                detail.Success = false;
+                detail.Error = "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.";
+                CallDetails.Add(detail);
+                throw new ProviderOperationTimeoutException(detail.Error, _MaximumTimeoutMs, ex);
+            }
+            catch (Exception ex) when (IsTimeoutLike(ex))
+            {
+                sw.Stop();
+                detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                detail.Success = false;
+                detail.Error = "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.";
+                CallDetails.Add(detail);
+                throw new ProviderOperationTimeoutException(detail.Error, _MaximumTimeoutMs, ex);
+            }
             catch (Exception ex)
             {
                 sw.Stop();
@@ -192,6 +221,37 @@ namespace Partio.Core.ThirdParty
                 CallDetails.Add(detail);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Determine whether an exception chain indicates a timeout.
+        /// </summary>
+        protected static bool IsTimeoutLike(Exception ex)
+        {
+            for (Exception? current = ex; current != null; current = current.InnerException)
+            {
+                if (current is TimeoutException)
+                    return true;
+
+                if (IsTimeoutMessage(current.Message))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Determine whether a message indicates a timeout.
+        /// </summary>
+        protected static bool IsTimeoutMessage(string? message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return false;
+
+            return message.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("task was canceled", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("operation was canceled", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>

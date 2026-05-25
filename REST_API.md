@@ -1,4 +1,4 @@
-# Partio REST API Reference
+﻿# Partio REST API Reference
 
 Base URL: `http://localhost:8400`
 
@@ -41,8 +41,8 @@ Returns the role and tenant of the authenticated caller.
 ```json
 { "Role": "Admin", "TenantName": "Admin" }
 ```
-- `Role` — `"Admin"` or `"User"`
-- `TenantName` — `"Admin"` for global admins, or the tenant's name
+- `Role` â€” `"Admin"` or `"User"`
+- `TenantName` â€” `"Admin"` for global admins, or the tenant's name
 
 ---
 
@@ -306,7 +306,7 @@ Entire table serialized as a single markdown table chunk.
 
 Split at boundaries defined by the `RegexPattern`. Text is split using `Regex.Split` at every match. Useful for Markdown headings, log timestamps, LaTeX sections, function definitions, and more.
 
-**Response**: `200 OK` — `SemanticCellResponse`
+**Response**: `200 OK` â€” `SemanticCellResponse`
 ```json
 {
     "GUID": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
@@ -336,8 +336,10 @@ Successful embedding responses also include these headers when tokenization reso
 | `X-Partio-Effective-Input-Budget` | Effective per-input token budget after reserved tokens are removed |
 
 **Errors**:
-- `404 Not Found` — EmbeddingEndpointId not found or does not belong to the caller's tenant
-- `400 Bad Request` — Endpoint is inactive, request body is missing/invalid, or strategy is incompatible with atom type
+- `404 Not Found` - EmbeddingEndpointId not found or does not belong to the caller's tenant
+- `400 Bad Request` - Endpoint is inactive, request body is missing/invalid, or strategy is incompatible with atom type
+- `502 Bad Gateway` - The selected endpoint is currently unhealthy
+- `504 Gateway Timeout` - The upstream embedding or inference provider exceeded the configured endpoint timeout
 
 #### Strategy-to-Type Validation
 
@@ -399,7 +401,7 @@ Process multiple semantic cells.
 
 **Request Body**: `List<SemanticCellRequest>`
 
-**Response**: `200 OK` — `List<SemanticCellResponse>`
+**Response**: `200 OK` â€” `List<SemanticCellResponse>`
 
 ---
 
@@ -419,7 +421,7 @@ Exercise a configured embedding endpoint through Partio.
 }
 ```
 
-**Response**: `200 OK` — `EndpointExplorerEmbeddingResponse`
+**Response**: `200 OK` â€” `EndpointExplorerEmbeddingResponse`
 ```json
 {
     "Success": true,
@@ -467,7 +469,9 @@ Exercise a configured inference endpoint through Partio.
 }
 ```
 
-**Response**: `200 OK` — `EndpointExplorerCompletionResponse`
+`TimeoutMs` is the requested completion timeout for this explorer call. Partio clamps it to a positive non-zero value and never allows it to exceed the selected endpoint's `MaximumTimeoutMs`.
+
+**Response**: `200 OK` â€” `EndpointExplorerCompletionResponse`
 ```json
 {
     "Success": true,
@@ -485,6 +489,7 @@ Exercise a configured inference endpoint through Partio.
 ```
 
 If the selected endpoint has `EnableRequestHistory = true` and request history is enabled globally, the explorer response also includes the created `RequestHistoryId`.
+If the upstream provider times out, the explorer route still returns `200 OK`, but the payload sets `Success = false` and `StatusCode = 504`.
 
 ---
 
@@ -502,19 +507,19 @@ Create a tenant. Also creates a default user, credential, and embedding endpoint
 }
 ```
 
-**Response**: `201 Created` — `TenantMetadata`
+**Response**: `201 Created` â€” `TenantMetadata`
 
 ### GET /v1.0/tenants/{id}
 Read a tenant by ID.
 
-**Response**: `200 OK` — `TenantMetadata`
+**Response**: `200 OK` â€” `TenantMetadata`
 
 ### PUT /v1.0/tenants/{id}
 Update a tenant.
 
 **Request Body**: `TenantMetadata` (partial update)
 
-**Response**: `200 OK` — `TenantMetadata`
+**Response**: `200 OK` â€” `TenantMetadata`
 
 ### DELETE /v1.0/tenants/{id}
 Delete a tenant.
@@ -540,7 +545,7 @@ List tenants with pagination and filtering.
 }
 ```
 
-**Response**: `200 OK` — `EnumerationResult<TenantMetadata>`
+**Response**: `200 OK` â€” `EnumerationResult<TenantMetadata>`
 
 ---
 
@@ -561,17 +566,17 @@ Create a user.
 }
 ```
 
-**Response**: `200 OK` — `UserMaster` (password redacted)
+**Response**: `200 OK` â€” `UserMaster` (password redacted)
 
 ### GET /v1.0/users/{id}
 Read a user by ID (password redacted).
 
-**Response**: `200 OK` — `UserMaster`
+**Response**: `200 OK` â€” `UserMaster`
 
 ### PUT /v1.0/users/{id}
 Update a user.
 
-**Response**: `200 OK` — `UserMaster`
+**Response**: `200 OK` â€” `UserMaster`
 
 ### DELETE /v1.0/users/{id}
 Delete a user.
@@ -604,17 +609,17 @@ Create a credential (generates a bearer token).
 }
 ```
 
-**Response**: `201 Created` — `Credential` (includes generated `BearerToken`)
+**Response**: `201 Created` â€” `Credential` (includes generated `BearerToken`)
 
 ### GET /v1.0/credentials/{id}
 Read a credential.
 
-**Response**: `200 OK` — `Credential`
+**Response**: `200 OK` â€” `Credential`
 
 ### PUT /v1.0/credentials/{id}
 Update a credential.
 
-**Response**: `200 OK` — `Credential`
+**Response**: `200 OK` â€” `Credential`
 
 ### DELETE /v1.0/credentials/{id}
 Delete a credential.
@@ -647,6 +652,7 @@ Create an embedding endpoint.
     "ApiKey": null,
     "Active": true,
     "EnableRequestHistory": true,
+    "MaximumTimeoutMs": 60000,
     "HealthCheckEnabled": false,
     "HealthCheckUrl": null,
     "HealthCheckMethod": "GET",
@@ -671,6 +677,7 @@ Create an embedding endpoint.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
+| `MaximumTimeoutMs` | int | `60000` | Maximum upstream provider timeout in milliseconds for embedding calls. Stored in milliseconds and clamped to a positive non-zero integer. |
 | `HealthCheckEnabled` | bool | `false` | Enable background health checking for this endpoint |
 | `HealthCheckUrl` | string? | `null` | Custom URL to check (defaults to the endpoint URL if null) |
 | `HealthCheckMethod` | string | `"GET"` | HTTP method for health checks (`GET` or `HEAD`) |
@@ -695,6 +702,7 @@ Create an embedding endpoint.
 | `AutoDetect` | bool | `true` | Whether Partio should continue probing or falling back for missing fields |
 
 When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs a background loop that periodically checks the endpoint. If the endpoint becomes unhealthy, process requests to it return `502 Bad Gateway`.
+If the embedding provider call itself exceeds `MaximumTimeoutMs`, process routes return `504 Gateway Timeout`.
 
 Health check defaults are applied automatically based on `ApiFormat` when creating or updating an endpoint:
 - **Ollama**: URL defaults to `{Endpoint}/api/tags`, 5s interval, 2s timeout, no auth
@@ -702,17 +710,17 @@ Health check defaults are applied automatically based on `ApiFormat` when creati
 - **vLLM**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
 - **Gemini**: URL defaults to `{Endpoint}/v1beta/models`, 15s interval, 5s timeout, auth enabled
 
-**Response**: `201 Created` — `EmbeddingEndpoint`
+**Response**: `201 Created` â€” `EmbeddingEndpoint`
 
 ### GET /v1.0/endpoints/embedding/{id}
 Read an embedding endpoint.
 
-**Response**: `200 OK` — `EmbeddingEndpoint`
+**Response**: `200 OK` â€” `EmbeddingEndpoint`
 
 ### PUT /v1.0/endpoints/embedding/{id}
 Update an embedding endpoint.
 
-**Response**: `200 OK` — `EmbeddingEndpoint`
+**Response**: `200 OK` â€” `EmbeddingEndpoint`
 
 ### DELETE /v1.0/endpoints/embedding/{id}
 Delete an embedding endpoint.
@@ -735,9 +743,9 @@ List embedding endpoints with pagination.
 Get the health status for a specific monitored embedding endpoint.
 
 **Path Parameters**:
-- `id` — Embedding endpoint ID
+- `id` â€” Embedding endpoint ID
 
-**Response**: `200 OK` — `EndpointHealthStatus`
+**Response**: `200 OK` â€” `EndpointHealthStatus`
 ```json
 {
     "EndpointId": "eep_xxxx",
@@ -764,12 +772,12 @@ Get the health status for a specific monitored embedding endpoint.
 ```
 
 **Errors**:
-- `404 Not Found` — No health state exists (health check not enabled or endpoint not found)
+- `404 Not Found` â€” No health state exists (health check not enabled or endpoint not found)
 
 ### GET /v1.0/endpoints/embedding/health
 Get health status for all monitored embedding endpoints. Non-admin callers see only their tenant's endpoints.
 
-**Response**: `200 OK` — `List<EndpointHealthStatus>`
+**Response**: `200 OK` â€” `List<EndpointHealthStatus>`
 
 ---
 
@@ -789,21 +797,39 @@ Create a completion endpoint.
     "ApiKey": null,
     "Active": true,
     "EnableRequestHistory": true,
+    "MaximumTimeoutMs": 60000,
     "HealthCheckEnabled": false
 }
 ```
 
-**Response**: `201 Created` — `CompletionEndpoint`
+**Response**: `201 Created` â€” `CompletionEndpoint`
+
+#### Completion Endpoint Timeout and Health Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `MaximumTimeoutMs` | int | `60000` | Maximum upstream provider timeout in milliseconds for inference calls. Stored in milliseconds and clamped to a positive non-zero integer. |
+| `HealthCheckEnabled` | bool | `true` | Enable background health checking for this endpoint |
+| `HealthCheckUrl` | string? | `null` | Custom URL to check (defaults from `ApiFormat` when omitted) |
+| `HealthCheckMethod` | string | `"GET"` | HTTP method for health checks (`GET` or `HEAD`) |
+| `HealthCheckIntervalMs` | int | `5000` or `15000` | Milliseconds between health checks, depending on `ApiFormat` |
+| `HealthCheckTimeoutMs` | int | `2000` or `5000` | Timeout per health check request in milliseconds, depending on `ApiFormat` |
+| `HealthCheckExpectedStatusCode` | int | `200` | Expected HTTP status code for a healthy response |
+| `HealthyThreshold` | int | `2` | Consecutive successes required to transition to healthy |
+| `UnhealthyThreshold` | int | `2` | Consecutive failures required to transition to unhealthy |
+| `HealthCheckUseAuth` | bool | `false` or `true` | Include the endpoint API key when the health probe requires authentication |
+
+Completion explorer and summarization calls never exceed `MaximumTimeoutMs`, even if the caller requests a larger `TimeoutMs`. When the inference provider exceeds this ceiling, process routes return `504 Gateway Timeout`.
 
 ### GET /v1.0/endpoints/completion/{id}
 Read a completion endpoint.
 
-**Response**: `200 OK` — `CompletionEndpoint`
+**Response**: `200 OK` â€” `CompletionEndpoint`
 
 ### PUT /v1.0/endpoints/completion/{id}
 Update a completion endpoint.
 
-**Response**: `200 OK` — `CompletionEndpoint`
+**Response**: `200 OK` â€” `CompletionEndpoint`
 
 ### DELETE /v1.0/endpoints/completion/{id}
 Delete a completion endpoint.
@@ -825,12 +851,12 @@ List completion endpoints with pagination.
 ### GET /v1.0/endpoints/completion/{id}/health
 Get the health status for a specific completion endpoint.
 
-**Response**: `200 OK` — `EndpointHealthStatus`
+**Response**: `200 OK` â€” `EndpointHealthStatus`
 
 ### GET /v1.0/endpoints/completion/health
 Get health status for all monitored completion endpoints.
 
-**Response**: `200 OK` — `List<EndpointHealthStatus>`
+**Response**: `200 OK` â€” `List<EndpointHealthStatus>`
 
 ---
 
@@ -839,12 +865,12 @@ Get health status for all monitored completion endpoints.
 ### GET /v1.0/requests/{id}
 Read a request history entry.
 
-**Response**: `200 OK` — `RequestHistoryEntry`
+**Response**: `200 OK` â€” `RequestHistoryEntry`
 
 ### GET /v1.0/requests/{id}/detail
 Read request/response body detail from filesystem.
 
-**Response**: `200 OK` — JSON object with the following fields:
+**Response**: `200 OK` â€” JSON object with the following fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -898,7 +924,7 @@ Get aggregated request statistics grouped by time bucket, broken out by success/
 | `Timeframe` | string? | `"Hour"` (1-minute buckets, ~60 samples), `"Day"` (15-minute buckets, ~96 samples), `"Week"` (1-hour buckets, ~168 samples), or `"Month"` (4-hour buckets, ~180 samples). Defaults to `"Day"`. |
 | `EndpointFilter` | string? | Optional URL substring filter to narrow results to a specific endpoint. |
 
-**Response**: `200 OK` — `RequestStatisticsResponse`
+**Response**: `200 OK` â€” `RequestStatisticsResponse`
 ```json
 {
     "Buckets": [
@@ -935,8 +961,8 @@ Summarization is an optional step in the processing pipeline that runs **before*
 
 ### Strategies
 
-- **TopDown** — Summarizes the entire content in a single pass, producing one summary from the full input.
-- **BottomUp** — Splits the content into smaller pieces first, summarizes each piece individually, then optionally combines the summaries.
+- **TopDown** â€” Summarizes the entire content in a single pass, producing one summary from the full input.
+- **BottomUp** â€” Splits the content into smaller pieces first, summarizes each piece individually, then optionally combines the summaries.
 
 ### Prompt Template
 
@@ -952,8 +978,8 @@ The summarization prompt is configurable via a template string. The following to
 
 Summarization supports two levels of retry control:
 
-- **`MaxRetriesPerSummary`** — Maximum number of retries for each individual summary cell. If a single cell fails repeatedly, it is skipped after this many attempts.
-- **`MaxRetries`** — Global maximum number of total retries across the entire summarization operation. Once this limit is reached, the operation fails regardless of per-cell limits.
+- **`MaxRetriesPerSummary`** â€” Maximum number of retries for each individual summary cell. If a single cell fails repeatedly, it is skipped after this many attempts.
+- **`MaxRetries`** â€” Global maximum number of total retries across the entire summarization operation. Once this limit is reached, the operation fails regardless of per-cell limits.
 
 ---
 
@@ -1012,14 +1038,14 @@ POST /v1.0/tenants/enumerate
 
 ### Ordering
 
-- `CreatedAscending` — oldest first
-- `CreatedDescending` — newest first (default)
-- `NameAscending` — alphabetical A-Z
-- `NameDescending` — alphabetical Z-A
+- `CreatedAscending` â€” oldest first
+- `CreatedDescending` â€” newest first (default)
+- `NameAscending` â€” alphabetical A-Z
+- `NameDescending` â€” alphabetical Z-A
 
 ### Filtering
 
-- `NameFilter` — partial match on name field
-- `LabelFilter` — exact match on labels
-- `TagKeyFilter` / `TagValueFilter` — filter by tag key/value
-- `ActiveFilter` — filter by active status (true/false)
+- `NameFilter` â€” partial match on name field
+- `LabelFilter` â€” exact match on labels
+- `TagKeyFilter` / `TagValueFilter` â€” filter by tag key/value
+- `ActiveFilter` â€” filter by active status (true/false)

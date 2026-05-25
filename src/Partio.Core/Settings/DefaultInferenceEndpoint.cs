@@ -12,6 +12,7 @@ namespace Partio.Core.Settings
         private string _Endpoint = "http://localhost:11434";
         private ApiFormatEnum _ApiFormat = ApiFormatEnum.Ollama;
         private string? _ApiKey = null;
+        private int _MaximumTimeoutMs = 60000;
 
         /// <summary>
         /// Display name for the inference endpoint.
@@ -56,6 +57,15 @@ namespace Partio.Core.Settings
         {
             get => _ApiKey;
             set => _ApiKey = value;
+        }
+
+        /// <summary>
+        /// Maximum upstream provider request timeout in milliseconds.
+        /// </summary>
+        public int MaximumTimeoutMs
+        {
+            get => _MaximumTimeoutMs;
+            set => _MaximumTimeoutMs = value <= 0 ? 1 : value;
         }
     }
 }

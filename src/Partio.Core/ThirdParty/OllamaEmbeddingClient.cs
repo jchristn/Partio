@@ -23,11 +23,13 @@ namespace Partio.Core.ThirdParty
         /// <param name="endpoint">Ollama server endpoint URL.</param>
         /// <param name="apiKey">API key.</param>
         /// <param name="logging">Logging module.</param>
-        public OllamaEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging)
-            : base(endpoint, apiKey, logging)
+        /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
+        public OllamaEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging, int maximumTimeoutMs)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs)
         {
             _Header = "[OllamaEmbedding] ";
             _Client = new OllamaClient(endpoint, apiKey, logging);
+            _Client.TimeoutMs = _MaximumTimeoutMs;
         }
 
         /// <inheritdoc />
@@ -41,11 +43,41 @@ namespace Partio.Core.ThirdParty
         public override async Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
         {
             EmbeddingOptions options = new EmbeddingOptions { Model = model };
-            EmbeddingResponse response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
+            _Client.TimeoutMs = _MaximumTimeoutMs;
+            EmbeddingResponse response;
+            try
+            {
+                response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+            {
+                SyncCallDetails();
+                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                    "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                    _MaximumTimeoutMs,
+                    ex);
+            }
+            catch (Exception ex) when (IsTimeoutLike(ex))
+            {
+                SyncCallDetails();
+                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                    "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                    _MaximumTimeoutMs,
+                    ex);
+            }
             SyncCallDetails();
 
             if (!response.Success)
+            {
+                if (IsTimeoutMessage(response.Error))
+                {
+                    throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                        "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                        _MaximumTimeoutMs);
+                }
+
                 throw new Exception(response.Error ?? "Ollama embedding request failed.");
+            }
 
             return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
         }

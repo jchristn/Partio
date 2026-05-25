@@ -175,7 +175,7 @@ namespace Test.XUnit
         private sealed class DiagnosticEmbeddingClient : EmbeddingClientBase
         {
             public DiagnosticEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging)
-                : base(endpoint, apiKey, logging)
+                : base(endpoint, apiKey, logging, 60000)
             {
             }
 

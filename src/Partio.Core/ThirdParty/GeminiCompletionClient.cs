@@ -18,8 +18,9 @@ namespace Partio.Core.ThirdParty
         /// <param name="endpoint">Gemini API endpoint URL.</param>
         /// <param name="apiKey">API key.</param>
         /// <param name="logging">Logging module.</param>
-        public GeminiCompletionClient(string endpoint, string? apiKey, LoggingModule logging)
-            : base(endpoint, apiKey, logging)
+        /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
+        public GeminiCompletionClient(string endpoint, string? apiKey, LoggingModule logging, int maximumTimeoutMs)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs)
         {
             _Header = "[GeminiCompletion] ";
             _Client = new GeminiClient(endpoint, apiKey, logging);
@@ -35,7 +36,8 @@ namespace Partio.Core.ThirdParty
             string? systemPrompt = null)
         {
             _Client.Model = model;
-            _Client.TimeoutMs = timeoutMs;
+            int effectiveTimeoutMs = ClampTimeoutMs(timeoutMs);
+            _Client.TimeoutMs = effectiveTimeoutMs;
 
             ChatCompletionOptions options = new ChatCompletionOptions
             {
@@ -43,8 +45,34 @@ namespace Partio.Core.ThirdParty
                 SystemPrompt = systemPrompt
             };
 
-            ChatResponse response = await _Client.ChatAsync(prompt, options, token).ConfigureAwait(false);
+            ChatResponse response;
+            try
+            {
+                response = await _Client.ChatAsync(prompt, options, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+            {
+                SyncCallDetails();
+                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                    "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
+                    effectiveTimeoutMs,
+                    ex);
+            }
+            catch (Exception ex) when (IsTimeoutLike(ex))
+            {
+                SyncCallDetails();
+                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                    "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
+                    effectiveTimeoutMs,
+                    ex);
+            }
             SyncCallDetails();
+            if (!response.Success && IsTimeoutMessage(response.Error))
+            {
+                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                    "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
+                    effectiveTimeoutMs);
+            }
             return response.Success ? response.Text?.Trim() : null;
         }
 

@@ -77,6 +77,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 health_check_method INT NOT NULL DEFAULT 0,
                 health_check_interval_ms INT NOT NULL DEFAULT 5000,
                 health_check_timeout_ms INT NOT NULL DEFAULT 2000,
+                maximum_timeout_ms INT NOT NULL DEFAULT 60000,
                 health_check_expected_status INT NOT NULL DEFAULT 200,
                 healthy_threshold INT NOT NULL DEFAULT 2,
                 unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -108,6 +109,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 health_check_method INT NOT NULL DEFAULT 0,
                 health_check_interval_ms INT NOT NULL DEFAULT 5000,
                 health_check_timeout_ms INT NOT NULL DEFAULT 2000,
+                maximum_timeout_ms INT NOT NULL DEFAULT 60000,
                 health_check_expected_status INT NOT NULL DEFAULT 200,
                 healthy_threshold INT NOT NULL DEFAULT 2,
                 unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -151,6 +153,18 @@ namespace Partio.Core.Database.Mysql.Queries
         /// </summary>
         public static readonly string AlterEmbeddingEndpointsAddTokenizationJson =
             @"ALTER TABLE embedding_endpoints ADD COLUMN tokenization_json TEXT NULL AFTER health_check_use_auth;";
+
+        /// <summary>
+        /// Migration: add maximum_timeout_ms column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddMaximumTimeoutMs =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN maximum_timeout_ms INT NOT NULL DEFAULT 60000 AFTER health_check_timeout_ms;";
+
+        /// <summary>
+        /// Migration: add maximum_timeout_ms column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddMaximumTimeoutMs =
+            @"ALTER TABLE completion_endpoints ADD COLUMN maximum_timeout_ms INT NOT NULL DEFAULT 60000 AFTER health_check_timeout_ms;";
 
         /// <summary>
         /// All table creation queries in dependency order.

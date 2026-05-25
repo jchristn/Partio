@@ -86,7 +86,8 @@
             "Model": "nomic-embed-text",
             "Endpoint": "http://localhost:11434",
             "ApiFormat": "Ollama",
-            "ApiKey": null
+            "ApiKey": null,
+            "MaximumTimeoutMs": 60000
         }
     ],
     "DefaultInferenceEndpoints": [
@@ -94,7 +95,8 @@
             "Name": "gemma3:4b",
             "Model": "gemma3:4b",
             "Endpoint": "http://localhost:11434",
-            "ApiFormat": "Ollama"
+            "ApiFormat": "Ollama",
+            "MaximumTimeoutMs": 60000
         }
     ]
 }

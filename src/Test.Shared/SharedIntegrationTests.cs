@@ -245,9 +245,11 @@ namespace Test.Shared
                     Model = "test-model",
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
-                    HealthCheckEnabled = false
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 61000
                 });
                 if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No endpoint returned");
+                if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
                 _TestEpId = ep.Id;
             }
         }
@@ -259,6 +261,7 @@ namespace Test.Shared
                 EmbeddingEndpoint? ep = await admin.GetEndpointAsync(_TestEpId);
                 if (ep == null) throw new Exception("Endpoint not found");
                 if (ep.Model != "test-model") throw new Exception("Model mismatch");
+                if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
             }
         }
 
@@ -272,9 +275,11 @@ namespace Test.Shared
                     Model = "test-model-v2",
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
-                    HealthCheckEnabled = false
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 91000
                 });
                 if (updated == null) throw new Exception("Update failed");
+                if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
             }
         }
 
@@ -346,9 +351,11 @@ namespace Test.Shared
                     Model = "test-model",
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
-                    HealthCheckEnabled = false
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 61000
                 });
                 if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
+                if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
                 _TestCepId = cep.Id;
             }
         }
@@ -360,6 +367,7 @@ namespace Test.Shared
                 CompletionEndpoint? cep = await admin.GetCompletionEndpointAsync(_TestCepId);
                 if (cep == null) throw new Exception("Endpoint not found");
                 if (cep.Model != "test-model") throw new Exception("Model mismatch");
+                if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
             }
         }
 
@@ -374,9 +382,11 @@ namespace Test.Shared
                     Model = "test-model-v2",
                     Endpoint = "http://localhost:11434",
                     ApiFormat = "Ollama",
-                    HealthCheckEnabled = false
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 91000
                 });
                 if (updated == null) throw new Exception("Update failed");
+                if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
             }
         }
 
@@ -475,6 +485,184 @@ namespace Test.Shared
                 if (result == null) throw new Exception("No response");
                 if (result.EndpointId != _TestCepId) throw new Exception("Endpoint mismatch");
                 if (result.CompletionCalls == null || result.CompletionCalls.Count == 0) throw new Exception("Expected upstream call details");
+            }
+        }
+
+        public static async Task TestExploreCompletionTimeoutStatusAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 1200);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Timeout Explorer Inference",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 250
+                });
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No timeout test completion endpoint returned");
+
+                EndpointExplorerCompletionResponse? result = await admin.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
+                {
+                    EndpointId = endpoint.Id,
+                    Prompt = "Timeout test prompt",
+                    TimeoutMs = 5000
+                });
+
+                if (result == null) throw new Exception("No explorer response");
+                if (result.Success) throw new Exception("Expected timeout explorer response");
+                if (result.StatusCode != 504) throw new Exception("Expected explorer StatusCode=504, got " + result.StatusCode);
+                if (string.IsNullOrWhiteSpace(result.Error) || result.Error.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) < 0)
+                    throw new Exception("Expected timeout error text");
+                if (result.CompletionCalls == null || result.CompletionCalls.Count == 0)
+                    throw new Exception("Expected recorded upstream completion call details");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestProcessEmbeddingTimeoutAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(embeddingDelayMs: 1200);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            EmbeddingEndpoint? endpoint = null;
+
+            try
+            {
+                endpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Timeout Process Embedding",
+                    Model = "text-embedding-3-small",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 250
+                });
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No timeout test embedding endpoint returned");
+
+                try
+                {
+                    await admin.ProcessAsync(new SemanticCellRequest
+                    {
+                        Type = "Text",
+                        Text = "Embedding timeout test payload.",
+                        ChunkingConfiguration = new ChunkingConfiguration
+                        {
+                            Strategy = "FixedTokenCount",
+                            FixedTokenCount = 512
+                        },
+                        EmbeddingConfiguration = new EmbeddingConfiguration
+                        {
+                            EmbeddingEndpointId = endpoint.Id
+                        }
+                    }).ConfigureAwait(false);
+
+                    throw new Exception("Expected PartioException with 504");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 504)
+                {
+                    if (ex.Message.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) < 0)
+                        throw new Exception("Expected timeout message, got: " + ex.Message);
+                }
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestProcessSummarizationTimeoutAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(embeddingDelayMs: 0, completionDelayMs: 1200);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            EmbeddingEndpoint? embeddingEndpoint = null;
+            CompletionEndpoint? completionEndpoint = null;
+
+            try
+            {
+                embeddingEndpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Timeout Process Summary Embedding",
+                    Model = "text-embedding-3-small",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000
+                });
+
+                completionEndpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Timeout Process Summary Completion",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 250
+                });
+
+                if (embeddingEndpoint == null || string.IsNullOrEmpty(embeddingEndpoint.Id))
+                    throw new Exception("No timeout test embedding endpoint returned");
+                if (completionEndpoint == null || string.IsNullOrEmpty(completionEndpoint.Id))
+                    throw new Exception("No timeout test completion endpoint returned");
+
+                try
+                {
+                    await admin.ProcessAsync(new SemanticCellRequest
+                    {
+                        Type = "Text",
+                        Text = "Summarization timeout test payload.",
+                        ChunkingConfiguration = new ChunkingConfiguration
+                        {
+                            Strategy = "FixedTokenCount",
+                            FixedTokenCount = 512
+                        },
+                        EmbeddingConfiguration = new EmbeddingConfiguration
+                        {
+                            EmbeddingEndpointId = embeddingEndpoint.Id
+                        },
+                        SummarizationConfiguration = new SummarizationConfiguration
+                        {
+                            CompletionEndpointId = completionEndpoint.Id,
+                            TimeoutMs = 5000,
+                            MaxSummaryTokens = 128,
+                            MinCellLength = 0
+                        }
+                    }).ConfigureAwait(false);
+
+                    throw new Exception("Expected PartioException with 504");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 504)
+                {
+                    if (ex.Message.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) < 0)
+                        throw new Exception("Expected timeout message, got: " + ex.Message);
+                }
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(completionEndpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(completionEndpoint.Id).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(embeddingEndpoint?.Id))
+                    await admin.DeleteEndpointAsync(embeddingEndpoint.Id).ConfigureAwait(false);
             }
         }
 
@@ -860,6 +1048,9 @@ namespace Test.Shared
             // Endpoint Explorer
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Embedding Endpoint", async () => await TestExploreEmbeddingEndpointAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Endpoint", async () => await TestExploreCompletionEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Timeout Status (504)", async () => await TestExploreCompletionTimeoutStatusAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Process Embedding Timeout (504)", async () => await TestProcessEmbeddingTimeoutAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Process Summarization Timeout (504)", async () => await TestProcessSummarizationTimeoutAsync()));
 
             // Process (RegexBased)
             tests.Add(SharedNamedTestCase.CreateAsync("Process Text (RegexBased - Markdown Headings)", async () => await TestProcessTextRegexMarkdownHeadingsAsync()));

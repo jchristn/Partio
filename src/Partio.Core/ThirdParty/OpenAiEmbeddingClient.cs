@@ -20,11 +20,13 @@ namespace Partio.Core.ThirdParty
         /// <param name="endpoint">OpenAI API endpoint URL.</param>
         /// <param name="apiKey">API key.</param>
         /// <param name="logging">Logging module.</param>
-        public OpenAiEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging)
-            : base(endpoint, apiKey, logging)
+        /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
+        public OpenAiEmbeddingClient(string endpoint, string? apiKey, LoggingModule logging, int maximumTimeoutMs)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs)
         {
             _Header = "[OpenAiEmbedding] ";
             _Client = new PolyPromptOpenAiClient(endpoint, apiKey, logging);
+            _Client.TimeoutMs = _MaximumTimeoutMs;
         }
 
         /// <inheritdoc />
@@ -38,11 +40,41 @@ namespace Partio.Core.ThirdParty
         public override async Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
         {
             PolyPromptEmbeddingOptions options = new PolyPromptEmbeddingOptions { Model = model };
-            PolyPrompt.Models.EmbeddingResponse response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
+            _Client.TimeoutMs = _MaximumTimeoutMs;
+            PolyPrompt.Models.EmbeddingResponse response;
+            try
+            {
+                response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+            {
+                SyncCallDetails();
+                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                    "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                    _MaximumTimeoutMs,
+                    ex);
+            }
+            catch (Exception ex) when (IsTimeoutLike(ex))
+            {
+                SyncCallDetails();
+                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                    "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                    _MaximumTimeoutMs,
+                    ex);
+            }
             SyncCallDetails();
 
             if (!response.Success)
+            {
+                if (IsTimeoutMessage(response.Error))
+                {
+                    throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                        "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                        _MaximumTimeoutMs);
+                }
+
                 throw new Exception(response.Error ?? "OpenAI embedding request failed.");
+            }
 
             return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
         }
