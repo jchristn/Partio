@@ -177,6 +177,90 @@ namespace Test.XUnit
             Assert.Equal(2, client.CallDetails.Count(d => d.Success));
         }
 
+        [Fact]
+        public async Task OpenAiEmbeddingClientCanBeReusedAcrossMultipleCalls()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using OpenAiEmbeddingClient client = new OpenAiEmbeddingClient(provider.BaseUrl, null, logging, 5000);
+
+            List<List<float>> first = await client.EmbedBatchAsync(new List<string> { "first input" }, "text-embedding-3-small");
+            List<List<float>> second = await client.EmbedBatchAsync(new List<string> { "second input" }, "text-embedding-3-small");
+
+            await provider.WaitForEmbeddingRequestCountAsync(2);
+
+            Assert.Single(first);
+            Assert.Single(second);
+            Assert.Equal(2, provider.EmbeddingRequestCount);
+            Assert.Equal(2, client.CallDetails.Count(d => d.Success));
+        }
+
+        [Fact]
+        public async Task OpenAiCompletionClientSupportsParallelCallsOnSharedInstance()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 200);
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using OpenAiCompletionClient client = new OpenAiCompletionClient(provider.BaseUrl, null, logging, 5000, "cep_test", 2);
+
+            Task<string?> firstTask = client.GenerateCompletionAsync("first prompt", "gpt-4.1-mini", 64, 5000);
+            await provider.WaitForCompletionRequestCountAsync(1);
+
+            Task<string?> secondTask = client.GenerateCompletionAsync("second prompt", "gpt-4.1-mini", 64, 5000);
+            string?[] results = await Task.WhenAll(firstTask, secondTask);
+
+            await provider.WaitForCompletionRequestCountAsync(2);
+
+            Assert.All(results, result => Assert.Equal("Stub completion response.", result));
+            Assert.Equal(2, provider.CompletionRequestCount);
+            Assert.Equal(2, client.CallDetails.Count(d => d.Success));
+        }
+
+        [Fact]
+        public async Task GeminiEmbeddingClientCanBeReusedAcrossMultipleCalls()
+        {
+            using SlowGeminiCompatibleServer provider = new SlowGeminiCompatibleServer();
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using GeminiEmbeddingClient client = new GeminiEmbeddingClient(provider.BaseUrl, "test-key", logging, 5000);
+
+            List<List<float>> first = await client.EmbedBatchAsync(new List<string> { "first input" }, "text-embedding-004");
+            List<List<float>> second = await client.EmbedBatchAsync(new List<string> { "second input" }, "text-embedding-004");
+
+            await provider.WaitForEmbeddingRequestCountAsync(2);
+
+            Assert.Single(first);
+            Assert.Single(second);
+            Assert.Equal(2, provider.EmbeddingRequestCount);
+            Assert.Equal(2, client.CallDetails.Count(d => d.Success));
+        }
+
+        [Fact]
+        public async Task GeminiCompletionClientSupportsParallelCallsOnSharedInstance()
+        {
+            using SlowGeminiCompatibleServer provider = new SlowGeminiCompatibleServer(completionDelayMs: 200);
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using GeminiCompletionClient client = new GeminiCompletionClient(provider.BaseUrl, "test-key", logging, 5000, "cep_test", 2);
+
+            Task<string?> firstTask = client.GenerateCompletionAsync("first prompt", "gemini-2.5-flash", 64, 5000);
+            await provider.WaitForCompletionRequestCountAsync(1);
+
+            Task<string?> secondTask = client.GenerateCompletionAsync("second prompt", "gemini-2.5-flash", 64, 5000);
+            string?[] results = await Task.WhenAll(firstTask, secondTask);
+
+            await provider.WaitForCompletionRequestCountAsync(2);
+
+            Assert.All(results, result => Assert.Equal("Stub Gemini response.", result));
+            Assert.Equal(2, provider.CompletionRequestCount);
+            Assert.Equal(2, client.CallDetails.Count(d => d.Success));
+        }
+
         private sealed class TimeoutPostEmbeddingClient : EmbeddingClientBase
         {
             public TimeoutPostEmbeddingClient(string endpoint, LoggingModule logging, int maximumTimeoutMs)

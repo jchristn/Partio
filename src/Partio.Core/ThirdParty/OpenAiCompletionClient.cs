@@ -10,8 +10,7 @@ namespace Partio.Core.ThirdParty
     /// </summary>
     public class OpenAiCompletionClient : CompletionClientBase
     {
-        private readonly PolyPromptOpenAiClient _Client;
-        private int _RecordedCallCount = 0;
+        private readonly object _CallDetailsLock = new object();
 
         /// <summary>
         /// Initialize a new OpenAiCompletionClient.
@@ -32,7 +31,6 @@ namespace Partio.Core.ThirdParty
             : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests)
         {
             _Header = "[OpenAiCompletion] ";
-            _Client = new PolyPromptOpenAiClient(endpoint, apiKey, logging);
         }
 
         /// <inheritdoc />
@@ -44,9 +42,7 @@ namespace Partio.Core.ThirdParty
             CancellationToken token = default,
             string? systemPrompt = null)
         {
-            _Client.Model = model;
             int effectiveTimeoutMs = ClampTimeoutMs(timeoutMs);
-            _Client.TimeoutMs = effectiveTimeoutMs;
 
             PolyPromptChatCompletionOptions options = new PolyPromptChatCompletionOptions
             {
@@ -56,65 +52,95 @@ namespace Partio.Core.ThirdParty
 
             PolyPromptChatResponse response;
             IDisposable? concurrencyLease = null;
-            try
+            using (PolyPromptOpenAiClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
             {
-                concurrencyLease = AcquireRequestSlot();
-                response = await _Client.ChatAsync(prompt, options, token).ConfigureAwait(false);
+                try
+                {
+                    concurrencyLease = AcquireRequestSlot();
+                    response = await client.ChatAsync(prompt, options, token).ConfigureAwait(false);
+                }
+                catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
+                {
+                    AppendRejectedCall(_Endpoint.TrimEnd('/'), "POST", ex.Message);
+                    AppendCallDetails(client.CallDetails);
+                    throw;
+                }
+                catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+                {
+                    AppendCallDetails(client.CallDetails);
+                    throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                        "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
+                        effectiveTimeoutMs,
+                        ex);
+                }
+                catch (Exception ex) when (IsTimeoutLike(ex))
+                {
+                    AppendCallDetails(client.CallDetails);
+                    throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                        "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
+                        effectiveTimeoutMs,
+                        ex);
+                }
+                finally
+                {
+                    concurrencyLease?.Dispose();
+                }
+
+                AppendCallDetails(client.CallDetails);
+                if (!response.Success && IsTimeoutMessage(response.Error))
+                {
+                    throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                        "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
+                        effectiveTimeoutMs);
+                }
+                return response.Success ? response.Text?.Trim() : null;
             }
-            catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
-            {
-                RecordRejectedCall(_Endpoint.TrimEnd('/'), "POST", ex.Message);
-                SyncCallDetails();
-                throw;
-            }
-            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
-            {
-                SyncCallDetails();
-                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
-                    "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
-                    effectiveTimeoutMs,
-                    ex);
-            }
-            catch (Exception ex) when (IsTimeoutLike(ex))
-            {
-                SyncCallDetails();
-                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
-                    "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
-                    effectiveTimeoutMs,
-                    ex);
-            }
-            finally
-            {
-                concurrencyLease?.Dispose();
-            }
-            SyncCallDetails();
-            if (!response.Success && IsTimeoutMessage(response.Error))
-            {
-                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
-                    "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
-                    effectiveTimeoutMs);
-            }
-            return response.Success ? response.Text?.Trim() : null;
         }
 
-        private void SyncCallDetails()
+        private PolyPromptOpenAiClient CreateConfiguredClient(string model, int timeoutMs)
         {
-            for (; _RecordedCallCount < _Client.CallDetails.Count; _RecordedCallCount++)
+            PolyPromptOpenAiClient client = new PolyPromptOpenAiClient(_Endpoint, _ApiKey, _Logging);
+            client.Model = model;
+            client.TimeoutMs = timeoutMs;
+            return client;
+        }
+
+        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CompletionCallDetail> source)
+        {
+            lock (_CallDetailsLock)
             {
-                PolyPrompt.Models.CompletionCallDetail src = _Client.CallDetails[_RecordedCallCount];
+                foreach (PolyPrompt.Models.CompletionCallDetail src in source)
+                {
+                    CallDetails.Add(new Partio.Core.Models.CompletionCallDetail
+                    {
+                        Url = src.Url,
+                        Method = src.Method,
+                        RequestHeaders = src.RequestHeaders,
+                        RequestBody = src.RequestBody,
+                        StatusCode = src.StatusCode,
+                        ResponseHeaders = src.ResponseHeaders,
+                        ResponseBody = src.ResponseBody,
+                        ResponseTimeMs = src.ResponseTimeMs,
+                        Success = src.Success,
+                        Error = src.Error,
+                        TimestampUtc = src.TimestampUtc
+                    });
+                }
+            }
+        }
+
+        private void AppendRejectedCall(string url, string method, string error)
+        {
+            lock (_CallDetailsLock)
+            {
                 CallDetails.Add(new Partio.Core.Models.CompletionCallDetail
                 {
-                    Url = src.Url,
-                    Method = src.Method,
-                    RequestHeaders = src.RequestHeaders,
-                    RequestBody = src.RequestBody,
-                    StatusCode = src.StatusCode,
-                    ResponseHeaders = src.ResponseHeaders,
-                    ResponseBody = src.ResponseBody,
-                    ResponseTimeMs = src.ResponseTimeMs,
-                    Success = src.Success,
-                    Error = src.Error,
-                    TimestampUtc = src.TimestampUtc
+                    Url = url,
+                    Method = method,
+                    RequestHeaders = new Dictionary<string, string>(),
+                    TimestampUtc = DateTime.UtcNow,
+                    Success = false,
+                    Error = error
                 });
             }
         }

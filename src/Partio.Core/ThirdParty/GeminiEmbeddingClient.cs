@@ -11,8 +11,7 @@ namespace Partio.Core.ThirdParty
     /// </summary>
     public class GeminiEmbeddingClient : EmbeddingClientBase
     {
-        private readonly GeminiClient _Client;
-        private int _RecordedCallCount = 0;
+        private readonly object _CallDetailsLock = new object();
 
         /// <summary>
         /// Initialize a new GeminiEmbeddingClient.
@@ -33,8 +32,6 @@ namespace Partio.Core.ThirdParty
             : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests)
         {
             _Header = "[GeminiEmbedding] ";
-            _Client = new GeminiClient(endpoint, apiKey, logging);
-            _Client.TimeoutMs = _MaximumTimeoutMs;
         }
 
         /// <inheritdoc />
@@ -48,55 +45,58 @@ namespace Partio.Core.ThirdParty
         public override async Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
         {
             EmbeddingOptions options = new EmbeddingOptions { Model = model };
-            _Client.TimeoutMs = _MaximumTimeoutMs;
             EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
-            try
+            using (GeminiClient client = CreateConfiguredClient(_MaximumTimeoutMs))
             {
-                concurrencyLease = AcquireRequestSlot();
-                response = await _Client.EmbedAsync(texts, options, token).ConfigureAwait(false);
-            }
-            catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
-            {
-                RecordRejectedCall("EmbeddingRequest", _Endpoint.TrimEnd('/'), "POST", ex.Message);
-                SyncCallDetails();
-                throw;
-            }
-            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
-            {
-                SyncCallDetails();
-                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
-                    "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
-                    _MaximumTimeoutMs,
-                    ex);
-            }
-            catch (Exception ex) when (IsTimeoutLike(ex))
-            {
-                SyncCallDetails();
-                throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
-                    "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
-                    _MaximumTimeoutMs,
-                    ex);
-            }
-            finally
-            {
-                concurrencyLease?.Dispose();
-            }
-            SyncCallDetails();
-
-            if (!response.Success)
-            {
-                if (IsTimeoutMessage(response.Error))
+                try
                 {
+                    concurrencyLease = AcquireRequestSlot();
+                    response = await client.EmbedAsync(texts, options, token).ConfigureAwait(false);
+                }
+                catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
+                {
+                    AppendRejectedCall("EmbeddingRequest", _Endpoint.TrimEnd('/'), "POST", ex.Message);
+                    AppendCallDetails(client.CallDetails);
+                    throw;
+                }
+                catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+                {
+                    AppendCallDetails(client.CallDetails);
                     throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
                         "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
-                        _MaximumTimeoutMs);
+                        _MaximumTimeoutMs,
+                        ex);
+                }
+                catch (Exception ex) when (IsTimeoutLike(ex))
+                {
+                    AppendCallDetails(client.CallDetails);
+                    throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                        "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                        _MaximumTimeoutMs,
+                        ex);
+                }
+                finally
+                {
+                    concurrencyLease?.Dispose();
                 }
 
-                throw new Exception(response.Error ?? "Gemini embedding request failed.");
-            }
+                AppendCallDetails(client.CallDetails);
 
-            return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
+                if (!response.Success)
+                {
+                    if (IsTimeoutMessage(response.Error))
+                    {
+                        throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
+                            "Upstream embedding provider request timed out after " + _MaximumTimeoutMs + "ms.",
+                            _MaximumTimeoutMs);
+                    }
+
+                    throw new Exception(response.Error ?? "Gemini embedding request failed.");
+                }
+
+                return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
+            }
         }
 
         /// <inheritdoc />
@@ -114,25 +114,51 @@ namespace Partio.Core.ThirdParty
             return Task.FromResult<EmbeddingModelCapabilities?>(capabilities);
         }
 
-        private void SyncCallDetails()
+        private GeminiClient CreateConfiguredClient(int timeoutMs)
         {
-            for (; _RecordedCallCount < _Client.CallDetails.Count; _RecordedCallCount++)
+            GeminiClient client = new GeminiClient(_Endpoint, _ApiKey, _Logging);
+            client.TimeoutMs = timeoutMs;
+            return client;
+        }
+
+        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CompletionCallDetail> source)
+        {
+            lock (_CallDetailsLock)
             {
-                PolyPrompt.Models.CompletionCallDetail src = _Client.CallDetails[_RecordedCallCount];
+                foreach (PolyPrompt.Models.CompletionCallDetail src in source)
+                {
+                    CallDetails.Add(new EmbeddingCallDetail
+                    {
+                        Purpose = "EmbeddingRequest",
+                        Url = src.Url,
+                        Method = src.Method,
+                        RequestHeaders = src.RequestHeaders,
+                        RequestBody = src.RequestBody,
+                        StatusCode = src.StatusCode,
+                        ResponseHeaders = src.ResponseHeaders,
+                        ResponseBody = src.ResponseBody,
+                        ResponseTimeMs = src.ResponseTimeMs,
+                        Success = src.Success,
+                        Error = src.Error,
+                        TimestampUtc = src.TimestampUtc
+                    });
+                }
+            }
+        }
+
+        private void AppendRejectedCall(string? purpose, string url, string method, string error)
+        {
+            lock (_CallDetailsLock)
+            {
                 CallDetails.Add(new EmbeddingCallDetail
                 {
-                    Purpose = "EmbeddingRequest",
-                    Url = src.Url,
-                    Method = src.Method,
-                    RequestHeaders = src.RequestHeaders,
-                    RequestBody = src.RequestBody,
-                    StatusCode = src.StatusCode,
-                    ResponseHeaders = src.ResponseHeaders,
-                    ResponseBody = src.ResponseBody,
-                    ResponseTimeMs = src.ResponseTimeMs,
-                    Success = src.Success,
-                    Error = src.Error,
-                    TimestampUtc = src.TimestampUtc
+                    Purpose = purpose,
+                    Url = url,
+                    Method = method,
+                    RequestHeaders = new Dictionary<string, string>(),
+                    TimestampUtc = DateTime.UtcNow,
+                    Success = false,
+                    Error = error
                 });
             }
         }
