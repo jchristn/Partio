@@ -232,7 +232,7 @@ export default function EndpointExplorerView() {
     <div className="endpoint-explorer">
       <div className="header-row">
         <div className="page-title-block">
-          <h2>Endpoint Explorer</h2>
+          <h2>API Explorer</h2>
           <p className="view-subtitle">Run a request through Partio itself to validate a configured embedding or inference endpoint and inspect the upstream exchange.</p>
         </div>
       </div>

@@ -101,7 +101,7 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Batch processing** for submitting multiple semantic cells in a single request
 - **Optional summarization** with LLM-powered cell summarization before chunking and embedding, supporting top-down and bottom-up strategies
 - **Completion endpoint management** for configuring LLM inference endpoints (Ollama, OpenAI, Gemini, vLLM) with health checks
-- **Endpoint Explorer** in the dashboard for exercising a specific embedding or inference endpoint through the Partio backend path and inspecting upstream call details
+- **API Explorer** in the dashboard for exercising a specific embedding or inference endpoint through the Partio backend path and inspecting upstream call details
 - **PolyPrompt-backed provider runtime** so provider-specific embeddings and inference wiring is centralized in a dedicated library
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history
 - **SDKs** for C#, Python, and JavaScript

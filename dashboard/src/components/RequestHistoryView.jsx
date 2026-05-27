@@ -10,6 +10,7 @@ import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import { copyToClipboard } from '../utils/clipboard';
 import Tooltip from './Tooltip';
+import RequestHistoryChart from './RequestHistoryChart';
 import './RequestHistoryView.css';
 
 function statusClass(code) {
@@ -258,6 +259,7 @@ export default function RequestHistoryView() {
           </button>
         </div>
       </div>
+      <RequestHistoryChart />
       <DataTable data={data} columns={columns} loading={loading} onRowClick={viewDetail} />
 
       {detailOpen && detailItem && (

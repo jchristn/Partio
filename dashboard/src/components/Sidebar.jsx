@@ -19,7 +19,7 @@ const endpointLinks = [
 ];
 
 const processingLinks = [
-  { to: '/explorer', label: 'Endpoint Explorer', tourId: 'nav-explorer' },
+  { to: '/explorer', label: 'API Explorer', tourId: 'nav-explorer' },
   { to: '/history', label: 'Request History', tourId: 'nav-history' },
   { to: '/process', label: 'Process Cells', tourId: 'nav-process' },
 ];
@@ -39,13 +39,6 @@ export default function Sidebar() {
           </NavLink>
         ))}
         <div className="nav-divider" />
-        <div className="nav-section-header" data-tour-id="nav-section-admin">Administration</div>
-        {adminLinks.map(link => (
-          <NavLink key={link.to} to={link.to} data-tour-id={link.tourId} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            {link.label}
-          </NavLink>
-        ))}
-        <div className="nav-divider" />
         <div className="nav-section-header" data-tour-id="nav-section-endpoints">Endpoints</div>
         {endpointLinks.map(link => (
           <NavLink key={link.to} to={link.to} data-tour-id={link.tourId} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
@@ -55,6 +48,13 @@ export default function Sidebar() {
         <div className="nav-divider" />
         <div className="nav-section-header" data-tour-id="nav-section-processing">Processing</div>
         {processingLinks.map(link => (
+          <NavLink key={link.to} to={link.to} data-tour-id={link.tourId} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            {link.label}
+          </NavLink>
+        ))}
+        <div className="nav-divider" />
+        <div className="nav-section-header" data-tour-id="nav-section-admin">Administration</div>
+        {adminLinks.map(link => (
           <NavLink key={link.to} to={link.to} data-tour-id={link.tourId} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             {link.label}
           </NavLink>

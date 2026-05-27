@@ -466,7 +466,7 @@ namespace Test.Shared
             }
         }
 
-        // ===== Endpoint Explorer =====
+        // ===== API Explorer =====
 
         public static async Task TestExploreEmbeddingEndpointAsync()
         {
@@ -1175,7 +1175,7 @@ namespace Test.Shared
             // Request History
             tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Request History", async () => await TestEnumerateRequestHistoryAsync()));
 
-            // Endpoint Explorer
+            // API Explorer
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Embedding Endpoint", async () => await TestExploreEmbeddingEndpointAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Endpoint", async () => await TestExploreCompletionEndpointAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Explore Embedding Concurrency Limit (429)", async () => await TestExploreEmbeddingConcurrencyLimitStatusAsync()));

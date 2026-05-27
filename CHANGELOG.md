@@ -16,7 +16,7 @@
   - Selectable timeframe: Last Hour (per-minute), Last 24 Hours (15-minute), Last 7 Days (hourly), Last 30 Days (4-hour)
   - Optional endpoint URL substring filter
   - Summary cards showing total successful, failed, and total request counts
-  - Quick actions section with shortcuts to Manage Embedding Endpoints, Manage Inference Endpoints, View Request History, and Endpoint Explorer
+  - Quick actions section with shortcuts to Manage Embedding Endpoints, Manage Inference Endpoints, View Request History, and API Explorer
 - **Request statistics API** - `POST /v1.0/requests/statistics` endpoint returning aggregated request counts grouped by time bucket with success/failure breakdown
   - Supported across all database providers: SQLite, PostgreSQL, MySQL, SQL Server
 - Dashboard is now the default landing page after login

@@ -9,30 +9,6 @@ const tourSteps = [
       'This quick tour will walk you through the main areas of the dashboard.',
   },
   {
-    target: 'nav-section-admin',
-    title: 'Administration',
-    description: 'Manage your tenants, users, and API credentials from this section.',
-    position: 'right',
-  },
-  {
-    target: 'nav-tenants',
-    title: 'Tenants',
-    description: 'Tenants are isolated workspaces, each with their own users, configurations, and data.',
-    position: 'right',
-  },
-  {
-    target: 'nav-users',
-    title: 'Users',
-    description: 'Create and manage users within each tenant. Users can have Admin or User roles.',
-    position: 'right',
-  },
-  {
-    target: 'nav-credentials',
-    title: 'Credentials',
-    description: 'Generate and manage bearer tokens used for authenticating API requests.',
-    position: 'right',
-  },
-  {
     target: 'nav-section-endpoints',
     title: 'Endpoints',
     description: 'Configure connections to your AI model providers for embeddings and inference.',
@@ -58,7 +34,7 @@ const tourSteps = [
   },
   {
     target: 'nav-explorer',
-    title: 'Endpoint Explorer',
+    title: 'API Explorer',
     description: 'Run a request through a selected embedding or inference endpoint and inspect the upstream exchange captured by Partio.',
     position: 'right',
   },
@@ -72,6 +48,30 @@ const tourSteps = [
     target: 'nav-process',
     title: 'Process Cells',
     description: 'The interactive workspace where you can chunk documents, generate embeddings, and run summarization.',
+    position: 'right',
+  },
+  {
+    target: 'nav-section-admin',
+    title: 'Administration',
+    description: 'Manage your tenants, users, and API credentials from this section.',
+    position: 'right',
+  },
+  {
+    target: 'nav-tenants',
+    title: 'Tenants',
+    description: 'Tenants are isolated workspaces, each with their own users, configurations, and data.',
+    position: 'right',
+  },
+  {
+    target: 'nav-users',
+    title: 'Users',
+    description: 'Create and manage users within each tenant. Users can have Admin or User roles.',
+    position: 'right',
+  },
+  {
+    target: 'nav-credentials',
+    title: 'Credentials',
+    description: 'Generate and manage bearer tokens used for authenticating API requests.',
     position: 'right',
   },
   {
