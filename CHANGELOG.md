@@ -20,6 +20,7 @@
 - **Request statistics API** - `POST /v1.0/requests/statistics` endpoint returning aggregated request counts grouped by time bucket with success/failure breakdown
   - Supported across all database providers: SQLite, PostgreSQL, MySQL, SQL Server
 - Dashboard is now the default landing page after login
+- Test runners now self-host their integration dependencies: `Test.Automated`, `Test.XUnit`, and `Test.Nunit` start a temporary Partio server and Ollama-compatible upstream stub instead of requiring external local services
 
 ### Changed
 - `FixedTokenCount` now means a requested model-native token budget, clamped to the resolved embedding endpoint budget before chunking begins

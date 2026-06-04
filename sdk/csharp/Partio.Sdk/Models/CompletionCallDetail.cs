@@ -26,7 +26,7 @@ namespace Partio.Sdk.Models
         public string? ResponseBody { get; set; }
 
         [JsonPropertyName("ResponseTimeMs")]
-        public long? ResponseTimeMs { get; set; }
+        public double? ResponseTimeMs { get; set; }
 
         [JsonPropertyName("Success")]
         public bool Success { get; set; }

@@ -1,9 +1,11 @@
 namespace Test.XUnit
 {
     using System.Reflection;
+    using Partio.Core.Enums;
     using Partio.Core.Exceptions;
     using Partio.Core.Models;
     using Partio.Core.Settings;
+    using Partio.Core.Summarization;
     using Partio.Core.ThirdParty;
     using SyslogLogging;
     using Test.Shared;
@@ -81,6 +83,89 @@ namespace Test.XUnit
             Assert.True(ex.Message.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) >= 0);
             Assert.NotEmpty(client.CallDetails);
             Assert.True(client.CallDetails[0].Error?.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        [Fact]
+        public async Task PartioOwnedHttpClientsReturnCopiedResponseDataWithoutRetainingResponses()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using TimeoutPostEmbeddingClient embeddingClient = new TimeoutPostEmbeddingClient(provider.BaseUrl, logging, 5000);
+            using TimeoutPostCompletionClient completionClient = new TimeoutPostCompletionClient(provider.BaseUrl, logging, 5000);
+
+            EmbeddingHttpResult embeddingResult = await embeddingClient.PostProbeAsync();
+            CompletionHttpResult completionResult = await completionClient.PostProbeAsync();
+
+            Assert.Null(embeddingResult.Response);
+            Assert.Equal(200, embeddingResult.StatusCode);
+            Assert.True(embeddingResult.IsSuccessStatusCode);
+            Assert.Contains("Content-Type", embeddingResult.ResponseHeaders.Keys);
+            Assert.Contains("\"data\"", embeddingResult.ResponseBody);
+
+            Assert.Null(completionResult.Response);
+            Assert.Equal(200, completionResult.StatusCode);
+            Assert.True(completionResult.IsSuccessStatusCode);
+            Assert.Contains("Content-Type", completionResult.ResponseHeaders.Keys);
+            Assert.Contains("chatcmpl_stub", completionResult.ResponseBody);
+        }
+
+        [Fact]
+        public async Task OpenAiEmbeddingClientPropagatesCallerCancellationAndReleasesConcurrencySlot()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(embeddingDelayMs: 500);
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using OpenAiEmbeddingClient client = new OpenAiEmbeddingClient(provider.BaseUrl, null, logging, 5000, "eep_cancel_test", 1);
+            using CancellationTokenSource cts = new CancellationTokenSource(50);
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => client.EmbedBatchAsync(new List<string> { "cancel this request" }, "text-embedding-3-small", cts.Token));
+
+            List<List<float>> secondResult = await client.EmbedBatchAsync(new List<string> { "slot should be free" }, "text-embedding-3-small");
+
+            Assert.Single(secondResult);
+            Assert.DoesNotContain(client.CallDetails, detail => detail.Error?.IndexOf("max concurrent request", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        [Fact]
+        public async Task SummarizationCapsParallelCallsToCompletionEndpointLimit()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 150);
+            LoggingModule logging = new LoggingModule();
+            logging.Settings.EnableConsole = false;
+
+            using OpenAiCompletionClient client = new OpenAiCompletionClient(provider.BaseUrl, null, logging, 5000, "cep_summary_limit", 1);
+            SummarizationEngine engine = new SummarizationEngine(logging);
+            SummarizationConfiguration config = new SummarizationConfiguration
+            {
+                CompletionEndpointId = "cep_summary_limit",
+                MinCellLength = 0,
+                MaxParallelTasks = 4,
+                MaxRetries = 4,
+                MaxRetriesPerSummary = 0,
+                MaxSummaryTokens = 128,
+                TimeoutMs = 5000
+            };
+
+            List<SemanticCellRequest> cells = Enumerable.Range(0, 4)
+                .Select(index => new SemanticCellRequest
+                {
+                    Type = AtomTypeEnum.Text,
+                    Text = "Document section " + index + " has enough text to be summarized by the upstream test provider."
+                })
+                .ToList();
+
+            List<SemanticCellRequest> summarized = await engine.SummarizeAsync(cells, config, client, "gpt-4.1-mini");
+
+            await provider.WaitForCompletionRequestCountAsync(4);
+
+            Assert.Equal(4, provider.CompletionRequestCount);
+            Assert.Equal(1, provider.MaxActiveCompletionRequests);
+            Assert.All(summarized, cell =>
+                Assert.Contains(cell.Children ?? new List<SemanticCellRequest>(), child => child.Type == AtomTypeEnum.Summary));
         }
 
         [Fact]
@@ -275,6 +360,13 @@ namespace Test.XUnit
                 return new List<float>();
             }
 
+            public async Task<EmbeddingHttpResult> PostProbeAsync()
+            {
+                string body = "{\"input\":\"probe\",\"model\":\"text-embedding-3-small\"}";
+                using StringContent content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+                return await PostAndRecordAsync(_Endpoint.TrimEnd('/') + "/v1/embeddings", content, body, "EmbeddingRequest", CancellationToken.None).ConfigureAwait(false);
+            }
+
             public override Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
             {
                 throw new NotSupportedException();
@@ -304,6 +396,18 @@ namespace Test.XUnit
                     timeoutMs,
                     token).ConfigureAwait(false);
                 return result.ResponseBody;
+            }
+
+            public async Task<CompletionHttpResult> PostProbeAsync()
+            {
+                string body = "{\"prompt\":\"probe\"}";
+                using StringContent content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+                return await PostAndRecordAsync(
+                    _Endpoint.TrimEnd('/') + "/v1/chat/completions",
+                    content,
+                    body,
+                    5000,
+                    CancellationToken.None).ConfigureAwait(false);
             }
         }
 

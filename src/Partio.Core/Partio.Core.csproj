@@ -12,7 +12,7 @@
     <PackageReference Include="SyslogLogging" Version="*" />
     <PackageReference Include="PrettyId" Version="*" />
     <PackageReference Include="SerializationHelper" Version="*" />
-    <PackageReference Include="PolyPrompt" Version="0.1.1" />
+    <PackageReference Include="PolyPrompt" Version="0.2.0" />
     <PackageReference Include="SharpToken" Version="*" />
     <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />

@@ -285,11 +285,16 @@ namespace Partio.Core.Summarization
             List<SemanticCellRequest> rootCells,
             CancellationToken token)
         {
-            SemaphoreSlim semaphore = new SemaphoreSlim(config.MaxParallelTasks);
+            int configuredParallelism = Math.Max(1, config.MaxParallelTasks);
+            int endpointParallelism = Math.Max(1, completionClient.MaxConcurrentRequests);
+            int maxParallelTasks = Math.Min(configuredParallelism, endpointParallelism);
+            using SemaphoreSlim semaphore = new SemaphoreSlim(maxParallelTasks);
             List<Task> tasks = new List<Task>();
 
             foreach (SemanticCellRequest cell in cells)
             {
+                token.ThrowIfCancellationRequested();
+
                 // Skip summary cells (pre-summarized by client)
                 if (cell.Type == AtomTypeEnum.Summary) continue;
 
@@ -302,6 +307,8 @@ namespace Partio.Core.Summarization
                     await semaphore.WaitAsync(token).ConfigureAwait(false);
                     try
                     {
+                        token.ThrowIfCancellationRequested();
+
                         // Check global failure limit
                         if (globalFailures.HasReachedLimit(config.MaxRetries))
                         {
@@ -400,6 +407,10 @@ namespace Partio.Core.Summarization
                     throw; // Global failure limit — propagate
                 }
                 catch (ProviderConcurrencyLimitException)
+                {
+                    throw;
+                }
+                catch (ProviderOperationTimeoutException)
                 {
                     throw;
                 }

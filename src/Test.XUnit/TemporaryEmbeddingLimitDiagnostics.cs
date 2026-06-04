@@ -106,7 +106,7 @@ namespace Test.XUnit
 
             Task<List<List<float>>> task = (Task<List<List<float>>>)embedTextsMethod!.Invoke(
                 null,
-                new object[] { textsToEmbed, client, endpoint.Model, profile, tokenizer })!;
+                new object[] { textsToEmbed, client, endpoint.Model, profile, tokenizer, CancellationToken.None })!;
 
             Task completedEmbedTask = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
             Assert.Same(task, completedEmbedTask);
@@ -157,7 +157,7 @@ namespace Test.XUnit
 
             Task<List<List<float>>> task = (Task<List<List<float>>>)embedTextsMethod!.Invoke(
                 null,
-                new object[] { textsToEmbed, client, endpoint.Model, profile, tokenizer })!;
+                new object[] { textsToEmbed, client, endpoint.Model, profile, tokenizer, CancellationToken.None })!;
 
             Task completedEmbedTask = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
             Assert.Same(task, completedEmbedTask);

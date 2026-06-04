@@ -35,7 +35,7 @@ namespace Partio.Sdk.Models
         public int? HttpStatus { get; set; }
 
         [JsonPropertyName("ResponseTimeMs")]
-        public long? ResponseTimeMs { get; set; }
+        public double? ResponseTimeMs { get; set; }
 
         [JsonPropertyName("ObjectKey")]
         public string? ObjectKey { get; set; }

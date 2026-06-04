@@ -301,7 +301,7 @@ namespace Partio.Server.Services
             {
                 timeoutCts.CancelAfter(endpoint.HealthCheckTimeoutMs);
 
-                HttpResponseMessage response = await _HttpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
+                using HttpResponseMessage response = await _HttpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
                 int statusCode = (int)response.StatusCode;
                 bool success = statusCode == endpoint.HealthCheckExpectedStatusCode;
 

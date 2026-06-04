@@ -5,8 +5,7 @@ namespace Partio.Core.Chunking
     using System.Text.RegularExpressions;
 
     /// <summary>
-    /// Splits text at boundaries defined by a user-supplied regular expression,
-    /// then groups segments to fill a token budget.
+    /// Splits text at boundaries defined by a user-supplied regular expression.
     /// </summary>
     public static class RegexChunker
     {
@@ -35,13 +34,20 @@ namespace Partio.Core.Chunking
 
             if (filtered.Count == 0) return ChunkingHelpers.ChunkByTokenSpans(text, config, tokenizer, tokenLimit);
 
-            return ChunkingHelpers.ChunkUnits(
-                filtered,
-                "\n",
-                tokenLimit,
-                tokenizer,
-                ChunkingHelpers.GetUnitOverlapCount(config),
-                segment => ChunkingHelpers.ChunkByTokenSpans(segment, config, tokenizer, tokenLimit));
+            List<string> chunks = new List<string>();
+            foreach (string segment in filtered)
+            {
+                if (tokenizer.CountTokens(segment) <= tokenLimit)
+                {
+                    chunks.Add(segment);
+                }
+                else
+                {
+                    chunks.AddRange(ChunkingHelpers.ChunkByTokenSpans(segment, config, tokenizer, tokenLimit));
+                }
+            }
+
+            return chunks;
         }
     }
 }

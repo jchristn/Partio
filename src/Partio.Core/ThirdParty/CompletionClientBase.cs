@@ -50,10 +50,23 @@ namespace Partio.Core.ThirdParty
         /// </summary>
         protected readonly int _MaxConcurrentRequests;
 
+        private const int MaxRecordedCallDetails = 1000;
+        private readonly List<CompletionCallDetail> _CallDetails = new List<CompletionCallDetail>();
+        private readonly object _CallDetailsLock = new object();
+
         /// <summary>
         /// Recorded details of HTTP calls made to upstream completion endpoints.
         /// </summary>
-        public List<CompletionCallDetail> CallDetails { get; } = new List<CompletionCallDetail>();
+        public IReadOnlyList<CompletionCallDetail> CallDetails
+        {
+            get
+            {
+                lock (_CallDetailsLock)
+                {
+                    return _CallDetails.ToList();
+                }
+            }
+        }
 
         /// <summary>
         /// Initialize a new CompletionClientBase.
@@ -79,6 +92,15 @@ namespace Partio.Core.ThirdParty
             _ConcurrencyKey = !string.IsNullOrWhiteSpace(concurrencyKey) ? concurrencyKey : endpoint;
             _MaxConcurrentRequests = maxConcurrentRequests < 1 ? 1 : maxConcurrentRequests;
             _HttpClient = new HttpClient();
+            _HttpClient.Timeout = Timeout.InfiniteTimeSpan;
+        }
+
+        /// <summary>
+        /// Maximum concurrent upstream provider requests for this endpoint.
+        /// </summary>
+        public int MaxConcurrentRequests
+        {
+            get { return _MaxConcurrentRequests; }
         }
 
         /// <summary>
@@ -139,7 +161,7 @@ namespace Partio.Core.ThirdParty
                 using (CancellationTokenSource timeoutCts = new CancellationTokenSource(effectiveTimeoutMs))
                 using (CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token))
                 {
-                    HttpResponseMessage response = await _HttpClient.PostAsync(url, content, linkedCts.Token).ConfigureAwait(false);
+                    using HttpResponseMessage response = await _HttpClient.PostAsync(url, content, linkedCts.Token).ConfigureAwait(false);
                     string responseBody = await response.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
 
                     sw.Stop();
@@ -161,10 +183,12 @@ namespace Partio.Core.ThirdParty
                     }
                     detail.ResponseHeaders = respHeaders;
 
-                    CallDetails.Add(detail);
+                    AddCallDetail(detail);
 
                     CompletionHttpResult result = new CompletionHttpResult();
-                    result.Response = response;
+                    result.StatusCode = (int)response.StatusCode;
+                    result.IsSuccessStatusCode = response.IsSuccessStatusCode;
+                    result.ResponseHeaders = respHeaders;
                     result.ResponseBody = responseBody;
                     return result;
                 }
@@ -175,7 +199,7 @@ namespace Partio.Core.ThirdParty
                 detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 detail.Success = false;
                 detail.Error = ex.Message;
-                CallDetails.Add(detail);
+                AddCallDetail(detail);
                 throw;
             }
             catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
@@ -184,16 +208,16 @@ namespace Partio.Core.ThirdParty
                 detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 detail.Success = false;
                 detail.Error = "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.";
-                CallDetails.Add(detail);
+                AddCallDetail(detail);
                 throw new ProviderOperationTimeoutException(detail.Error, effectiveTimeoutMs, ex);
             }
-            catch (Exception ex) when (IsTimeoutLike(ex))
+            catch (Exception ex) when (!token.IsCancellationRequested && IsTimeoutLike(ex))
             {
                 sw.Stop();
                 detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 detail.Success = false;
                 detail.Error = "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.";
-                CallDetails.Add(detail);
+                AddCallDetail(detail);
                 throw new ProviderOperationTimeoutException(detail.Error, effectiveTimeoutMs, ex);
             }
             catch (Exception ex)
@@ -202,7 +226,7 @@ namespace Partio.Core.ThirdParty
                 detail.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
                 detail.Success = false;
                 detail.Error = ex.Message;
-                CallDetails.Add(detail);
+                AddCallDetail(detail);
                 throw;
             }
             finally
@@ -239,7 +263,7 @@ namespace Partio.Core.ThirdParty
                 reqHeaders[header.Key] = string.Join(", ", header.Value);
             }
 
-            CallDetails.Add(new CompletionCallDetail
+            AddCallDetail(new CompletionCallDetail
             {
                 Url = url,
                 Method = method,
@@ -248,6 +272,24 @@ namespace Partio.Core.ThirdParty
                 Success = false,
                 Error = error
             });
+        }
+
+        /// <summary>
+        /// Append a recorded call while keeping the in-memory history bounded and synchronized.
+        /// </summary>
+        protected void AddCallDetail(CompletionCallDetail detail)
+        {
+            if (detail == null) return;
+
+            lock (_CallDetailsLock)
+            {
+                if (_CallDetails.Count >= MaxRecordedCallDetails)
+                {
+                    _CallDetails.RemoveAt(0);
+                }
+
+                _CallDetails.Add(detail);
+            }
         }
 
         /// <summary>

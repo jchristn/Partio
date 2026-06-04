@@ -71,7 +71,7 @@ namespace Partio.Core.ThirdParty
                         _MaximumTimeoutMs,
                         ex);
                 }
-                catch (Exception ex) when (IsTimeoutLike(ex))
+                catch (Exception ex) when (!token.IsCancellationRequested && IsTimeoutLike(ex))
                 {
                     AppendCallDetails(client.CallDetails);
                     throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
@@ -110,7 +110,7 @@ namespace Partio.Core.ThirdParty
             using StringContent content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json");
             EmbeddingHttpResult result = await PostAndRecordAsync(url, content, requestBodyJson, "CapabilityProbe", token).ConfigureAwait(false);
 
-            if (!result.Response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(result.ResponseBody))
+            if (!result.IsSuccessStatusCode || string.IsNullOrWhiteSpace(result.ResponseBody))
                 return null;
 
             using JsonDocument doc = JsonDocument.Parse(result.ResponseBody);
@@ -181,7 +181,7 @@ namespace Partio.Core.ThirdParty
             {
                 foreach (PolyPrompt.Models.CompletionCallDetail src in source)
                 {
-                    CallDetails.Add(new EmbeddingCallDetail
+                    AddCallDetail(new EmbeddingCallDetail
                     {
                         Purpose = "EmbeddingRequest",
                         Url = src.Url,
@@ -204,7 +204,7 @@ namespace Partio.Core.ThirdParty
         {
             lock (_CallDetailsLock)
             {
-                CallDetails.Add(new EmbeddingCallDetail
+                AddCallDetail(new EmbeddingCallDetail
                 {
                     Purpose = purpose,
                     Url = url,

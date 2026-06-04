@@ -10,9 +10,11 @@ namespace Test.Shared
 
     public static class SharedIntegrationTests
     {
+        private const string DefaultOllamaEndpoint = "http://127.0.0.1:11434";
         private static string _Endpoint = "http://localhost:8400";
         private static string _AdminKey = "partioadmin";
         private static string _TestToken = "default";
+        private static string _OllamaEndpoint = DefaultOllamaEndpoint;
 
         // Shared state across sequential tests
         private static string _TestTenantId = "";
@@ -26,11 +28,23 @@ namespace Test.Shared
         private static string _GeminiCepId = "";
         private static string _VllmCepId = "";
 
-        public static void Configure(string endpoint, string adminKey, string testToken)
+        public static void Configure(string endpoint, string adminKey, string testToken, string? ollamaEndpoint = null)
         {
             _Endpoint = endpoint;
             _AdminKey = adminKey;
             _TestToken = testToken;
+            _OllamaEndpoint = string.IsNullOrWhiteSpace(ollamaEndpoint) ? DefaultOllamaEndpoint : ollamaEndpoint.TrimEnd('/');
+
+            _TestTenantId = "";
+            _TestUserId = "";
+            _TestCredId = "";
+            _TestCredToken = "";
+            _TestEpId = "";
+            _GeminiEpId = "";
+            _VllmEpId = "";
+            _TestCepId = "";
+            _GeminiCepId = "";
+            _VllmCepId = "";
         }
 
         // ===== Health =====
@@ -243,7 +257,7 @@ namespace Test.Shared
                 {
                     TenantId = _TestTenantId,
                     Model = "test-model",
-                    Endpoint = "http://localhost:11434",
+                    Endpoint = _OllamaEndpoint,
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 61000,
@@ -276,7 +290,7 @@ namespace Test.Shared
                 {
                     TenantId = _TestTenantId,
                     Model = "test-model-v2",
-                    Endpoint = "http://localhost:11434",
+                    Endpoint = _OllamaEndpoint,
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 91000,
@@ -354,7 +368,7 @@ namespace Test.Shared
                     TenantId = _TestTenantId,
                     Name = "Test Inference",
                     Model = "test-model",
-                    Endpoint = "http://localhost:11434",
+                    Endpoint = _OllamaEndpoint,
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 61000,
@@ -388,7 +402,7 @@ namespace Test.Shared
                     TenantId = _TestTenantId,
                     Name = "Updated Inference",
                     Model = "test-model-v2",
-                    Endpoint = "http://localhost:11434",
+                    Endpoint = _OllamaEndpoint,
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 91000,
@@ -545,7 +559,7 @@ namespace Test.Shared
 
         public static async Task TestExploreEmbeddingConcurrencyLimitStatusAsync()
         {
-            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(embeddingDelayMs: 1200);
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(embeddingDelayMs: 8000);
             using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
 
             EmbeddingEndpoint? endpoint = null;
@@ -604,7 +618,7 @@ namespace Test.Shared
 
         public static async Task TestExploreCompletionConcurrencyLimitStatusAsync()
         {
-            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 1200);
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 8000);
             using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
 
             CompletionEndpoint? endpoint = null;
@@ -630,7 +644,7 @@ namespace Test.Shared
                 {
                     EndpointId = endpoint.Id,
                     Prompt = "First concurrency completion payload",
-                    TimeoutMs = 5000
+                    TimeoutMs = 15000
                 });
 
                 await provider.WaitForCompletionRequestCountAsync(1).ConfigureAwait(false);
@@ -641,7 +655,7 @@ namespace Test.Shared
                     {
                         EndpointId = endpoint.Id,
                         Prompt = "Second concurrency completion payload",
-                        TimeoutMs = 5000
+                        TimeoutMs = 15000
                     }).ConfigureAwait(false);
 
                     throw new Exception("Expected PartioException with 429");

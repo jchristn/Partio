@@ -721,16 +721,78 @@ namespace Partio.Core.Tokenization
             if (string.IsNullOrWhiteSpace(corpus)) corpus = "calibrationtoken";
 
             StringBuilder builder = new StringBuilder();
-            string candidate = string.Empty;
+            int builderTokenCount = 0;
+            int maxIterations = Math.Max(8, tokenCount * 2);
 
-            while (tokenizer.CountTokens(candidate) < tokenCount)
+            for (int i = 0; i < maxIterations && builderTokenCount < tokenCount; i++)
             {
                 if (builder.Length > 0) builder.Append(' ');
                 builder.Append(corpus);
-                candidate = tokenizer.SliceByTokenRange(builder.ToString(), 0, tokenCount).Trim();
+                builderTokenCount = tokenizer.CountTokens(builder.ToString());
+            }
+
+            string source = builder.Length > 0 ? builder.ToString() : corpus;
+            string candidate = tokenizer.SliceByTokenRange(source, 0, tokenCount).Trim();
+            candidate = PadCalibrationTextToTokenCount(tokenizer, candidate, tokenCount);
+            return TrimCalibrationTextToTokenCount(tokenizer, candidate, tokenCount);
+        }
+
+        private static string PadCalibrationTextToTokenCount(ITokenizerAdapter tokenizer, string text, int tokenCount)
+        {
+            string candidate = text ?? string.Empty;
+            int currentTokenCount = tokenizer.CountTokens(candidate);
+            if (currentTokenCount >= tokenCount) return candidate;
+
+            string[] paddingTerms = new[] { "a", "the", "sample", "data", "token", "calibration" };
+            int maxIterations = Math.Max(32, tokenCount * 4);
+
+            for (int i = 0; i < maxIterations && currentTokenCount < tokenCount; i++)
+            {
+                bool advanced = false;
+
+                foreach (string term in paddingTerms)
+                {
+                    string next = string.IsNullOrWhiteSpace(candidate)
+                        ? term
+                        : candidate + " " + term;
+                    int nextTokenCount = tokenizer.CountTokens(next);
+
+                    if (nextTokenCount > currentTokenCount && nextTokenCount <= tokenCount)
+                    {
+                        candidate = next;
+                        currentTokenCount = nextTokenCount;
+                        advanced = true;
+                        break;
+                    }
+                }
+
+                if (!advanced)
+                    break;
             }
 
             return candidate;
+        }
+
+        private static string TrimCalibrationTextToTokenCount(ITokenizerAdapter tokenizer, string text, int tokenCount)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+            int currentTokenCount = tokenizer.CountTokens(text);
+            if (currentTokenCount <= tokenCount) return text;
+
+            IReadOnlyList<int> tokenIds = tokenizer.Encode(text);
+            int take = Math.Min(tokenCount, tokenIds.Count);
+
+            while (take > 0)
+            {
+                string candidate = tokenizer.Decode(tokenIds.Take(take)).Trim();
+                if (tokenizer.CountTokens(candidate) <= tokenCount)
+                    return candidate;
+
+                take--;
+            }
+
+            return string.Empty;
         }
 
         private static void AnnotateCallDetails(
@@ -744,7 +806,8 @@ namespace Partio.Core.Tokenization
             BatchLimitModeEnum batchLimitMode,
             string? failureHint)
         {
-            if (client.CallDetails.Count <= startIndex) return;
+            IReadOnlyList<EmbeddingCallDetail> callDetails = client.CallDetails;
+            if (callDetails.Count <= startIndex) return;
 
             List<EmbeddingCallInputDetail> inputDetails = inputs.Select((input, index) =>
             {
@@ -764,9 +827,9 @@ namespace Partio.Core.Tokenization
                 .Select(detail => detail.Index)
                 .ToList();
 
-            for (int i = startIndex; i < client.CallDetails.Count; i++)
+            for (int i = startIndex; i < callDetails.Count; i++)
             {
-                EmbeddingCallDetail detail = client.CallDetails[i];
+                EmbeddingCallDetail detail = callDetails[i];
                 detail.Purpose = purpose;
                 detail.Inputs = inputDetails;
                 detail.BatchTokenCount = inputDetails.Sum(d => d.TokenCount);

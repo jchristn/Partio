@@ -29,7 +29,7 @@ namespace Partio.Sdk.Models
         public string? Output { get; set; }
 
         [JsonPropertyName("ResponseTimeMs")]
-        public long ResponseTimeMs { get; set; }
+        public double ResponseTimeMs { get; set; }
 
         [JsonPropertyName("RequestHistoryId")]
         public string? RequestHistoryId { get; set; }

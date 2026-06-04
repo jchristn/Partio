@@ -48,6 +48,7 @@ namespace Partio.Server
         private static string _Header = "[PartioServer] ";
         private static ConcurrentDictionary<string, AuthContext> _AuthContexts = new ConcurrentDictionary<string, AuthContext>();
         private static ConcurrentDictionary<string, InFlightRequest> _InFlightRequests = new ConcurrentDictionary<string, InFlightRequest>();
+        private static ConcurrentDictionary<string, CancellationToken> _RequestTokens = new ConcurrentDictionary<string, CancellationToken>();
         private static bool _ShuttingDown = false;
 
         /// <summary>
@@ -200,6 +201,7 @@ namespace Partio.Server
             {
                 string connId = ctx.Guid.ToString();
                 int statusCode = 500;
+                _RequestTokens[connId] = token;
 
                 // Create request history entry before the route handler runs
                 if (_Settings.RequestHistory.Enabled && _RequestHistoryService != null)
@@ -300,6 +302,8 @@ namespace Partio.Server
                             _Logging.Warn(_Header + "failed to update request history entry: " + ex.Message);
                         }
                     }
+
+                    _RequestTokens.TryRemove(connId, out _);
                 }
             });
 
@@ -937,21 +941,23 @@ namespace Partio.Server
         {
             string connId = req.Http.Guid.ToString();
             _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
 
             SemanticCellRequest? cellReq = null;
 
             try
             {
+                token.ThrowIfCancellationRequested();
                 AuthContext auth = (AuthContext)req.Metadata;
                 cellReq = req.GetData<SemanticCellRequest>();
                 if (cellReq == null) throw new ArgumentException("Request body is required.");
 
-                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(cellReq.EmbeddingConfiguration.EmbeddingEndpointId, auth).ConfigureAwait(false);
+                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(cellReq.EmbeddingConfiguration.EmbeddingEndpointId, auth, token).ConfigureAwait(false);
 
                 req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
                 req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
 
-                ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
+                ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint, token).ConfigureAwait(false);
                 ApplyTokenizationProfileHeaders(req.Http.Response.Headers, cellResult.TokenizationProfile);
 
                 if (inflight != null)
@@ -1008,6 +1014,7 @@ namespace Partio.Server
         {
             string connId = req.Http.Guid.ToString();
             _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
 
             List<SemanticCellRequest>? cellReqs = null;
             List<SemanticCellResponse> responses = new List<SemanticCellResponse>();
@@ -1018,6 +1025,7 @@ namespace Partio.Server
 
             try
             {
+                token.ThrowIfCancellationRequested();
                 AuthContext auth = (AuthContext)req.Metadata;
                 cellReqs = req.GetData<List<SemanticCellRequest>>();
                 if (cellReqs == null || cellReqs.Count == 0) throw new ArgumentException("Request body must contain at least one cell.");
@@ -1031,13 +1039,14 @@ namespace Partio.Server
                     string embeddingEndpointId = cellReq.EmbeddingConfiguration.EmbeddingEndpointId;
                     if (!endpointCache.TryGetValue(embeddingEndpointId, out EmbeddingEndpoint? endpoint))
                     {
-                        endpoint = await ResolveEmbeddingEndpointFromBody(embeddingEndpointId, auth).ConfigureAwait(false);
+                        endpoint = await ResolveEmbeddingEndpointFromBody(embeddingEndpointId, auth, token).ConfigureAwait(false);
                         endpointCache[embeddingEndpointId] = endpoint;
                     }
 
+                    token.ThrowIfCancellationRequested();
                     endpointIdsUsed.Add(endpoint.Id);
                     modelsUsed.Add(endpoint.Model);
-                    ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint).ConfigureAwait(false);
+                    ProcessCellResult cellResult = await ProcessCellAsync(cellReq, endpoint, token).ConfigureAwait(false);
                     responses.Add(cellResult.Response);
                     allEmbeddingCalls.AddRange(cellResult.EmbeddingCalls);
                     allCompletionCalls.AddRange(cellResult.CompletionCalls);
@@ -1112,12 +1121,12 @@ namespace Partio.Server
             }
         }
 
-        private static async Task<EmbeddingEndpoint> ResolveEmbeddingEndpointFromBody(string id, AuthContext auth)
+        private static async Task<EmbeddingEndpoint> ResolveEmbeddingEndpointFromBody(string id, AuthContext auth, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(id))
                 throw new ArgumentException("EmbeddingConfiguration.EmbeddingEndpointId is required.");
 
-            EmbeddingEndpoint? endpoint = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
+            EmbeddingEndpoint? endpoint = await _Database.EmbeddingEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false);
 
             // Return 404 if not found, or if non-admin caller's tenant doesn't match
             if (endpoint == null || (!auth.IsGlobalAdmin && endpoint.TenantId != auth.TenantId))
@@ -1161,12 +1170,12 @@ namespace Partio.Server
                 additionalDetail).ConfigureAwait(false);
         }
 
-        private static async Task<CompletionEndpoint> ResolveCompletionEndpointFromBody(string id, AuthContext auth)
+        private static async Task<CompletionEndpoint> ResolveCompletionEndpointFromBody(string id, AuthContext auth, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(id))
                 throw new ArgumentException("Completion endpoint ID is required.");
 
-            CompletionEndpoint? endpoint = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
+            CompletionEndpoint? endpoint = await _Database.CompletionEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false);
 
             if (endpoint == null || (!auth.IsGlobalAdmin && endpoint.TenantId != auth.TenantId))
                 throw new KeyNotFoundException("Completion endpoint not found: " + id);
@@ -1185,6 +1194,7 @@ namespace Partio.Server
         {
             string connId = req.Http.Guid.ToString();
             _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
 
             EndpointExplorerEmbeddingResponse response = new EndpointExplorerEmbeddingResponse();
             EndpointExplorerEmbeddingRequest? explorerReq = null;
@@ -1192,13 +1202,14 @@ namespace Partio.Server
 
             try
             {
+                token.ThrowIfCancellationRequested();
                 AuthContext auth = (AuthContext)req.Metadata;
                 explorerReq = req.GetData<EndpointExplorerEmbeddingRequest>();
                 if (explorerReq == null) throw new ArgumentException("Request body is required.");
                 if (string.IsNullOrWhiteSpace(explorerReq.EndpointId)) throw new ArgumentException("EndpointId is required.");
                 if (string.IsNullOrWhiteSpace(explorerReq.Input)) throw new ArgumentException("Input is required.");
 
-                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(explorerReq.EndpointId, auth).ConfigureAwait(false);
+                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(explorerReq.EndpointId, auth, token).ConfigureAwait(false);
                 response.EndpointId = endpoint.Id;
                 response.Model = endpoint.Model;
                 response.Input = explorerReq.Input;
@@ -1210,14 +1221,14 @@ namespace Partio.Server
                 req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
 
                 using EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
-                response.TokenizationProfile = await _TokenizationResolver.ResolveAsync(endpoint, endpoint.Model, client).ConfigureAwait(false);
+                response.TokenizationProfile = await _TokenizationResolver.ResolveAsync(endpoint, endpoint.Model, client, token: token).ConfigureAwait(false);
                 ApplyRuntimeEmbeddingSafeguards(endpoint, response.TokenizationProfile);
                 ApplyTokenizationProfileHeaders(req.Http.Response.Headers, response.TokenizationProfile);
                 int startCallIndex = client.CallDetails.Count;
 
                 try
                 {
-                    List<float> embedding = await client.EmbedAsync(explorerReq.Input, endpoint.Model).ConfigureAwait(false);
+                    List<float> embedding = await client.EmbedAsync(explorerReq.Input, endpoint.Model, token).ConfigureAwait(false);
                     if (response.TokenizationProfile != null)
                     {
                         BatchLimitModeEnum appliedBatchLimitMode = response.TokenizationProfile.BatchLimitMode == BatchLimitModeEnum.Unknown
@@ -1387,6 +1398,7 @@ namespace Partio.Server
         {
             string connId = req.Http.Guid.ToString();
             _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
 
             EndpointExplorerCompletionResponse response = new EndpointExplorerCompletionResponse();
             EndpointExplorerCompletionRequest? explorerReq = null;
@@ -1394,13 +1406,14 @@ namespace Partio.Server
 
             try
             {
+                token.ThrowIfCancellationRequested();
                 AuthContext auth = (AuthContext)req.Metadata;
                 explorerReq = req.GetData<EndpointExplorerCompletionRequest>();
                 if (explorerReq == null) throw new ArgumentException("Request body is required.");
                 if (string.IsNullOrWhiteSpace(explorerReq.EndpointId)) throw new ArgumentException("EndpointId is required.");
                 if (string.IsNullOrWhiteSpace(explorerReq.Prompt)) throw new ArgumentException("Prompt is required.");
 
-                CompletionEndpoint endpoint = await ResolveCompletionEndpointFromBody(explorerReq.EndpointId, auth).ConfigureAwait(false);
+                CompletionEndpoint endpoint = await ResolveCompletionEndpointFromBody(explorerReq.EndpointId, auth, token).ConfigureAwait(false);
                 response.EndpointId = endpoint.Id;
                 response.Model = endpoint.Model;
                 response.Prompt = explorerReq.Prompt;
@@ -1423,7 +1436,7 @@ namespace Partio.Server
                         endpoint.Model,
                         maxTokens,
                         timeoutMs,
-                        default,
+                        token,
                         explorerReq.SystemPrompt).ConfigureAwait(false);
 
                     sw.Stop();
@@ -1567,7 +1580,7 @@ namespace Partio.Server
             }
         }
 
-        private static async Task<ProcessCellResult> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint)
+        private static async Task<ProcessCellResult> ProcessCellAsync(SemanticCellRequest request, EmbeddingEndpoint endpoint, CancellationToken token = default)
         {
             ProcessCellResult cellResult = new ProcessCellResult();
             List<CompletionCallDetail> completionCalls = new List<CompletionCallDetail>();
@@ -1575,13 +1588,14 @@ namespace Partio.Server
 
             try
             {
+                token.ThrowIfCancellationRequested();
                 List<SemanticCellRequest> rootCells = SummarizationEngine.Deflatten(new List<SemanticCellRequest> { request });
 
                 if (request.SummarizationConfiguration != null)
                 {
                     SummarizationConfiguration sumConfig = request.SummarizationConfiguration;
 
-                    CompletionEndpoint? compEndpoint = await _Database.CompletionEndpoint.ReadByIdAsync(sumConfig.CompletionEndpointId).ConfigureAwait(false);
+                    CompletionEndpoint? compEndpoint = await _Database.CompletionEndpoint.ReadByIdAsync(sumConfig.CompletionEndpointId, token).ConfigureAwait(false);
                     if (compEndpoint == null)
                         throw new KeyNotFoundException("Completion endpoint not found: " + sumConfig.CompletionEndpointId);
                     if (!compEndpoint.Active)
@@ -1594,7 +1608,7 @@ namespace Partio.Server
                     using (compClient)
                     {
                         SummarizationEngine summarizer = new SummarizationEngine(_Logging);
-                        rootCells = await summarizer.SummarizeAsync(rootCells, sumConfig, compClient, compEndpoint.Model).ConfigureAwait(false);
+                        rootCells = await summarizer.SummarizeAsync(rootCells, sumConfig, compClient, compEndpoint.Model, token).ConfigureAwait(false);
                         completionCalls.AddRange(compClient.CallDetails);
                     }
                 }
@@ -1602,7 +1616,7 @@ namespace Partio.Server
                 string model = endpoint.Model;
                 using (client = CreateEmbeddingClient(endpoint))
                 {
-                    ResolvedTokenizationProfile profile = await _TokenizationResolver.ResolveAsync(endpoint, model, client).ConfigureAwait(false);
+                    ResolvedTokenizationProfile profile = await _TokenizationResolver.ResolveAsync(endpoint, model, client, token: token).ConfigureAwait(false);
                     ApplyRuntimeEmbeddingSafeguards(endpoint, profile);
                     cellResult.TokenizationProfile = profile;
                     ITokenizerAdapter tokenizer = TokenizerAdapterFactory.Create(profile);
@@ -1610,7 +1624,8 @@ namespace Partio.Server
                     List<SemanticCellResponse> rootResponses = new List<SemanticCellResponse>();
                     foreach (SemanticCellRequest rootCell in rootCells)
                     {
-                        SemanticCellResponse resp = await ProcessCellHierarchyAsync(rootCell, client, model, profile, tokenizer, cellResult.ChunkDiagnostics).ConfigureAwait(false);
+                        token.ThrowIfCancellationRequested();
+                        SemanticCellResponse resp = await ProcessCellHierarchyAsync(rootCell, client, model, profile, tokenizer, cellResult.ChunkDiagnostics, token).ConfigureAwait(false);
                         rootResponses.Add(resp);
                     }
                     cellResult.Response = rootResponses.Count > 0 ? rootResponses[0] : new SemanticCellResponse();
@@ -1633,8 +1648,10 @@ namespace Partio.Server
             string model,
             ResolvedTokenizationProfile profile,
             ITokenizerAdapter tokenizer,
-            List<ChunkProcessingDiagnostic> chunkDiagnostics)
+            List<ChunkProcessingDiagnostic> chunkDiagnostics,
+            CancellationToken token = default)
         {
+            token.ThrowIfCancellationRequested();
             ValidateStrategyForAtomType(request);
 
             if (request.ChunkingConfiguration.Strategy == ChunkStrategyEnum.RegexBased)
@@ -1711,7 +1728,7 @@ namespace Partio.Server
                     });
                 }
 
-                List<List<float>> embeddings = await EmbedTextsAsync(textsToEmbed, client, model, profile, tokenizer).ConfigureAwait(false);
+                List<List<float>> embeddings = await EmbedTextsAsync(textsToEmbed, client, model, profile, tokenizer, token).ConfigureAwait(false);
 
                 for (int i = 0; i < chunks.Count && i < embeddings.Count; i++)
                 {
@@ -1745,7 +1762,8 @@ namespace Partio.Server
                 response.Children = new List<SemanticCellResponse>();
                 foreach (SemanticCellRequest child in request.Children)
                 {
-                    SemanticCellResponse childResp = await ProcessCellHierarchyAsync(child, client, model, profile, tokenizer, chunkDiagnostics).ConfigureAwait(false);
+                    token.ThrowIfCancellationRequested();
+                    SemanticCellResponse childResp = await ProcessCellHierarchyAsync(child, client, model, profile, tokenizer, chunkDiagnostics, token).ConfigureAwait(false);
                     response.Children.Add(childResp);
                 }
             }
@@ -1758,8 +1776,10 @@ namespace Partio.Server
             EmbeddingClientBase client,
             string model,
             ResolvedTokenizationProfile profile,
-            ITokenizerAdapter tokenizer)
+            ITokenizerAdapter tokenizer,
+            CancellationToken token = default)
         {
+            token.ThrowIfCancellationRequested();
             if (textsToEmbed == null || textsToEmbed.Count == 0) return new List<List<float>>();
 
             BatchLimitModeEnum appliedBatchLimitMode = profile.BatchLimitMode == BatchLimitModeEnum.Unknown
@@ -1770,7 +1790,7 @@ namespace Partio.Server
             {
                 try
                 {
-                    return await EmbedBatchOnceAsync(textsToEmbed, client, model, profile, tokenizer, appliedBatchLimitMode).ConfigureAwait(false);
+                    return await EmbedBatchOnceAsync(textsToEmbed, client, model, profile, tokenizer, appliedBatchLimitMode, token).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -1779,7 +1799,7 @@ namespace Partio.Server
                 }
             }
 
-            return await EmbedWithWholeRequestBudgetAsync(textsToEmbed, client, model, profile, tokenizer, appliedBatchLimitMode).ConfigureAwait(false);
+            return await EmbedWithWholeRequestBudgetAsync(textsToEmbed, client, model, profile, tokenizer, appliedBatchLimitMode, token).ConfigureAwait(false);
         }
 
         private static async Task<List<List<float>>> EmbedWithWholeRequestBudgetAsync(
@@ -1788,12 +1808,14 @@ namespace Partio.Server
             string model,
             ResolvedTokenizationProfile profile,
             ITokenizerAdapter tokenizer,
-            BatchLimitModeEnum appliedBatchLimitMode)
+            BatchLimitModeEnum appliedBatchLimitMode,
+            CancellationToken token = default)
         {
             List<List<float>> allEmbeddings = new List<List<float>>();
             int index = 0;
             while (index < textsToEmbed.Count)
             {
+                token.ThrowIfCancellationRequested();
                 List<string> batch = new List<string>();
                 int batchTokens = 0;
 
@@ -1825,7 +1847,8 @@ namespace Partio.Server
                     model,
                     profile,
                     tokenizer,
-                    appliedBatchLimitMode).ConfigureAwait(false);
+                    appliedBatchLimitMode,
+                    token).ConfigureAwait(false);
                 allEmbeddings.AddRange(embeddings);
             }
 
@@ -1838,11 +1861,13 @@ namespace Partio.Server
             string model,
             ResolvedTokenizationProfile profile,
             ITokenizerAdapter tokenizer,
-            BatchLimitModeEnum appliedBatchLimitMode)
+            BatchLimitModeEnum appliedBatchLimitMode,
+            CancellationToken token = default)
         {
+            token.ThrowIfCancellationRequested();
             try
             {
-                return await EmbedBatchOnceAsync(inputs, client, model, profile, tokenizer, appliedBatchLimitMode).ConfigureAwait(false);
+                return await EmbedBatchOnceAsync(inputs, client, model, profile, tokenizer, appliedBatchLimitMode, token).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1858,14 +1883,16 @@ namespace Partio.Server
                         model,
                         profile,
                         tokenizer,
-                        appliedBatchLimitMode).ConfigureAwait(false);
+                        appliedBatchLimitMode,
+                        token).ConfigureAwait(false);
                     List<List<float>> rightEmbeddings = await EmbedBatchWithContextFallbackAsync(
                         right,
                         client,
                         model,
                         profile,
                         tokenizer,
-                        appliedBatchLimitMode).ConfigureAwait(false);
+                        appliedBatchLimitMode,
+                        token).ConfigureAwait(false);
                     leftEmbeddings.AddRange(rightEmbeddings);
                     return leftEmbeddings;
                 }
@@ -1878,7 +1905,8 @@ namespace Partio.Server
                         model,
                         profile,
                         tokenizer,
-                        appliedBatchLimitMode).ConfigureAwait(false)
+                        appliedBatchLimitMode,
+                        token).ConfigureAwait(false)
                 };
             }
         }
@@ -1889,8 +1917,10 @@ namespace Partio.Server
             string model,
             ResolvedTokenizationProfile profile,
             ITokenizerAdapter tokenizer,
-            BatchLimitModeEnum appliedBatchLimitMode)
+            BatchLimitModeEnum appliedBatchLimitMode,
+            CancellationToken token = default)
         {
+            token.ThrowIfCancellationRequested();
             int tokenCount = tokenizer.CountTokens(input);
             if (tokenCount <= 1)
                 throw new InvalidOperationException("A single-token embedding input was rejected for exceeding context length.");
@@ -1915,13 +1945,15 @@ namespace Partio.Server
             List<List<float>> splitEmbeddings = new List<List<float>>();
             foreach (string splitInput in splitInputs)
             {
+                token.ThrowIfCancellationRequested();
                 List<List<float>> result = await EmbedBatchWithContextFallbackAsync(
                     new List<string> { splitInput },
                     client,
                     model,
                     profile,
                     tokenizer,
-                    appliedBatchLimitMode).ConfigureAwait(false);
+                    appliedBatchLimitMode,
+                    token).ConfigureAwait(false);
                 splitEmbeddings.Add(result[0]);
             }
 
@@ -1934,12 +1966,14 @@ namespace Partio.Server
             string model,
             ResolvedTokenizationProfile profile,
             ITokenizerAdapter tokenizer,
-            BatchLimitModeEnum appliedBatchLimitMode)
+            BatchLimitModeEnum appliedBatchLimitMode,
+            CancellationToken token = default)
         {
+            token.ThrowIfCancellationRequested();
             int startCallIndex = client.CallDetails.Count;
             try
             {
-                List<List<float>> embeddings = await client.EmbedBatchAsync(inputs, model).ConfigureAwait(false);
+                List<List<float>> embeddings = await client.EmbedBatchAsync(inputs, model, token).ConfigureAwait(false);
                 AnnotateEmbeddingRequestCalls(client, startCallIndex, inputs, tokenizer, profile, appliedBatchLimitMode, null);
                 return embeddings;
             }
@@ -2206,7 +2240,8 @@ namespace Partio.Server
             BatchLimitModeEnum appliedBatchLimitMode,
             string? failureHint)
         {
-            if (client.CallDetails.Count <= startCallIndex) return;
+            IReadOnlyList<EmbeddingCallDetail> callDetails = client.CallDetails;
+            if (callDetails.Count <= startCallIndex) return;
 
             List<EmbeddingCallInputDetail> inputDetails = inputs.Select((input, index) =>
             {
@@ -2242,9 +2277,9 @@ namespace Partio.Server
                     + " tokens.";
             }
 
-            for (int i = startCallIndex; i < client.CallDetails.Count; i++)
+            for (int i = startCallIndex; i < callDetails.Count; i++)
             {
-                EmbeddingCallDetail detail = client.CallDetails[i];
+                EmbeddingCallDetail detail = callDetails[i];
                 if (string.IsNullOrEmpty(detail.Purpose))
                     detail.Purpose = "EmbeddingRequest";
                 detail.Inputs = inputDetails;
@@ -2839,6 +2874,16 @@ namespace Partio.Server
         #endregion
 
         #region Helpers
+
+        private static CancellationToken GetRequestCancellationToken(ApiRequest req)
+        {
+            if (req != null && _RequestTokens.TryGetValue(req.Http.Guid.ToString(), out CancellationToken token))
+            {
+                return token;
+            }
+
+            return CancellationToken.None;
+        }
 
         private static void RequireAdmin(ApiRequest req)
         {

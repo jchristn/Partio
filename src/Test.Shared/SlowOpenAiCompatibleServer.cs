@@ -32,9 +32,15 @@ namespace Test.Shared
 
         public int CompletionRequestCount => Volatile.Read(ref _CompletionRequestCount);
 
+        public int MaxActiveCompletionRequests => Volatile.Read(ref _MaxActiveCompletionRequests);
+
         private int _EmbeddingRequestCount = 0;
 
         private int _CompletionRequestCount = 0;
+
+        private int _ActiveCompletionRequests = 0;
+
+        private int _MaxActiveCompletionRequests = 0;
 
         public SlowOpenAiCompatibleServer(int embeddingDelayMs = 0, int completionDelayMs = 0, int modelsDelayMs = 0)
         {
@@ -140,24 +146,34 @@ namespace Test.Shared
                     if (request.Method == "POST" && request.Path == "/v1/chat/completions")
                     {
                         Interlocked.Increment(ref _CompletionRequestCount);
-                        await DelayIfNeededAsync(CompletionDelayMs, token).ConfigureAwait(false);
-                        await WriteJsonResponseAsync(stream, 200, new
+                        int activeCompletionRequests = Interlocked.Increment(ref _ActiveCompletionRequests);
+                        UpdateMaxActiveCompletionRequests(activeCompletionRequests);
+
+                        try
                         {
-                            id = "chatcmpl_stub",
-                            @object = "chat.completion",
-                            created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            model = CompletionModel,
-                            choices = new[]
+                            await DelayIfNeededAsync(CompletionDelayMs, token).ConfigureAwait(false);
+                            await WriteJsonResponseAsync(stream, 200, new
                             {
-                                new
+                                id = "chatcmpl_stub",
+                                @object = "chat.completion",
+                                created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                model = CompletionModel,
+                                choices = new[]
                                 {
-                                    index = 0,
-                                    message = new { role = "assistant", content = "Stub completion response." },
-                                    finish_reason = "stop"
-                                }
-                            },
-                            usage = new { prompt_tokens = 1, completion_tokens = 1, total_tokens = 2 }
-                        }).ConfigureAwait(false);
+                                    new
+                                    {
+                                        index = 0,
+                                        message = new { role = "assistant", content = "Stub completion response." },
+                                        finish_reason = "stop"
+                                    }
+                                },
+                                usage = new { prompt_tokens = 1, completion_tokens = 1, total_tokens = 2 }
+                            }).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            Interlocked.Decrement(ref _ActiveCompletionRequests);
+                        }
                         return;
                     }
 
@@ -303,6 +319,20 @@ namespace Test.Shared
         {
             if (delayMs > 0)
                 await Task.Delay(delayMs, token).ConfigureAwait(false);
+        }
+
+        private void UpdateMaxActiveCompletionRequests(int activeCompletionRequests)
+        {
+            while (true)
+            {
+                int currentMax = Volatile.Read(ref _MaxActiveCompletionRequests);
+                if (activeCompletionRequests <= currentMax)
+                    return;
+
+                int previous = Interlocked.CompareExchange(ref _MaxActiveCompletionRequests, activeCompletionRequests, currentMax);
+                if (previous == currentMax)
+                    return;
+            }
         }
 
         private static async Task WriteJsonResponseAsync(NetworkStream stream, int statusCode, object payload)

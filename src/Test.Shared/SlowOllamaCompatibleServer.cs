@@ -121,6 +121,37 @@ namespace Test.Shared
                     RawHttpRequest? request = await ReadRequestAsync(stream, token).ConfigureAwait(false);
                     if (request == null) return;
 
+                    if ((request.Method == "GET" || request.Method == "HEAD") && request.Path == "/api/tags")
+                    {
+                        await WriteJsonResponseAsync(stream, 200, new
+                        {
+                            models = new[]
+                            {
+                                new
+                                {
+                                    name = EmbeddingModel,
+                                    model = EmbeddingModel,
+                                    modified_at = DateTime.UtcNow.ToString("O"),
+                                    size = 1
+                                },
+                                new
+                                {
+                                    name = CompletionModel,
+                                    model = CompletionModel,
+                                    modified_at = DateTime.UtcNow.ToString("O"),
+                                    size = 1
+                                }
+                            }
+                        }).ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (request.Method == "POST" && request.Path == "/api/show")
+                    {
+                        await WriteJsonResponseAsync(stream, 404, new { error = "capability probe not implemented" }).ConfigureAwait(false);
+                        return;
+                    }
+
                     if (request.Method == "POST" && request.Path == "/api/embed")
                     {
                         Interlocked.Increment(ref _EmbeddingRequestCount);

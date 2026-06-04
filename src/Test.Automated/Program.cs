@@ -1,20 +1,31 @@
 namespace Test.Automated
 {
+    using Test.Shared;
+
     public class Program
     {
-        public static async Task Main(string[] args)
+        public static async Task<int> Main(string[] args)
         {
-            string endpoint = "http://localhost:8400";
-            string adminKey = "partioadmin";
-            string testToken = "default";
+            if (args.Length > 0)
+            {
+                string endpoint = args[0];
+                string adminKey = args.Length >= 2 ? args[1] : "partioadmin";
+                string testToken = args.Length >= 3 ? args[2] : "default";
+                string upstreamEndpoint = args.Length >= 4 ? args[3] : "http://127.0.0.1:11434";
 
-            if (args.Length >= 1) endpoint = args[0];
-            if (args.Length >= 2) adminKey = args[1];
-            if (args.Length >= 3) testToken = args[2];
+                AutomatedConsoleRunner externalRunner = new AutomatedConsoleRunner(endpoint, adminKey, testToken, upstreamEndpoint);
+                AutomatedRunSummary externalSummary = await externalRunner.RunAsync().ConfigureAwait(false);
+                return externalSummary.FailedCount > 0 ? 1 : 0;
+            }
 
-            AutomatedConsoleRunner runner = new AutomatedConsoleRunner(endpoint, adminKey, testToken);
+            await using SelfHostedPartioTestEnvironment environment = await SelfHostedPartioTestEnvironment.StartAsync().ConfigureAwait(false);
+            AutomatedConsoleRunner runner = new AutomatedConsoleRunner(
+                environment.Endpoint,
+                environment.AdminKey,
+                environment.TestToken,
+                environment.UpstreamEndpoint);
             AutomatedRunSummary summary = await runner.RunAsync().ConfigureAwait(false);
-            Environment.Exit(summary.FailedCount > 0 ? 1 : 0);
+            return summary.FailedCount > 0 ? 1 : 0;
         }
     }
 }

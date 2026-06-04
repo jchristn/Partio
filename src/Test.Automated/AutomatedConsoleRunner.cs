@@ -8,12 +8,14 @@ namespace Test.Automated
         private readonly string _Endpoint;
         private readonly string _AdminKey;
         private readonly string _TestToken;
+        private readonly string _UpstreamEndpoint;
 
-        public AutomatedConsoleRunner(string endpoint, string adminKey, string testToken)
+        public AutomatedConsoleRunner(string endpoint, string adminKey, string testToken, string? upstreamEndpoint = null)
         {
             _Endpoint = endpoint;
             _AdminKey = adminKey;
             _TestToken = testToken;
+            _UpstreamEndpoint = string.IsNullOrWhiteSpace(upstreamEndpoint) ? "http://127.0.0.1:11434" : upstreamEndpoint.TrimEnd('/');
         }
 
         public async Task<AutomatedRunSummary> RunAsync()
@@ -29,6 +31,7 @@ namespace Test.Automated
             Console.WriteLine();
             Console.WriteLine("  Partio Automated Test Suite");
             Console.WriteLine("  Endpoint  : " + _Endpoint);
+            Console.WriteLine("  Upstream  : " + _UpstreamEndpoint);
             Console.WriteLine("  Admin Key : " + _AdminKey);
             Console.WriteLine("  Token     : " + _TestToken);
             Console.WriteLine();
@@ -49,7 +52,7 @@ namespace Test.Automated
             await ExecuteTestsAsync(SharedSummarizationUnitTests.GetTests(), results);
 
             // Run integration tests
-            SharedIntegrationTests.Configure(_Endpoint, _AdminKey, _TestToken);
+            SharedIntegrationTests.Configure(_Endpoint, _AdminKey, _TestToken, _UpstreamEndpoint);
             await ExecuteTestsAsync(SharedIntegrationTests.GetTests(), results);
 
             totalSw.Stop();

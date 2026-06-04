@@ -73,7 +73,7 @@ namespace Partio.Core.ThirdParty
                         effectiveTimeoutMs,
                         ex);
                 }
-                catch (Exception ex) when (IsTimeoutLike(ex))
+                catch (Exception ex) when (!token.IsCancellationRequested && IsTimeoutLike(ex))
                 {
                     AppendCallDetails(client.CallDetails);
                     throw new Partio.Core.Exceptions.ProviderOperationTimeoutException(
@@ -111,7 +111,7 @@ namespace Partio.Core.ThirdParty
             {
                 foreach (PolyPrompt.Models.CompletionCallDetail src in source)
                 {
-                    CallDetails.Add(new Partio.Core.Models.CompletionCallDetail
+                    AddCallDetail(new Partio.Core.Models.CompletionCallDetail
                     {
                         Url = src.Url,
                         Method = src.Method,
@@ -133,7 +133,7 @@ namespace Partio.Core.ThirdParty
         {
             lock (_CallDetailsLock)
             {
-                CallDetails.Add(new Partio.Core.Models.CompletionCallDetail
+                AddCallDetail(new Partio.Core.Models.CompletionCallDetail
                 {
                     Url = url,
                     Method = method,

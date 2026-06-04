@@ -503,7 +503,7 @@ namespace Test.Shared
                     }).ToList();
                 }
 
-                CallDetails.Add(new EmbeddingCallDetail
+                AddCallDetail(new EmbeddingCallDetail
                 {
                     Purpose = "EmbeddingRequest",
                     Url = _Endpoint.TrimEnd('/') + "/api/embed",

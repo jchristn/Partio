@@ -528,6 +528,17 @@ sdk/js/              - JavaScript SDK and test harness
 docker/              - Docker Compose setup and default configuration
 ```
 
+## Testing
+
+The .NET test runners are self-contained by default. `Test.Automated`, `Test.XUnit`, and `Test.Nunit` start an isolated Partio server process backed by a temporary SQLite database, plus an Ollama-compatible upstream stub on a random local port. No local Docker deployment, Partio server, or Ollama instance is required for the default test runs.
+
+```bash
+dotnet test src/Partio.sln
+src/Test.Automated/bin/Debug/net10.0/Test.Automated.exe
+```
+
+`Test.Automated` still accepts explicit endpoint arguments for manual external-target runs: `Test.Automated <partio-url> <admin-key> <test-token> [upstream-url]`.
+
 ## Docker Images
 
 | Image | Description | Default Port |
