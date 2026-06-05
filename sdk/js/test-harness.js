@@ -6,14 +6,22 @@ import { PartioClient, PartioError } from './partio-sdk.js';
 
 const endpoint = process.argv[2] || 'http://localhost:8400';
 const adminKey = process.argv[3] || 'partioadmin';
+const providerEndpoint = process.env.PARTIO_TEST_PROVIDER_ENDPOINT || process.argv[4] || 'http://localhost:11434';
+const embeddingModel = process.env.PARTIO_TEST_EMBEDDING_MODEL || process.argv[5] || 'nomic-embed-text';
+const completionModel = process.env.PARTIO_TEST_COMPLETION_MODEL || process.argv[6] || 'gemma3:4b';
+const providerAvailable = await isProviderAvailable(providerEndpoint);
 
 console.log('Partio JavaScript SDK Test Harness');
 console.log(`Endpoint: ${endpoint}`);
 console.log(`Admin Key: ${adminKey}`);
+console.log(`Provider Endpoint: ${providerEndpoint} (${providerAvailable ? 'available' : 'unavailable; provider-dependent tests will skip'})`);
+console.log(`Embedding Model: ${embeddingModel}`);
+console.log(`Completion Model: ${completionModel}`);
 console.log();
 
 let passed = 0;
 let failed = 0;
+let skipped = 0;
 const failedTests = [];
 const totalStart = Date.now();
 
@@ -38,9 +46,41 @@ async function runTest(name, fn) {
     passed++;
   } catch (ex) {
     const elapsed = Date.now() - start;
+    if (ex instanceof SkipTest) {
+      console.log(`  SKIP  ${name} (${elapsed}ms) - ${ex.message}`);
+      skipped++;
+      return;
+    }
     console.log(`  FAIL  ${name} (${elapsed}ms) - ${ex.message}`);
     failed++;
     failedTests.push(name);
+  }
+}
+
+class SkipTest extends Error {}
+
+function skipIfProviderUnavailable() {
+  if (!providerAvailable) {
+    throw new SkipTest(`requires reachable Ollama-compatible provider at ${providerEndpoint}`);
+  }
+}
+
+async function getHarnessEmbeddingEndpoint() {
+  const activeEp = await client.getEndpoint(testEpId);
+  if (!activeEp || activeEp.Active === false) {
+    throw new SkipTest('no active embedding endpoint');
+  }
+  return activeEp;
+}
+
+async function isProviderAvailable(url) {
+  try {
+    const response = await fetch(`${url.replace(/\/+$/, '')}/api/tags`, {
+      signal: AbortSignal.timeout(2000)
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -133,8 +173,8 @@ await runTest('Create Endpoint', async () => {
   const ep = await client.createEndpoint({
     TenantId: testTenantId,
     Name: 'Test Embedding',
-    Model: 'test-model',
-    Endpoint: 'http://localhost:11434',
+    Model: embeddingModel,
+    Endpoint: providerEndpoint,
     ApiFormat: 'Ollama',
     HealthCheckEnabled: false,
     MaximumTimeoutMs: 61000,
@@ -156,7 +196,7 @@ await runTest('Create Endpoint', async () => {
 
 await runTest('Read Endpoint', async () => {
   const ep = await client.getEndpoint(testEpId);
-  if (!ep || ep.Model !== 'test-model') throw new Error('Mismatch');
+  if (!ep || ep.Model !== embeddingModel) throw new Error('Mismatch');
   if (ep.MaximumTimeoutMs !== 61000) throw new Error('MaximumTimeoutMs mismatch');
   if (ep.MaxConcurrentRequests !== 3) throw new Error('MaxConcurrentRequests mismatch');
   if (!ep.Tokenization) throw new Error('Expected tokenization override');
@@ -168,8 +208,8 @@ await runTest('Update Endpoint', async () => {
   const updated = await client.updateEndpoint(testEpId, {
     TenantId: testTenantId,
     Name: 'Updated Embedding',
-    Model: 'test-model-updated',
-    Endpoint: 'http://localhost:11434',
+    Model: embeddingModel,
+    Endpoint: providerEndpoint,
     ApiFormat: 'Ollama',
     HealthCheckEnabled: false,
     MaximumTimeoutMs: 91000,
@@ -214,7 +254,7 @@ await runTest('Create vLLM Embedding Endpoint', async () => {
 
 // Completion Endpoint CRUD
 await runTest('Create Completion Endpoint', async () => {
-  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: 'test-model', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 61000, MaxConcurrentRequests: 3 });
+  const cep = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Test Inference', Model: completionModel, Endpoint: providerEndpoint, ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 61000, MaxConcurrentRequests: 3 });
   if (!cep || !cep.Id) throw new Error('No response');
   if (cep.MaximumTimeoutMs !== 61000) throw new Error('MaximumTimeoutMs mismatch');
   if (cep.MaxConcurrentRequests !== 3) throw new Error('MaxConcurrentRequests mismatch');
@@ -223,13 +263,13 @@ await runTest('Create Completion Endpoint', async () => {
 
 await runTest('Read Completion Endpoint', async () => {
   const cep = await client.getCompletionEndpoint(testCepId);
-  if (!cep || cep.Model !== 'test-model') throw new Error('Mismatch');
+  if (!cep || cep.Model !== completionModel) throw new Error('Mismatch');
   if (cep.MaximumTimeoutMs !== 61000) throw new Error('MaximumTimeoutMs mismatch');
   if (cep.MaxConcurrentRequests !== 3) throw new Error('MaxConcurrentRequests mismatch');
 });
 
 await runTest('Update Completion Endpoint', async () => {
-  const updated = await client.updateCompletionEndpoint(testCepId, { TenantId: testTenantId, Name: 'Updated Inference', Model: 'test-model-updated', Endpoint: 'http://localhost:11434', ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 91000, MaxConcurrentRequests: 5 });
+  const updated = await client.updateCompletionEndpoint(testCepId, { TenantId: testTenantId, Name: 'Updated Inference', Model: completionModel, Endpoint: providerEndpoint, ApiFormat: 'Ollama', HealthCheckEnabled: false, MaximumTimeoutMs: 91000, MaxConcurrentRequests: 5 });
   if (!updated) throw new Error('Update failed');
   if (updated.MaximumTimeoutMs !== 91000) throw new Error('MaximumTimeoutMs mismatch');
   if (updated.MaxConcurrentRequests !== 5) throw new Error('MaxConcurrentRequests mismatch');
@@ -256,6 +296,33 @@ await runTest('Create vLLM Completion Endpoint', async () => {
   vllmCepId = cep.Id;
 });
 
+await runTest('Load Completion Endpoint', async () => {
+  skipIfProviderUnavailable();
+  const result = await client.loadCompletionEndpoint(testCepId, { KeepAlive: '30m' });
+  if (!result) throw new Error('No response');
+  if (!result.Success) throw new Error(`Load failed: ${result.Message}`);
+  if (result.EndpointId !== testCepId) throw new Error('Endpoint mismatch');
+  if (result.Outcome !== 'Loaded') throw new Error(`Expected Loaded, got ${result.Outcome}`);
+});
+
+await runTest('Load Embedding Endpoint', async () => {
+  skipIfProviderUnavailable();
+  const result = await client.loadEndpoint(testEpId, { KeepAlive: '30m' });
+  if (!result) throw new Error('No response');
+  if (!result.Success) throw new Error(`Load failed: ${result.Message}`);
+  if (result.EndpointId !== testEpId) throw new Error('Endpoint mismatch');
+  if (result.Outcome !== 'Loaded') throw new Error(`Expected Loaded, got ${result.Outcome}`);
+});
+
+await runTest('Unsupported Native Load', async () => {
+  try {
+    await client.loadCompletionEndpoint(vllmCepId, { Strategy: 'NativeProviderLoad', RequireNativeLoad: true });
+    throw new Error('Expected PartioError with 409');
+  } catch (err) {
+    if (err.statusCode !== 409) throw err;
+  }
+});
+
 // Request History
 await runTest('Enumerate Request History', async () => {
   const result = await client.enumerateRequestHistory();
@@ -263,6 +330,7 @@ await runTest('Enumerate Request History', async () => {
 });
 
 await runTest('Explore Embedding Endpoint', async () => {
+  skipIfProviderUnavailable();
   const result = await client.exploreEmbeddingEndpoint({
     EndpointId: testEpId,
     Input: 'JavaScript SDK explorer embedding payload'
@@ -278,6 +346,7 @@ await runTest('Explore Embedding Endpoint', async () => {
 });
 
 await runTest('Explore Completion Endpoint', async () => {
+  skipIfProviderUnavailable();
   const result = await client.exploreCompletionEndpoint({
     EndpointId: testCepId,
     Prompt: 'JavaScript SDK explorer completion payload'
@@ -288,9 +357,8 @@ await runTest('Explore Completion Endpoint', async () => {
 
 // Process Single Cell (requires an active embedding endpoint)
 await runTest('Process Single Cell', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   const result = await client.process({
     Type: 'Text',
@@ -311,9 +379,8 @@ await runTest('Process Single Cell', async () => {
 
 // Process Table strategies
 await runTest('Process Table (Row)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   const result = await client.process({
     Type: 'Table',
@@ -325,9 +392,8 @@ await runTest('Process Table (Row)', async () => {
 });
 
 await runTest('Process Table (RowWithHeaders)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   const result = await client.process({
     Type: 'Table',
@@ -339,9 +405,8 @@ await runTest('Process Table (RowWithHeaders)', async () => {
 });
 
 await runTest('Process Table (RowGroupWithHeaders)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   const result = await client.process({
     Type: 'Table',
@@ -353,9 +418,8 @@ await runTest('Process Table (RowGroupWithHeaders)', async () => {
 });
 
 await runTest('Process Table (KeyValuePairs)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   const result = await client.process({
     Type: 'Table',
@@ -367,9 +431,8 @@ await runTest('Process Table (KeyValuePairs)', async () => {
 });
 
 await runTest('Process Table (WholeTable)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   const result = await client.process({
     Type: 'Table',
@@ -381,9 +444,8 @@ await runTest('Process Table (WholeTable)', async () => {
 });
 
 await runTest('Process Text (RegexBased)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   const result = await client.process({
     Type: 'Text',
@@ -399,9 +461,8 @@ await runTest('Process Text (RegexBased)', async () => {
 });
 
 await runTest('Regex Strategy Missing Pattern (400)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   try {
     await client.process({
@@ -417,9 +478,8 @@ await runTest('Regex Strategy Missing Pattern (400)', async () => {
 });
 
 await runTest('Table Strategy on Text (400)', async () => {
-  const eps = await client.enumerateEndpoints();
-  const activeEp = eps && eps.Data ? eps.Data.find(e => e.Active !== false) : null;
-  if (!activeEp) throw new Error('SKIP: no active embedding endpoint');
+  skipIfProviderUnavailable();
+  const activeEp = await getHarnessEmbeddingEndpoint();
 
   try {
     await client.process({
@@ -498,7 +558,7 @@ const totalMs = Date.now() - totalStart;
 
 console.log();
 console.log('=== SUMMARY ===');
-console.log(`Total: ${passed + failed}  Passed: ${passed}  Failed: ${failed}`);
+console.log(`Total: ${passed + failed + skipped}  Passed: ${passed}  Failed: ${failed}  Skipped: ${skipped}`);
 console.log(`Runtime: ${totalMs}ms`);
 console.log(`Result: ${failed === 0 ? 'PASS' : 'FAIL'}`);
 

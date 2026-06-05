@@ -37,6 +37,8 @@ namespace Test.Shared
 
         public string UpstreamEndpoint { get; }
 
+        public int UpstreamTagsRequestCount => _Ollama.TagsRequestCount;
+
         public string AdminKey { get; } = "partioadmin";
 
         public string TestToken { get; } = "default";
@@ -44,6 +46,16 @@ namespace Test.Shared
         public string WorkingDirectory { get; }
 
         public string ServerAssemblyPath { get; }
+
+        public int GetUpstreamRawPathRequestCount(string rawPath)
+        {
+            return _Ollama.GetRawPathRequestCount(rawPath);
+        }
+
+        public async Task WaitForUpstreamRawPathRequestCountAsync(string rawPath, int minCount, int timeoutMs = 5000)
+        {
+            await _Ollama.WaitForRawPathRequestCountAsync(rawPath, minCount, timeoutMs).ConfigureAwait(false);
+        }
 
         public static async Task<SelfHostedPartioTestEnvironment> StartAsync(CancellationToken token = default)
         {

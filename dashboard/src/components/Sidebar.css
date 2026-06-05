@@ -82,3 +82,42 @@
   color: rgba(255, 255, 255, 0.8);
   background: rgba(255, 255, 255, 0.08);
 }
+
+@media (max-width: 720px) {
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+  }
+
+  .sidebar-header {
+    padding: 8px 12px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-logo {
+    height: 36px;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    padding: 8px 0;
+    overflow-x: auto;
+  }
+
+  .nav-section-header,
+  .nav-divider,
+  .sidebar-footer {
+    display: none;
+  }
+
+  .nav-link {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+}

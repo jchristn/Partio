@@ -5,12 +5,17 @@
   padding: 12px 24px;
   background: var(--topbar-bg);
   border-bottom: 1px solid var(--topbar-border);
+  gap: 12px;
+  min-width: 0;
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .topbar-label {
@@ -22,6 +27,8 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .connection-dot {
@@ -42,6 +49,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .role-indicator {
@@ -119,4 +127,16 @@
   background: var(--bg-color);
   color: var(--text-primary);
   border-color: var(--text-secondary);
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    align-items: flex-start;
+    padding: 10px 16px;
+  }
+
+  .topbar-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }

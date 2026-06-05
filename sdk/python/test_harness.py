@@ -1,21 +1,35 @@
 """Partio Python SDK Test Harness."""
 
+import os
 import sys
 import time
+import urllib.request
 from partio_sdk import PartioClient, PartioError
+
+
+class SkipTest(Exception):
+    pass
 
 
 def main():
     endpoint = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8400"
     admin_key = sys.argv[2] if len(sys.argv) > 2 else "partioadmin"
+    provider_endpoint = os.environ.get("PARTIO_TEST_PROVIDER_ENDPOINT") or (sys.argv[3] if len(sys.argv) > 3 else "http://localhost:11434")
+    embedding_model = os.environ.get("PARTIO_TEST_EMBEDDING_MODEL") or (sys.argv[4] if len(sys.argv) > 4 else "nomic-embed-text")
+    completion_model = os.environ.get("PARTIO_TEST_COMPLETION_MODEL") or (sys.argv[5] if len(sys.argv) > 5 else "gemma3:4b")
+    provider_available = is_provider_available(provider_endpoint)
 
     print("Partio Python SDK Test Harness")
     print(f"Endpoint: {endpoint}")
     print(f"Admin Key: {admin_key}")
+    print(f"Provider Endpoint: {provider_endpoint} ({'available' if provider_available else 'unavailable; provider-dependent tests will skip'})")
+    print(f"Embedding Model: {embedding_model}")
+    print(f"Completion Model: {completion_model}")
     print()
 
     passed = 0
     failed = 0
+    skipped = 0
     failed_tests = []
     total_start = time.time()
 
@@ -32,18 +46,32 @@ def main():
     with PartioClient(endpoint, admin_key) as client:
 
         def run_test(name, fn):
-            nonlocal passed, failed
+            nonlocal passed, failed, skipped
             start = time.time()
             try:
                 fn()
                 elapsed = int((time.time() - start) * 1000)
                 print(f"  PASS  {name} ({elapsed}ms)")
                 passed += 1
+            except SkipTest as ex:
+                elapsed = int((time.time() - start) * 1000)
+                print(f"  SKIP  {name} ({elapsed}ms) - {ex}")
+                skipped += 1
             except Exception as ex:
                 elapsed = int((time.time() - start) * 1000)
                 print(f"  FAIL  {name} ({elapsed}ms) - {ex}")
                 failed += 1
                 failed_tests.append(name)
+
+        def skip_if_provider_unavailable():
+            if not provider_available:
+                raise SkipTest(f"requires reachable Ollama-compatible provider at {provider_endpoint}")
+
+        def get_harness_embedding_endpoint():
+            active_ep = client.get_endpoint(test_ep_id)
+            if not active_ep or active_ep.get("Active", True) is False:
+                raise SkipTest("no active embedding endpoint")
+            return active_ep
 
         # Health
         def test_health():
@@ -138,8 +166,8 @@ def main():
             ep = client.create_endpoint({
                 "TenantId": test_tenant_id,
                 "Name": "Test Embedding",
-                "Model": "test-model",
-                "Endpoint": "http://localhost:11434",
+                "Model": embedding_model,
+                "Endpoint": provider_endpoint,
                 "ApiFormat": "Ollama",
                 "HealthCheckEnabled": False,
                 "MaximumTimeoutMs": 61000,
@@ -161,7 +189,7 @@ def main():
 
         def test_read_endpoint():
             ep = client.get_endpoint(test_ep_id)
-            assert ep and ep["Model"] == "test-model"
+            assert ep and ep["Model"] == embedding_model
             assert ep.get("MaximumTimeoutMs") == 61000
             assert ep.get("MaxConcurrentRequests") == 3
             assert ep.get("Tokenization"), "Expected tokenization override"
@@ -173,8 +201,8 @@ def main():
             updated = client.update_endpoint(test_ep_id, {
                 "TenantId": test_tenant_id,
                 "Name": "Updated Embedding",
-                "Model": "test-model-updated",
-                "Endpoint": "http://localhost:11434",
+                "Model": embedding_model,
+                "Endpoint": provider_endpoint,
                 "ApiFormat": "Ollama",
                 "HealthCheckEnabled": False,
                 "MaximumTimeoutMs": 91000,
@@ -222,7 +250,7 @@ def main():
         # Completion Endpoint CRUD
         def test_create_completion_endpoint():
             nonlocal test_cep_id
-            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Test Inference", "Model": "test-model", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 61000, "MaxConcurrentRequests": 3})
+            cep = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Test Inference", "Model": completion_model, "Endpoint": provider_endpoint, "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 61000, "MaxConcurrentRequests": 3})
             assert cep and "Id" in cep
             assert cep.get("MaximumTimeoutMs") == 61000
             assert cep.get("MaxConcurrentRequests") == 3
@@ -231,13 +259,13 @@ def main():
 
         def test_read_completion_endpoint():
             cep = client.get_completion_endpoint(test_cep_id)
-            assert cep and cep["Model"] == "test-model"
+            assert cep and cep["Model"] == completion_model
             assert cep.get("MaximumTimeoutMs") == 61000
             assert cep.get("MaxConcurrentRequests") == 3
         run_test("Read Completion Endpoint", test_read_completion_endpoint)
 
         def test_update_completion_endpoint():
-            updated = client.update_completion_endpoint(test_cep_id, {"TenantId": test_tenant_id, "Name": "Updated Inference", "Model": "test-model-updated", "Endpoint": "http://localhost:11434", "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 91000, "MaxConcurrentRequests": 5})
+            updated = client.update_completion_endpoint(test_cep_id, {"TenantId": test_tenant_id, "Name": "Updated Inference", "Model": completion_model, "Endpoint": provider_endpoint, "ApiFormat": "Ollama", "HealthCheckEnabled": False, "MaximumTimeoutMs": 91000, "MaxConcurrentRequests": 5})
             assert updated is not None
             assert updated.get("MaximumTimeoutMs") == 91000
             assert updated.get("MaxConcurrentRequests") == 5
@@ -266,6 +294,32 @@ def main():
             vllm_cep_id = cep["Id"]
         run_test("Create vLLM Completion Endpoint", test_create_vllm_completion_endpoint)
 
+        def test_load_completion_endpoint():
+            skip_if_provider_unavailable()
+            result = client.load_completion_endpoint(test_cep_id, {"KeepAlive": "30m"})
+            assert result is not None, "No response"
+            assert result.get("Success") is True, "Load failed: " + str(result.get("Message"))
+            assert result.get("EndpointId") == test_cep_id, "Endpoint mismatch"
+            assert result.get("Outcome") == "Loaded", "Expected Loaded"
+        run_test("Load Completion Endpoint", test_load_completion_endpoint)
+
+        def test_load_embedding_endpoint():
+            skip_if_provider_unavailable()
+            result = client.load_endpoint(test_ep_id, {"KeepAlive": "30m"})
+            assert result is not None, "No response"
+            assert result.get("Success") is True, "Load failed: " + str(result.get("Message"))
+            assert result.get("EndpointId") == test_ep_id, "Endpoint mismatch"
+            assert result.get("Outcome") == "Loaded", "Expected Loaded"
+        run_test("Load Embedding Endpoint", test_load_embedding_endpoint)
+
+        def test_unsupported_native_load():
+            try:
+                client.load_completion_endpoint(vllm_cep_id, {"Strategy": "NativeProviderLoad", "RequireNativeLoad": True})
+                raise Exception("Expected PartioError with 409")
+            except PartioError as exc:
+                assert exc.status_code == 409
+        run_test("Unsupported Native Load", test_unsupported_native_load)
+
         # Request History
         def test_enumerate_history():
             result = client.enumerate_request_history()
@@ -273,6 +327,7 @@ def main():
         run_test("Enumerate Request History", test_enumerate_history)
 
         def test_explore_embedding_endpoint():
+            skip_if_provider_unavailable()
             result = client.explore_embedding_endpoint({
                 "EndpointId": test_ep_id,
                 "Input": "Python SDK explorer embedding payload"
@@ -288,6 +343,7 @@ def main():
         run_test("Explore Embedding Endpoint", test_explore_embedding_endpoint)
 
         def test_explore_completion_endpoint():
+            skip_if_provider_unavailable()
             result = client.explore_completion_endpoint({
                 "EndpointId": test_cep_id,
                 "Prompt": "Python SDK explorer completion payload"
@@ -299,15 +355,8 @@ def main():
 
         # Process Single Cell (requires an active embedding endpoint)
         def test_process_single_cell():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             result = client.process({
                 "Type": "Text",
@@ -328,15 +377,8 @@ def main():
 
         # Process Table - Row
         def test_process_table_row():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             result = client.process({
                 "Type": "Table",
@@ -350,15 +392,8 @@ def main():
 
         # Process Table - RowWithHeaders
         def test_process_table_row_with_headers():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             result = client.process({
                 "Type": "Table",
@@ -372,15 +407,8 @@ def main():
 
         # Process Table - RowGroupWithHeaders
         def test_process_table_row_group():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             result = client.process({
                 "Type": "Table",
@@ -394,15 +422,8 @@ def main():
 
         # Process Table - KeyValuePairs
         def test_process_table_kv():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             result = client.process({
                 "Type": "Table",
@@ -416,15 +437,8 @@ def main():
 
         # Process Table - WholeTable
         def test_process_table_whole():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             result = client.process({
                 "Type": "Table",
@@ -438,15 +452,8 @@ def main():
 
         # Process Text - RegexBased
         def test_process_regex_based():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             result = client.process({
                 "Type": "Text",
@@ -464,15 +471,8 @@ def main():
 
         # Regex Strategy Missing Pattern (400)
         def test_regex_missing_pattern():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             try:
                 client.process({
@@ -488,15 +488,8 @@ def main():
 
         # Negative test: table strategy on text atom
         def test_table_strategy_on_text():
-            eps = client.enumerate_endpoints()
-            active_ep = None
-            if eps and "Data" in eps:
-                for ep in eps["Data"]:
-                    if ep.get("Active", True) is not False:
-                        active_ep = ep
-                        break
-            if not active_ep:
-                raise Exception("SKIP: no active embedding endpoint")
+            skip_if_provider_unavailable()
+            active_ep = get_harness_embedding_endpoint()
 
             try:
                 client.process({
@@ -576,7 +569,7 @@ def main():
 
     print()
     print("=== SUMMARY ===")
-    print(f"Total: {passed + failed}  Passed: {passed}  Failed: {failed}")
+    print(f"Total: {passed + failed + skipped}  Passed: {passed}  Failed: {failed}  Skipped: {skipped}")
     print(f"Runtime: {total_ms}ms")
     print(f"Result: {'PASS' if failed == 0 else 'FAIL'}")
 
@@ -588,6 +581,14 @@ def main():
 
     print("================")
     sys.exit(0 if failed == 0 else 1)
+
+
+def is_provider_available(endpoint):
+    try:
+        with urllib.request.urlopen(endpoint.rstrip("/") + "/api/tags", timeout=2) as response:
+            return 200 <= response.status < 300
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

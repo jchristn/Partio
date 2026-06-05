@@ -9,7 +9,6 @@ import TagInput from './TagInput';
 import KeyValueEditor from './KeyValueEditor';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
-import TooltipIcon from './TooltipIcon';
 import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
@@ -170,8 +169,8 @@ export default function TenantsView() {
           <div className="form-group">
             <label className="checkbox-label">
               <input type="checkbox" checked={form.Active} onChange={e => setForm({ ...form, Active: e.target.checked })} />
-              {' '}Active
-              <TooltipIcon content="Enable or disable this tenant. Inactive tenants remain stored but should not be used for new activity." />
+              {' '}
+              <Tooltip content="Enable or disable this tenant. Inactive tenants remain stored but should not be used for new activity.">Active</Tooltip>
             </label>
           </div>
           <div className="btn-group" style={{ marginTop: 16 }}>

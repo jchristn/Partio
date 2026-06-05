@@ -1,12 +1,15 @@
 .workspace {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .workspace-main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .workspace-content {
@@ -14,4 +17,20 @@
   padding: 24px;
   overflow-y: auto;
   background: var(--bg-color);
+  min-width: 0;
+}
+
+.workspace-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .workspace {
+    flex-direction: column;
+  }
+
+  .workspace-content {
+    padding: 16px;
+  }
 }

@@ -1,5 +1,6 @@
 namespace Partio.Core.ThirdParty
 {
+    using System.Net.Http.Headers;
     using System.Text;
     using System.Text.Json;
     using System.Text.RegularExpressions;
@@ -35,6 +36,8 @@ namespace Partio.Core.ThirdParty
             : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests)
         {
             _Header = "[OllamaEmbedding] ";
+            if (!string.IsNullOrWhiteSpace(_ApiKey))
+                _HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _ApiKey);
         }
 
         /// <inheritdoc />
@@ -100,6 +103,49 @@ namespace Partio.Core.ThirdParty
 
                 return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
             }
+        }
+
+        /// <inheritdoc />
+        public override async Task<ModelLoadProviderResult> LoadModelAsync(string model, ModelLoadRequest request, CancellationToken token = default)
+        {
+            if (request == null) request = new ModelLoadRequest();
+
+            if (request.Strategy == ModelLoadStrategyEnum.WarmRequest)
+                return await base.LoadModelAsync(model, request, token).ConfigureAwait(false);
+
+            string keepAlive = string.IsNullOrWhiteSpace(request.KeepAlive) ? "30m" : request.KeepAlive!;
+            string input = request.SampleInput;
+            string url = _Endpoint.TrimEnd('/') + "/api/embed";
+            string requestBodyJson =
+                "{"
+                + "\"model\":\"" + JsonEncodedText.Encode(model).ToString() + "\","
+                + "\"input\":\"" + JsonEncodedText.Encode(input).ToString() + "\","
+                + "\"keep_alive\":\"" + JsonEncodedText.Encode(keepAlive).ToString() + "\""
+                + "}";
+
+            using StringContent content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json");
+            EmbeddingHttpResult result = await PostAndRecordAsync(url, content, requestBodyJson, "ModelLoad", token).ConfigureAwait(false);
+
+            if (!result.IsSuccessStatusCode)
+            {
+                return new ModelLoadProviderResult
+                {
+                    Success = false,
+                    StatusCode = 502,
+                    Outcome = ModelLoadOutcomeEnum.Failed,
+                    Strategy = ModelLoadStrategyEnum.NativeProviderLoad,
+                    Message = "Ollama embed keep-alive request failed with upstream status " + result.StatusCode + "."
+                };
+            }
+
+            return new ModelLoadProviderResult
+            {
+                Success = true,
+                StatusCode = 200,
+                Outcome = ModelLoadOutcomeEnum.Loaded,
+                Strategy = ModelLoadStrategyEnum.NativeProviderLoad,
+                Message = "Ollama accepted the embedding keep-alive request."
+            };
         }
 
         /// <inheritdoc />

@@ -12,6 +12,7 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Credential CRUD (`createCredential`, `getCredential`, `updateCredential`, `deleteCredential`, `credentialExists`, `enumerateCredentials`)
 - Embedding Endpoint CRUD (`createEndpoint`, `getEndpoint`, `updateEndpoint`, `deleteEndpoint`, `endpointExists`, `enumerateEndpoints`)
 - Completion Endpoint CRUD (`createCompletionEndpoint`, `getCompletionEndpoint`, `updateCompletionEndpoint`, `deleteCompletionEndpoint`, `completionEndpointExists`, `enumerateCompletionEndpoints`)
+- Model loading and warming (`loadEndpoint`, `loadCompletionEndpoint`)
 - Embedding & Completion Endpoint Health (`getEndpointHealth`, `getAllEndpointHealth`, `getCompletionEndpointHealth`, `getAllCompletionEndpointHealth`)
 - Semantic cell processing (`process`, `processBatch`)
 - Endpoint explorer (`exploreEmbeddingEndpoint`, `exploreCompletionEndpoint`)
@@ -20,6 +21,7 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
 Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
 Use `MaximumTimeoutMs` and `MaxConcurrentRequests` on embedding or completion endpoints to cap upstream provider calls per endpoint. Process routes that hit the timeout cap raise `PartioError` with status code `504`; concurrency-limit rejections raise `PartioError` with status code `429`.
+Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.
 
 ## Prerequisites
 
@@ -83,6 +85,13 @@ const embeddingExplorer = await client.exploreEmbeddingEndpoint({
 });
 
 console.log(embeddingExplorer.TokenizationProfile.ProfileSource);
+
+const loadResult = await client.loadCompletionEndpoint('cep_your_completion_endpoint_id', {
+  Strategy: 'Auto',
+  KeepAlive: '30m'
+});
+
+console.log(`${loadResult.Outcome}: ${loadResult.Message}`);
 ```
 
 Explorer requests still return `200 OK` for provider-level failures reported in the response payload, but concurrency-limit rejections return HTTP `429`.

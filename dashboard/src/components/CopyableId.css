@@ -2,6 +2,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .id-cell {
@@ -11,6 +13,10 @@
   border-radius: 4px;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .copy-btn {

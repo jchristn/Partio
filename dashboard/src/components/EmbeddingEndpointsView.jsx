@@ -8,9 +8,10 @@ import DataTable from './DataTable';
 import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
+import LoadModelModal from './modals/LoadModelModal';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
-import TooltipIcon from './TooltipIcon';
+import { t } from '../i18n';
 import './EmbeddingEndpointsView.css';
 
 function getApiFormatDefaults(apiFormat) {
@@ -312,6 +313,8 @@ export default function EmbeddingEndpointsView() {
   const [healthDetailModal, setHealthDetailModal] = useState({ isOpen: false, data: null });
   const [healthFieldsEdited, setHealthFieldsEdited] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [loadModal, setLoadModal] = useState({ isOpen: false, endpoint: null });
+  const [loadingModelId, setLoadingModelId] = useState(null);
 
   const loadTenants = useCallback(async () => {
     try {
@@ -459,12 +462,16 @@ export default function EmbeddingEndpointsView() {
     }
   };
 
+  const openLoadModel = (item) => {
+    setLoadModal({ isOpen: true, endpoint: item });
+  };
+
   const columns = [
     {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique endpoint identifier (click to copy)',
-      width: '280px',
+      width: '18%',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
@@ -486,27 +493,6 @@ export default function EmbeddingEndpointsView() {
       key: 'ApiFormat',
       label: 'Format',
       tooltip: 'API protocol format: Ollama, OpenAI, Gemini, or vLLM'
-    },
-    {
-      key: 'MaximumTimeoutMs',
-      label: 'Req Timeout',
-      tooltip: 'Maximum upstream embedding-provider request timeout enforced by Partio for this endpoint, in milliseconds.',
-      filterValue: (item) => formatMaximumTimeout(item.MaximumTimeoutMs),
-      render: (item) => <span className="timeout-summary">{formatMaximumTimeout(item.MaximumTimeoutMs)}</span>
-    },
-    {
-      key: 'MaxConcurrentRequests',
-      label: 'Max Concurrent',
-      tooltip: 'Maximum concurrent upstream embedding-provider requests allowed for this endpoint.',
-      filterValue: (item) => formatMaxConcurrentRequests(item.MaxConcurrentRequests),
-      render: (item) => <span className="timeout-summary">{formatMaxConcurrentRequests(item.MaxConcurrentRequests)}</span>
-    },
-    {
-      key: 'Tokenization',
-      label: 'Tokenization',
-      tooltip: 'Endpoint override shown here. When unset, Partio resolves tokenization dynamically through probe, provider defaults, and the global fallback.',
-      filterValue: (item) => item.Tokenization ? 'Override' : 'Auto',
-      render: (item) => <span className="tokenization-summary">{describeTokenization(item.Tokenization)}</span>
     },
     {
       key: 'Active',
@@ -545,25 +531,16 @@ export default function EmbeddingEndpointsView() {
       }
     },
     {
-      key: 'EnableRequestHistory',
-      label: 'History',
-      tooltip: 'Whether request/response logging is enabled',
-      filterValue: (item) => item.EnableRequestHistory ? 'On' : 'Off',
-      render: (item) => (
-        <span className={`status-badge ${item.EnableRequestHistory ? 'active' : 'inactive'}`}>
-          {item.EnableRequestHistory ? 'On' : 'Off'}
-        </span>
-      )
-    },
-    {
       key: 'actions',
       label: 'Actions',
       tooltip: 'Edit, view JSON, or delete this endpoint',
+      width: '76px',
       isAction: true,
       preventRowClick: true,
       sortable: false,
       render: (item) => (
         <ActionMenu actions={[
+          { label: t('loadModel.action'), onClick: () => openLoadModel(item), disabled: loadingModelId === item.Id },
           { label: 'Edit', onClick: () => openEdit(item) },
           { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
           ...(item.HealthCheckEnabled ? [{ label: 'Health Detail', onClick: () => openHealthDetail(item.Id) }] : []),
@@ -672,15 +649,15 @@ export default function EmbeddingEndpointsView() {
             <div className="form-group">
               <label className="checkbox-label">
                 <input type="checkbox" checked={form.Active} onChange={e => setForm({ ...form, Active: e.target.checked })} />
-                {' '}Active
-                <TooltipIcon content="Enable or disable this embedding endpoint. Inactive endpoints are ignored for new work." />
+                {' '}
+                <Tooltip content="Enable or disable this embedding endpoint. Inactive endpoints are ignored for new work.">Active</Tooltip>
               </label>
             </div>
             <div className="form-group">
               <label className="checkbox-label">
                 <input type="checkbox" checked={form.EnableRequestHistory} onChange={e => setForm({ ...form, EnableRequestHistory: e.target.checked })} />
-                {' '}Enable Request History
-                <TooltipIcon content="Log all embedding requests and responses for debugging and auditing." />
+                {' '}
+                <Tooltip content="Log all embedding requests and responses for debugging and auditing.">Enable Request History</Tooltip>
               </label>
             </div>
             <div className="endpoint-form-row">
@@ -708,8 +685,10 @@ export default function EmbeddingEndpointsView() {
                   checked={form.Tokenization.Enabled}
                   onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, Enabled: e.target.checked } })}
                 />
-                {' '}Configure Tokenization Override
-                <TooltipIcon content="Override tokenizer family, model budget, and batching semantics for this endpoint. When disabled, Partio resolves tokenization from probe, provider defaults, then the global fallback." />
+                {' '}
+                <Tooltip content="Override tokenizer family, model budget, and batching semantics for this endpoint. When disabled, Partio resolves tokenization from probe, provider defaults, then the global fallback.">
+                  Configure Tokenization Override
+                </Tooltip>
               </label>
             </div>
             {form.Tokenization.Enabled && (
@@ -721,8 +700,10 @@ export default function EmbeddingEndpointsView() {
                       checked={form.Tokenization.AutoDetect}
                       onChange={e => setForm({ ...form, Tokenization: { ...form.Tokenization, AutoDetect: e.target.checked } })}
                     />
-                    {' '}Auto-detect Missing Fields
-                    <TooltipIcon content="If enabled, Partio can still probe or fall back for any tokenization field you leave blank here." />
+                    {' '}
+                    <Tooltip content="If enabled, Partio can still probe or fall back for any tokenization field you leave blank here.">
+                      Auto-detect Missing Fields
+                    </Tooltip>
                   </label>
                 </div>
                 <div className="endpoint-form-row">
@@ -781,8 +762,8 @@ export default function EmbeddingEndpointsView() {
             <div className="form-group">
               <label className="checkbox-label">
                 <input type="checkbox" checked={form.HealthCheckEnabled} onChange={e => setForm({ ...form, HealthCheckEnabled: e.target.checked })} />
-                {' '}Enable Health Checks
-                <TooltipIcon content="Periodically probe the endpoint to track availability and uptime." />
+                {' '}
+                <Tooltip content="Periodically probe the endpoint to track availability and uptime.">Enable Health Checks</Tooltip>
               </label>
             </div>
             {form.HealthCheckEnabled && (
@@ -841,8 +822,10 @@ export default function EmbeddingEndpointsView() {
                 <div className="form-group">
                   <label className="checkbox-label">
                     <input type="checkbox" checked={form.HealthCheckUseAuth} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckUseAuth: e.target.checked }); }} />
-                    {' '}Send API Key as Bearer Token
-                    <TooltipIcon content="Include the API key as a Bearer token in health check requests. Enable for authenticated endpoints." />
+                    {' '}
+                    <Tooltip content="Include the API key as a Bearer token in health check requests. Enable for authenticated endpoints.">
+                      Send API Key as Bearer Token
+                    </Tooltip>
                   </label>
                 </div>
               </>
@@ -872,6 +855,15 @@ export default function EmbeddingEndpointsView() {
         onClose={() => setJsonModal({ isOpen: false, data: null })}
         title="Endpoint JSON"
         data={jsonModal.data}
+      />
+      <LoadModelModal
+        isOpen={loadModal.isOpen}
+        endpoint={loadModal.endpoint}
+        endpointType="Embedding"
+        onClose={() => setLoadModal({ isOpen: false, endpoint: null })}
+        onLoad={(id, request) => api.loadEndpoint(id, request)}
+        onComplete={() => { load(); loadHealth(); }}
+        onLoadingChange={(id, isLoading) => setLoadingModelId(isLoading ? id : null)}
       />
       <HealthDetailModal
         isOpen={healthDetailModal.isOpen}

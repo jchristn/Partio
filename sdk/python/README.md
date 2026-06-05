@@ -12,6 +12,7 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 - Credential CRUD (`create_credential`, `get_credential`, `update_credential`, `delete_credential`, `credential_exists`, `enumerate_credentials`)
 - Embedding Endpoint CRUD (`create_endpoint`, `get_endpoint`, `update_endpoint`, `delete_endpoint`, `endpoint_exists`, `enumerate_endpoints`)
 - Completion Endpoint CRUD (`create_completion_endpoint`, `get_completion_endpoint`, `update_completion_endpoint`, `delete_completion_endpoint`, `completion_endpoint_exists`, `enumerate_completion_endpoints`)
+- Model loading and warming (`load_endpoint`, `load_completion_endpoint`)
 - Embedding & Completion Endpoint Health (`get_endpoint_health`, `get_all_endpoint_health`, `get_completion_endpoint_health`, `get_all_completion_endpoint_health`)
 - Semantic cell processing (`process`, `process_batch`)
 - Endpoint explorer (`explore_embedding_endpoint`, `explore_completion_endpoint`)
@@ -20,6 +21,7 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
 Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
 Use `MaximumTimeoutMs` and `MaxConcurrentRequests` on embedding or completion endpoints to cap upstream provider calls per endpoint. Process routes that hit the timeout cap raise `PartioError` with status code `504`; concurrency-limit rejections raise `PartioError` with status code `429`.
+Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.
 
 ## Prerequisites
 
@@ -86,6 +88,12 @@ with PartioClient("http://localhost:8400", "your-access-key") as client:
         "Input": "Tokenizer diagnostics sample"
     })
     print(embedding_explorer["TokenizationProfile"]["ProfileSource"])
+
+    load_result = client.load_completion_endpoint("cep_your_completion_endpoint_id", {
+        "Strategy": "Auto",
+        "KeepAlive": "30m"
+    })
+    print(f"{load_result['Outcome']}: {load_result['Message']}")
 ```
 
 Explorer requests still return `200 OK` for provider-level failures reported in the response payload, but concurrency-limit rejections return HTTP `429`.

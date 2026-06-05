@@ -121,6 +121,7 @@ export class PartioClient {
     } catch { return false; }
   }
   async enumerateEndpoints(req = {}) { return this._request('POST', '/v1.0/endpoints/embedding/enumerate', req); }
+  async loadEndpoint(id, request = {}) { return this._request('POST', `/v1.0/endpoints/embedding/${id}/load`, request); }
 
   // Embedding Endpoint Health
   async getEndpointHealth(id) { return this._request('GET', `/v1.0/endpoints/embedding/${id}/health`); }
@@ -141,6 +142,7 @@ export class PartioClient {
     } catch { return false; }
   }
   async enumerateCompletionEndpoints(req = {}) { return this._request('POST', '/v1.0/endpoints/completion/enumerate', req); }
+  async loadCompletionEndpoint(id, request = {}) { return this._request('POST', `/v1.0/endpoints/completion/${id}/load`, request); }
 
   // Completion Endpoint Health
   async getCompletionEndpointHealth(id) { return this._request('GET', `/v1.0/endpoints/completion/${id}/health`); }

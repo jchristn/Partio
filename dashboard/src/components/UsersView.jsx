@@ -7,7 +7,6 @@ import ActionMenu from './ActionMenu';
 import DataTable from './DataTable';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
-import TooltipIcon from './TooltipIcon';
 import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
@@ -194,15 +193,15 @@ export default function UsersView() {
           <div className="form-group">
             <label className="checkbox-label">
               <input type="checkbox" checked={form.IsAdmin} onChange={e => setForm({ ...form, IsAdmin: e.target.checked })} />
-              {' '}Admin
-              <TooltipIcon content="Grant administrative privileges. Admins can manage dashboard resources and settings." />
+              {' '}
+              <Tooltip content="Grant administrative privileges. Admins can manage dashboard resources and settings.">Admin</Tooltip>
             </label>
           </div>
           <div className="form-group">
             <label className="checkbox-label">
               <input type="checkbox" checked={form.Active} onChange={e => setForm({ ...form, Active: e.target.checked })} />
-              {' '}Active
-              <TooltipIcon content="Enable or disable this user account. Inactive users should not be able to authenticate." />
+              {' '}
+              <Tooltip content="Enable or disable this user account. Inactive users should not be able to authenticate.">Active</Tooltip>
             </label>
           </div>
           <div className="btn-group" style={{ marginTop: 16 }}><button className="primary" onClick={handleSave}>Save</button><button className="secondary" onClick={() => setShowModal(false)}>Cancel</button></div>

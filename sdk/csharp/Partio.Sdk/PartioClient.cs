@@ -204,6 +204,9 @@ namespace Partio.Sdk
         public Task<EnumerationResult<EmbeddingEndpoint>?> EnumerateEndpointsAsync(EnumerationRequest? req = null) =>
             MakeRequestAsync<EnumerationResult<EmbeddingEndpoint>>(HttpMethod.Post, "/v1.0/endpoints/embedding/enumerate", req ?? new EnumerationRequest());
 
+        public Task<ModelLoadResponse?> LoadEndpointAsync(string id, ModelLoadRequest? request = null) =>
+            MakeRequestAsync<ModelLoadResponse>(HttpMethod.Post, $"/v1.0/endpoints/embedding/{id}/load", request ?? new ModelLoadRequest());
+
         // Embedding Endpoint Health
         public Task<EndpointHealthStatus?> GetEndpointHealthAsync(string id) =>
             MakeRequestAsync<EndpointHealthStatus>(HttpMethod.Get, $"/v1.0/endpoints/embedding/{id}/health");
@@ -238,6 +241,9 @@ namespace Partio.Sdk
 
         public Task<EnumerationResult<CompletionEndpoint>?> EnumerateCompletionEndpointsAsync(EnumerationRequest? req = null) =>
             MakeRequestAsync<EnumerationResult<CompletionEndpoint>>(HttpMethod.Post, "/v1.0/endpoints/completion/enumerate", req ?? new EnumerationRequest());
+
+        public Task<ModelLoadResponse?> LoadCompletionEndpointAsync(string id, ModelLoadRequest? request = null) =>
+            MakeRequestAsync<ModelLoadResponse>(HttpMethod.Post, $"/v1.0/endpoints/completion/{id}/load", request ?? new ModelLoadRequest());
 
         // Completion Endpoint Health
         public Task<EndpointHealthStatus?> GetCompletionEndpointHealthAsync(string id) =>

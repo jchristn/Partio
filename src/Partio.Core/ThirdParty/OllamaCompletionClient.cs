@@ -1,5 +1,10 @@
 namespace Partio.Core.ThirdParty
 {
+    using System.Net.Http.Headers;
+    using System.Text;
+    using System.Text.Json;
+    using Partio.Core.Enums;
+    using Partio.Core.Models;
     using PolyPrompt.Clients;
     using PolyPrompt.Models;
     using SyslogLogging;
@@ -30,6 +35,8 @@ namespace Partio.Core.ThirdParty
             : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests)
         {
             _Header = "[OllamaCompletion] ";
+            if (!string.IsNullOrWhiteSpace(_ApiKey))
+                _HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _ApiKey);
         }
 
         /// <inheritdoc />
@@ -95,6 +102,54 @@ namespace Partio.Core.ThirdParty
 
                 return response.Success ? response.Text?.Trim() : null;
             }
+        }
+
+        /// <inheritdoc />
+        public override async Task<ModelLoadProviderResult> LoadModelAsync(string model, ModelLoadRequest request, CancellationToken token = default)
+        {
+            if (request == null) request = new ModelLoadRequest();
+
+            if (request.Strategy == ModelLoadStrategyEnum.WarmRequest)
+                return await base.LoadModelAsync(model, request, token).ConfigureAwait(false);
+
+            string keepAlive = string.IsNullOrWhiteSpace(request.KeepAlive) ? "30m" : request.KeepAlive!;
+            string url = _Endpoint.TrimEnd('/') + "/api/generate";
+            string requestBodyJson =
+                "{"
+                + "\"model\":\"" + JsonEncodedText.Encode(model).ToString() + "\","
+                + "\"prompt\":\"\","
+                + "\"stream\":false,"
+                + "\"keep_alive\":\"" + JsonEncodedText.Encode(keepAlive).ToString() + "\""
+                + "}";
+
+            using StringContent content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json");
+            CompletionHttpResult result = await PostAndRecordAsync(
+                url,
+                content,
+                requestBodyJson,
+                request.ResolveTimeoutMs(_MaximumTimeoutMs),
+                token).ConfigureAwait(false);
+
+            if (!result.IsSuccessStatusCode)
+            {
+                return new ModelLoadProviderResult
+                {
+                    Success = false,
+                    StatusCode = 502,
+                    Outcome = ModelLoadOutcomeEnum.Failed,
+                    Strategy = ModelLoadStrategyEnum.NativeProviderLoad,
+                    Message = "Ollama preload request failed with upstream status " + result.StatusCode + "."
+                };
+            }
+
+            return new ModelLoadProviderResult
+            {
+                Success = true,
+                StatusCode = 200,
+                Outcome = ModelLoadOutcomeEnum.Loaded,
+                Strategy = ModelLoadStrategyEnum.NativeProviderLoad,
+                Message = "Ollama accepted the preload request."
+            };
         }
 
         private OllamaClient CreateConfiguredClient(string model, int timeoutMs)

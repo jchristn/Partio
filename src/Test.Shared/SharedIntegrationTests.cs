@@ -469,6 +469,474 @@ namespace Test.Shared
             }
         }
 
+        // ===== Model Loading =====
+
+        public static async Task TestLoadOllamaCompletionEndpointAsync()
+        {
+            using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
+            {
+                ModelLoadResponse? result = await admin.LoadCompletionEndpointAsync(_TestCepId, new ModelLoadRequest
+                {
+                    KeepAlive = "30m"
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Load failed: " + result.Message);
+                if (result.EndpointId != _TestCepId) throw new Exception("Endpoint mismatch");
+                if (result.Outcome != "Loaded") throw new Exception("Expected Loaded, got " + result.Outcome);
+                if (result.Strategy != "NativeProviderLoad") throw new Exception("Expected NativeProviderLoad, got " + result.Strategy);
+                if (result.CompletionCalls == null || result.CompletionCalls.Count == 0) throw new Exception("Expected upstream completion call details");
+                if (!string.IsNullOrWhiteSpace(result.RequestHistoryId))
+                {
+                    RequestHistoryDetail? detail = await admin.GetRequestHistoryDetailAsync(result.RequestHistoryId).ConfigureAwait(false);
+                    if (detail == null || detail.ModelLoad == null || !detail.ModelLoad.ContainsKey("Outcome"))
+                        throw new Exception("Expected ModelLoad metadata in request history detail");
+                }
+            }
+        }
+
+        public static async Task TestLoadOllamaEmbeddingEndpointAsync()
+        {
+            using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
+            {
+                ModelLoadResponse? result = await admin.LoadEndpointAsync(_TestEpId, new ModelLoadRequest
+                {
+                    KeepAlive = "30m"
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Load failed: " + result.Message);
+                if (result.EndpointId != _TestEpId) throw new Exception("Endpoint mismatch");
+                if (result.Outcome != "Loaded") throw new Exception("Expected Loaded, got " + result.Outcome);
+                if (result.Strategy != "NativeProviderLoad") throw new Exception("Expected NativeProviderLoad, got " + result.Strategy);
+                if (result.EmbeddingCalls == null || result.EmbeddingCalls.Count == 0) throw new Exception("Expected upstream embedding call details");
+            }
+        }
+
+        public static async Task TestWarmOpenAiCompletionEndpointAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "OpenAI Warm Test",
+                    Model = provider.CompletionModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    ApiKey = "test-api-key",
+                    HealthCheckEnabled = false
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                ModelLoadResponse? result = await admin.LoadCompletionEndpointAsync(endpoint.Id, new ModelLoadRequest
+                {
+                    Strategy = "WarmRequest",
+                    SampleInput = "OpenAI warm probe",
+                    MaxTokens = 1
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Warm failed: " + result.Message);
+                if (result.Outcome != "Warmed") throw new Exception("Expected Warmed, got " + result.Outcome);
+                await provider.WaitForCompletionRequestCountAsync(1).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestWarmOpenAiEmbeddingEndpointAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            EmbeddingEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "OpenAI Embedding Warm Test",
+                    Model = provider.EmbeddingModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    ApiKey = "test-api-key",
+                    HealthCheckEnabled = false
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                ModelLoadResponse? result = await admin.LoadEndpointAsync(endpoint.Id, new ModelLoadRequest
+                {
+                    Strategy = "WarmRequest",
+                    SampleInput = "OpenAI embedding warm probe"
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Warm failed: " + result.Message);
+                if (result.Outcome != "Warmed") throw new Exception("Expected Warmed, got " + result.Outcome);
+                await provider.WaitForEmbeddingRequestCountAsync(1).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestWarmVllmCompletionEndpointAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "vLLM Warm Test",
+                    Model = provider.CompletionModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "vLLM",
+                    HealthCheckEnabled = false
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                ModelLoadResponse? result = await admin.LoadCompletionEndpointAsync(endpoint.Id, new ModelLoadRequest
+                {
+                    Strategy = "WarmRequest",
+                    SampleInput = "vLLM warm probe",
+                    MaxTokens = 1
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Warm failed: " + result.Message);
+                if (result.Outcome != "Warmed") throw new Exception("Expected Warmed, got " + result.Outcome);
+                if (string.IsNullOrWhiteSpace(result.Message) || !result.Message.Contains("vLLM", StringComparison.OrdinalIgnoreCase))
+                    throw new Exception("Expected vLLM limitation message");
+                await provider.WaitForCompletionRequestCountAsync(1).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestWarmVllmEmbeddingEndpointAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            EmbeddingEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "vLLM Embedding Warm Test",
+                    Model = provider.EmbeddingModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "vLLM",
+                    HealthCheckEnabled = false
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                ModelLoadResponse? result = await admin.LoadEndpointAsync(endpoint.Id, new ModelLoadRequest
+                {
+                    Strategy = "WarmRequest",
+                    SampleInput = "vLLM embedding warm probe"
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Warm failed: " + result.Message);
+                if (result.Outcome != "Warmed") throw new Exception("Expected Warmed, got " + result.Outcome);
+                if (string.IsNullOrWhiteSpace(result.Message) || !result.Message.Contains("vLLM", StringComparison.OrdinalIgnoreCase))
+                    throw new Exception("Expected vLLM limitation message");
+                await provider.WaitForEmbeddingRequestCountAsync(1).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestWarmGeminiCompletionEndpointAsync()
+        {
+            using SlowGeminiCompatibleServer provider = new SlowGeminiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Gemini Warm Test",
+                    Model = provider.CompletionModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "Gemini",
+                    ApiKey = "test-api-key",
+                    HealthCheckEnabled = false
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                ModelLoadResponse? result = await admin.LoadCompletionEndpointAsync(endpoint.Id, new ModelLoadRequest
+                {
+                    Strategy = "WarmRequest",
+                    SampleInput = "Gemini warm probe",
+                    MaxTokens = 1
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Warm failed: " + result.Message);
+                if (result.Outcome != "Warmed") throw new Exception("Expected Warmed, got " + result.Outcome);
+                await provider.WaitForCompletionRequestCountAsync(1).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestWarmGeminiEmbeddingEndpointAsync()
+        {
+            using SlowGeminiCompatibleServer provider = new SlowGeminiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            EmbeddingEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Gemini Embedding Warm Test",
+                    Model = provider.EmbeddingModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "Gemini",
+                    ApiKey = "test-api-key",
+                    HealthCheckEnabled = false
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                ModelLoadResponse? result = await admin.LoadEndpointAsync(endpoint.Id, new ModelLoadRequest
+                {
+                    Strategy = "WarmRequest",
+                    SampleInput = "Gemini embedding warm probe"
+                });
+
+                if (result == null) throw new Exception("No load response");
+                if (!result.Success) throw new Exception("Warm failed: " + result.Message);
+                if (result.Outcome != "Warmed") throw new Exception("Expected Warmed, got " + result.Outcome);
+                await provider.WaitForEmbeddingRequestCountAsync(1).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestUnsupportedNativeCompletionLoadAsync()
+        {
+            using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
+            {
+                try
+                {
+                    await admin.LoadCompletionEndpointAsync(_VllmCepId, new ModelLoadRequest
+                    {
+                        Strategy = "NativeProviderLoad",
+                        RequireNativeLoad = true
+                    });
+                    throw new Exception("Expected PartioException with 409");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 409)
+                {
+                    // Expected
+                }
+            }
+        }
+
+        public static async Task TestInvalidLoadKeepAliveAsync()
+        {
+            using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
+            {
+                try
+                {
+                    await admin.LoadCompletionEndpointAsync(_TestCepId, new ModelLoadRequest
+                    {
+                        KeepAlive = "0"
+                    });
+                    throw new Exception("Expected PartioException with 400");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 400)
+                {
+                    // Expected
+                }
+            }
+        }
+
+        public static async Task TestLoadMissingEndpointAsync()
+        {
+            using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
+            {
+                try
+                {
+                    await admin.LoadCompletionEndpointAsync("cep_missing_load_test", new ModelLoadRequest());
+                    throw new Exception("Expected PartioException with 404");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 404)
+                {
+                    // Expected
+                }
+            }
+        }
+
+        public static async Task TestLoadInactiveEndpointAsync()
+        {
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+            CompletionEndpoint? endpoint = null;
+
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Inactive Load Test",
+                    Model = "test-model",
+                    Endpoint = _OllamaEndpoint,
+                    ApiFormat = "Ollama",
+                    Active = false,
+                    HealthCheckEnabled = false
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                try
+                {
+                    await admin.LoadCompletionEndpointAsync(endpoint.Id, new ModelLoadRequest());
+                    throw new Exception("Expected PartioException with 400");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 400)
+                {
+                    // Expected
+                }
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestLoadCompletionTimeoutStatusAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 1200);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Load Timeout Test",
+                    Model = provider.CompletionModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    ApiKey = "test-api-key",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 200
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                try
+                {
+                    await admin.LoadCompletionEndpointAsync(endpoint.Id, new ModelLoadRequest
+                    {
+                        Strategy = "WarmRequest",
+                        TimeoutMs = 200,
+                        SampleInput = "Timeout load probe"
+                    });
+                    throw new Exception("Expected PartioException with 504");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 504)
+                {
+                    // Expected
+                }
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestLoadCompletionConcurrencyLimitStatusAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 8000);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Load Concurrency Test",
+                    Model = provider.CompletionModel,
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    ApiKey = "test-api-key",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000,
+                    MaxConcurrentRequests = 1
+                });
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id)) throw new Exception("No endpoint returned");
+
+                Task<ModelLoadResponse?> firstTask = admin.LoadCompletionEndpointAsync(endpoint.Id, new ModelLoadRequest
+                {
+                    Strategy = "WarmRequest",
+                    TimeoutMs = 15000,
+                    SampleInput = "First load concurrency probe"
+                });
+
+                await provider.WaitForCompletionRequestCountAsync(1).ConfigureAwait(false);
+
+                try
+                {
+                    await admin.LoadCompletionEndpointAsync(endpoint.Id, new ModelLoadRequest
+                    {
+                        Strategy = "WarmRequest",
+                        TimeoutMs = 15000,
+                        SampleInput = "Second load concurrency probe"
+                    }).ConfigureAwait(false);
+                    throw new Exception("Expected PartioException with 429");
+                }
+                catch (PartioException ex) when (ex.StatusCode == 429)
+                {
+                    // Expected
+                }
+
+                ModelLoadResponse? first = await firstTask.ConfigureAwait(false);
+                if (first == null || !first.Success)
+                    throw new Exception("First load request should have succeeded");
+            }
+            finally
+            {
+                if (endpoint != null && !string.IsNullOrEmpty(endpoint.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
         // ===== Request History =====
 
         public static async Task TestEnumerateRequestHistoryAsync()
@@ -1185,6 +1653,22 @@ namespace Test.Shared
             tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Completion Endpoints", async () => await TestEnumerateCompletionEndpointsAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Create Gemini Completion Endpoint", async () => await TestCreateGeminiCompletionEndpointAsync()));
             tests.Add(SharedNamedTestCase.CreateAsync("Create vLLM Completion Endpoint", async () => await TestCreateVllmCompletionEndpointAsync()));
+
+            // Model Loading
+            tests.Add(SharedNamedTestCase.CreateAsync("Load Ollama Completion Endpoint Model", async () => await TestLoadOllamaCompletionEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Load Ollama Embedding Endpoint Model", async () => await TestLoadOllamaEmbeddingEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Warm OpenAI Completion Endpoint Model", async () => await TestWarmOpenAiCompletionEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Warm OpenAI Embedding Endpoint Model", async () => await TestWarmOpenAiEmbeddingEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Warm vLLM Completion Endpoint Model", async () => await TestWarmVllmCompletionEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Warm vLLM Embedding Endpoint Model", async () => await TestWarmVllmEmbeddingEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Warm Gemini Completion Endpoint Model", async () => await TestWarmGeminiCompletionEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Warm Gemini Embedding Endpoint Model", async () => await TestWarmGeminiEmbeddingEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Unsupported Native Completion Load (409)", async () => await TestUnsupportedNativeCompletionLoadAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Invalid Load KeepAlive (400)", async () => await TestInvalidLoadKeepAliveAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Load Missing Endpoint (404)", async () => await TestLoadMissingEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Load Inactive Endpoint (400)", async () => await TestLoadInactiveEndpointAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Load Completion Timeout (504)", async () => await TestLoadCompletionTimeoutStatusAsync()));
+            tests.Add(SharedNamedTestCase.CreateAsync("Load Completion Concurrency Limit (429)", async () => await TestLoadCompletionConcurrencyLimitStatusAsync()));
 
             // Request History
             tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Request History", async () => await TestEnumerateRequestHistoryAsync()));

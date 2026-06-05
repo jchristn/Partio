@@ -6,7 +6,6 @@ import TagInput from './TagInput';
 import KeyValueEditor from './KeyValueEditor';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
-import TooltipIcon from './TooltipIcon';
 import './ChunkEmbedView.css';
 
 const STRATEGY_COMPATIBILITY = {
@@ -306,8 +305,9 @@ export default function ChunkEmbedView() {
           <div className="form-section-divider" />
           <div className="checkbox-group" style={{ marginBottom: 8 }}>
             <input type="checkbox" checked={form.EnableSummarization} onChange={e => update('EnableSummarization', e.target.checked)} id="enableSumm" />
-            <label htmlFor="enableSumm"><strong>Enable Summarization</strong></label>
-            <TooltipIcon content="Run summarization over cells before embedding. Requires an active inference endpoint." />
+            <Tooltip content="Run summarization over cells before embedding. Requires an active inference endpoint.">
+              <label htmlFor="enableSumm"><strong>Enable Summarization</strong></label>
+            </Tooltip>
           </div>
 
           {form.EnableSummarization && (
@@ -444,8 +444,9 @@ export default function ChunkEmbedView() {
             </div>
             <div className="checkbox-group">
               <input type="checkbox" checked={form.L2Normalization} onChange={e => update('L2Normalization', e.target.checked)} id="l2norm" />
-              <label htmlFor="l2norm">L2 Normalize</label>
-              <TooltipIcon content="Normalize each returned embedding vector to length 1 after generation." />
+              <Tooltip content="Normalize each returned embedding vector to length 1 after generation.">
+                <label htmlFor="l2norm">L2 Normalize</label>
+              </Tooltip>
             </div>
           </div>
 

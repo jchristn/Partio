@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Model loading and warming API for configured embedding and inference endpoints:
+  - `POST /v1.0/endpoints/embedding/{id}/load`
+  - `POST /v1.0/endpoints/completion/{id}/load`
+- Native Ollama preload support with `keep_alive`, plus warm-request behavior for OpenAI, Gemini, and vLLM.
+- Dashboard `Load Model` row action for embedding and inference endpoints.
+- C#, JavaScript, and Python SDK methods for model loading.
+- Postman collection examples for embedding load, inference load, Ollama `gemma3:4b`, OpenAI-compatible warm requests, and unsupported native-load handling.
+- Shared integration coverage for Ollama load, hosted-provider warm behavior, unsupported native load, and invalid unload-style keep-alive values.
+
 ## v0.3.0 - 2026-05-18
 
 ### Added

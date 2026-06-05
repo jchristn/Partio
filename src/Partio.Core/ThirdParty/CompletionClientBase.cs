@@ -122,6 +122,59 @@ namespace Partio.Core.ThirdParty
             string? systemPrompt = null);
 
         /// <summary>
+        /// Load or warm a model for this completion provider.
+        /// </summary>
+        /// <param name="model">Model name.</param>
+        /// <param name="request">Load request settings.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Provider-level load result.</returns>
+        public virtual async Task<ModelLoadProviderResult> LoadModelAsync(string model, ModelLoadRequest request, CancellationToken token = default)
+        {
+            if (request == null) request = new ModelLoadRequest();
+
+            if (request.RequireNativeLoad || request.Strategy == Partio.Core.Enums.ModelLoadStrategyEnum.NativeProviderLoad)
+            {
+                return new ModelLoadProviderResult
+                {
+                    Success = false,
+                    StatusCode = 409,
+                    Outcome = Partio.Core.Enums.ModelLoadOutcomeEnum.Unsupported,
+                    Strategy = Partio.Core.Enums.ModelLoadStrategyEnum.NativeProviderLoad,
+                    Message = "Native model loading is not supported by this provider. Use WarmRequest or Auto."
+                };
+            }
+
+            await GenerateCompletionAsync(
+                request.SampleInput,
+                model,
+                request.MaxTokens,
+                request.ResolveTimeoutMs(_MaximumTimeoutMs),
+                token).ConfigureAwait(false);
+
+            CompletionCallDetail? latestCall = CallDetails.LastOrDefault();
+            if (latestCall != null && !latestCall.Success)
+            {
+                return new ModelLoadProviderResult
+                {
+                    Success = false,
+                    StatusCode = 502,
+                    Outcome = Partio.Core.Enums.ModelLoadOutcomeEnum.Failed,
+                    Strategy = Partio.Core.Enums.ModelLoadStrategyEnum.WarmRequest,
+                    Message = latestCall.Error ?? "Provider warm request failed."
+                };
+            }
+
+            return new ModelLoadProviderResult
+            {
+                Success = true,
+                StatusCode = 200,
+                Outcome = Partio.Core.Enums.ModelLoadOutcomeEnum.Warmed,
+                Strategy = Partio.Core.Enums.ModelLoadStrategyEnum.WarmRequest,
+                Message = "Provider accepted the completion warm request."
+            };
+        }
+
+        /// <summary>
         /// Send an HTTP POST to an upstream endpoint and record the call details.
         /// </summary>
         /// <param name="url">Full URL to call.</param>
