@@ -7,7 +7,6 @@ import ActionMenu from './ActionMenu';
 import DataTable from './DataTable';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
-import TooltipIcon from './TooltipIcon';
 import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
@@ -195,8 +194,8 @@ export default function CredentialsView() {
           <div className="form-group">
             <label className="checkbox-label">
               <input type="checkbox" checked={form.Active} onChange={e => setForm({ ...form, Active: e.target.checked })} />
-              {' '}Active
-              <TooltipIcon content="Enable or disable this credential. Inactive tokens remain stored but should no longer authenticate requests." />
+              {' '}
+              <Tooltip content="Enable or disable this credential. Inactive tokens remain stored but should no longer authenticate requests.">Active</Tooltip>
             </label>
           </div>
           <div className="btn-group" style={{ marginTop: 16 }}><button className="primary" onClick={handleSave}>Save</button><button className="secondary" onClick={() => setShowModal(false)}>Cancel</button></div>

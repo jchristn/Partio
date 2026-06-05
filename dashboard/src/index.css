@@ -4,6 +4,13 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 :root {
   --primary-color: #0f3460;
   --primary-hover: #1a5276;
@@ -190,30 +197,6 @@ input:focus, select:focus, textarea:focus {
   width: 100%;
 }
 
-.tooltip-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--text-secondary);
-  border-radius: 999px;
-  cursor: help;
-  transition: background 0.2s, color 0.2s;
-}
-
-.tooltip-icon:hover,
-.tooltip-icon:focus-visible {
-  background: rgba(15, 52, 96, 0.1);
-  color: var(--primary-color);
-  outline: none;
-}
-
-.tooltip-icon svg {
-  width: 14px;
-  height: 14px;
-}
-
 .dashboard-tooltip {
   position: fixed;
   z-index: 10000;
@@ -247,11 +230,6 @@ input:focus, select:focus, textarea:focus {
   top: -5px;
 }
 
-[data-theme="dark"] .tooltip-icon:hover,
-[data-theme="dark"] .tooltip-icon:focus-visible {
-  background: rgba(59, 130, 246, 0.18);
-}
-
 [data-theme="dark"] .dashboard-tooltip {
   background: rgba(2, 6, 23, 0.98);
   box-shadow: 0 18px 36px rgba(2, 6, 23, 0.45);
@@ -267,6 +245,8 @@ input:focus, select:focus, textarea:focus {
   align-items: flex-start;
   margin-bottom: 20px;
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .header-row h2 {
@@ -298,6 +278,18 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-row-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
 }
 
 .refresh-btn {
@@ -354,10 +346,16 @@ input:focus, select:focus, textarea:focus {
   background: var(--card-bg);
   border-radius: 8px;
   border: 1px solid var(--border-color);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
 }
 
 .data-table {
   width: 100%;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -389,6 +387,14 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.th-content .tooltip-anchor {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .filter-row th {
@@ -425,6 +431,10 @@ input:focus, select:focus, textarea:focus {
 .data-table tbody td {
   padding: 12px 16px;
   font-size: 14px;
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .no-data {

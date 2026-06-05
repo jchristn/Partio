@@ -18,6 +18,7 @@ request-history/
 node_modules/
 dist/
 .cache/
+dashboard/test-results/
 
 ## Python
 __pycache__/

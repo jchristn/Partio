@@ -1,7 +1,6 @@
 namespace Partio.Server.Services
 {
     using System.Collections.Concurrent;
-    using System.Net.Http;
     using Partio.Core.Database;
     using Partio.Core.Enums;
     using Partio.Core.Models;
@@ -15,11 +14,9 @@ namespace Partio.Server.Services
     {
         private readonly DatabaseDriverBase _Database;
         private readonly LoggingModule _Logging;
+        private readonly SharedHealthCheckCoordinator _Coordinator;
         private readonly string _Header = "[CompletionHealthCheck] ";
         private readonly ConcurrentDictionary<string, EndpointHealthState> _States = new ConcurrentDictionary<string, EndpointHealthState>();
-        private readonly ConcurrentDictionary<string, CancellationTokenSource> _CancellationTokens = new ConcurrentDictionary<string, CancellationTokenSource>();
-        private readonly ConcurrentDictionary<string, Task> _RunningTasks = new ConcurrentDictionary<string, Task>();
-        private readonly HttpClient _HttpClient = new HttpClient();
         private static readonly TimeSpan _HistoryRetention = TimeSpan.FromHours(24);
 
         /// <summary>
@@ -27,10 +24,12 @@ namespace Partio.Server.Services
         /// </summary>
         /// <param name="database">Database driver.</param>
         /// <param name="logging">Logging module.</param>
-        public CompletionHealthCheckService(DatabaseDriverBase database, LoggingModule logging)
+        /// <param name="coordinator">Shared health check coordinator.</param>
+        public CompletionHealthCheckService(DatabaseDriverBase database, LoggingModule logging, SharedHealthCheckCoordinator? coordinator = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            _Coordinator = coordinator ?? new SharedHealthCheckCoordinator(logging);
         }
 
         /// <summary>
@@ -69,45 +68,12 @@ namespace Partio.Server.Services
         {
             _Logging.Info(_Header + "stopping completion health check service");
 
-            foreach (string key in _CancellationTokens.Keys)
-            {
-                if (_CancellationTokens.TryGetValue(key, out CancellationTokenSource? cts))
-                {
-                    cts.Cancel();
-                }
-            }
-
-            foreach (string key in _RunningTasks.Keys)
-            {
-                if (_RunningTasks.TryGetValue(key, out Task? task))
-                {
-                    try
-                    {
-                        await task.ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Expected
-                    }
-                    catch (Exception ex)
-                    {
-                        _Logging.Warn(_Header + "error during shutdown for " + key + ": " + ex.Message);
-                    }
-                }
-            }
-
-            foreach (string key in _CancellationTokens.Keys)
-            {
-                if (_CancellationTokens.TryRemove(key, out CancellationTokenSource? cts))
-                {
-                    cts.Dispose();
-                }
-            }
-
-            _RunningTasks.Clear();
+            foreach (string endpointId in _States.Keys)
+                _Coordinator.Unregister(BuildSubscriptionId(endpointId));
             _States.Clear();
 
             _Logging.Info(_Header + "completion health check service stopped");
+            await Task.CompletedTask.ConfigureAwait(false);
         }
 
         /// <summary>
@@ -189,6 +155,8 @@ namespace Partio.Server.Services
 
         private void StartLoop(CompletionEndpoint endpoint)
         {
+            string monitorKey = BuildMonitorKey(endpoint);
+
             EndpointHealthState state = new EndpointHealthState();
             state.EndpointId = endpoint.Id;
             state.EndpointName = endpoint.Name ?? endpoint.Model;
@@ -199,108 +167,53 @@ namespace Partio.Server.Services
 
             _States[endpoint.Id] = state;
 
-            CancellationTokenSource cts = new CancellationTokenSource();
-            _CancellationTokens[endpoint.Id] = cts;
-
-            Task loopTask = Task.Run(() => HealthCheckLoopAsync(endpoint, state, cts.Token));
-            _RunningTasks[endpoint.Id] = loopTask;
-
-            _Logging.Info(_Header + "started monitoring completion endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + ") every " + endpoint.HealthCheckIntervalMs + "ms");
+            _Coordinator.Register(new SharedHealthCheckSubscription
+            {
+                SubscriptionId = BuildSubscriptionId(endpoint.Id),
+                MonitorKey = monitorKey,
+                Url = ResolveHealthCheckUrl(endpoint),
+                Method = endpoint.HealthCheckMethod,
+                ExpectedStatusCode = endpoint.HealthCheckExpectedStatusCode,
+                IntervalMs = Math.Max(1, endpoint.HealthCheckIntervalMs),
+                TimeoutMs = Math.Max(1, endpoint.HealthCheckTimeoutMs),
+                UseAuth = endpoint.HealthCheckUseAuth,
+                ApiFormat = endpoint.ApiFormat,
+                ApiKey = endpoint.ApiKey,
+                Description = "completion endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + ")",
+                UpdateState = (success, errorMessage) =>
+                {
+                    if (_States.TryGetValue(endpoint.Id, out EndpointHealthState? currentState))
+                        UpdateState(currentState, success, errorMessage, endpoint);
+                }
+            });
         }
 
         private void StopLoop(string endpointId)
         {
-            if (_CancellationTokens.TryRemove(endpointId, out CancellationTokenSource? cts))
-            {
-                cts.Cancel();
-                cts.Dispose();
-            }
-
-            if (_RunningTasks.TryRemove(endpointId, out Task? task))
-            {
-                _ = task.ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                        _Logging.Warn(_Header + "loop for " + endpointId + " faulted: " + t.Exception?.Message);
-                }, TaskContinuationOptions.OnlyOnFaulted);
-            }
+            _States.TryRemove(endpointId, out _);
+            _Coordinator.Unregister(BuildSubscriptionId(endpointId));
         }
 
-        private async Task HealthCheckLoopAsync(CompletionEndpoint endpoint, EndpointHealthState state, CancellationToken token)
+        private static string BuildMonitorKey(CompletionEndpoint endpoint)
         {
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    await Task.Delay(endpoint.HealthCheckIntervalMs, token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-
-                bool success = false;
-                string? errorMessage = null;
-
-                try
-                {
-                    success = await PerformCheckAsync(endpoint, token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (OperationCanceledException)
-                {
-                    success = false;
-                    errorMessage = "health check timed out after " + endpoint.HealthCheckTimeoutMs + "ms";
-                    _Logging.Debug(_Header + "timeout for endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + "): " + errorMessage);
-                }
-                catch (Exception ex)
-                {
-                    success = false;
-                    errorMessage = ex.Message;
-                    _Logging.Debug(_Header + "error for endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + "): " + errorMessage);
-                }
-
-                UpdateState(state, success, errorMessage, endpoint);
-            }
+            return SharedHealthCheckCoordinator.BuildMonitorKey(
+                ResolveHealthCheckUrl(endpoint),
+                endpoint.HealthCheckMethod,
+                endpoint.HealthCheckExpectedStatusCode,
+                endpoint.HealthCheckUseAuth,
+                endpoint.ApiFormat);
         }
 
-        private async Task<bool> PerformCheckAsync(CompletionEndpoint endpoint, CancellationToken token)
+        private static string ResolveHealthCheckUrl(CompletionEndpoint endpoint)
         {
-            string url = !string.IsNullOrEmpty(endpoint.HealthCheckUrl)
+            return !string.IsNullOrEmpty(endpoint.HealthCheckUrl)
                 ? endpoint.HealthCheckUrl
                 : endpoint.Endpoint;
+        }
 
-            HttpMethod method = endpoint.HealthCheckMethod == HealthCheckMethodEnum.HEAD
-                ? HttpMethod.Head
-                : HttpMethod.Get;
-
-            _Logging.Debug(_Header + "sending " + method + " " + url + " for endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + ")");
-
-            HttpRequestMessage request = new HttpRequestMessage(method, url);
-
-            if (endpoint.HealthCheckUseAuth && !string.IsNullOrEmpty(endpoint.ApiKey))
-            {
-                if (endpoint.ApiFormat == ApiFormatEnum.Gemini)
-                    request.Headers.Add("x-goog-api-key", endpoint.ApiKey);
-                else
-                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
-            }
-
-            using (CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token))
-            {
-                timeoutCts.CancelAfter(endpoint.HealthCheckTimeoutMs);
-
-                using HttpResponseMessage response = await _HttpClient.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
-                int statusCode = (int)response.StatusCode;
-                bool success = statusCode == endpoint.HealthCheckExpectedStatusCode;
-
-                _Logging.Debug(_Header + "received " + statusCode + " from " + url + " for endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + "), success: " + success);
-
-                return success;
-            }
+        private static string BuildSubscriptionId(string endpointId)
+        {
+            return "completion:" + endpointId;
         }
 
         private void UpdateState(EndpointHealthState state, bool success, string? errorMessage, CompletionEndpoint endpoint)

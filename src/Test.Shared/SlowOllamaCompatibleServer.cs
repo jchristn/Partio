@@ -1,5 +1,6 @@
 namespace Test.Shared
 {
+    using System.Collections.Concurrent;
     using System.Diagnostics;
     using System.Net;
     using System.Net.Sockets;
@@ -15,6 +16,7 @@ namespace Test.Shared
         private readonly TcpListener _Listener;
         private readonly CancellationTokenSource _Cancellation = new CancellationTokenSource();
         private readonly Task _AcceptLoopTask;
+        private readonly ConcurrentDictionary<string, int> _RawPathRequestCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         public string BaseUrl { get; }
 
@@ -30,9 +32,22 @@ namespace Test.Shared
 
         public int ChatRequestCount => Volatile.Read(ref _ChatRequestCount);
 
+        public int TagsRequestCount => Volatile.Read(ref _TagsRequestCount);
+
+        public int GetRawPathRequestCount(string rawPath)
+        {
+            return _RawPathRequestCounts.TryGetValue(rawPath, out int count) ? count : 0;
+        }
+
+        public string? LastEmbeddingKeepAlive { get; private set; }
+
+        public string? LastCompletionKeepAlive { get; private set; }
+
         private int _EmbeddingRequestCount = 0;
 
         private int _ChatRequestCount = 0;
+
+        private int _TagsRequestCount = 0;
 
         public SlowOllamaCompatibleServer(int embeddingDelayMs = 0, int chatDelayMs = 0)
         {
@@ -85,6 +100,11 @@ namespace Test.Shared
             await WaitForCountAsync(() => ChatRequestCount, minCount, timeoutMs).ConfigureAwait(false);
         }
 
+        public async Task WaitForRawPathRequestCountAsync(string rawPath, int minCount, int timeoutMs = 5000)
+        {
+            await WaitForCountAsync(() => GetRawPathRequestCount(rawPath), minCount, timeoutMs).ConfigureAwait(false);
+        }
+
         private async Task AcceptLoopAsync(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
@@ -120,9 +140,11 @@ namespace Test.Shared
                 {
                     RawHttpRequest? request = await ReadRequestAsync(stream, token).ConfigureAwait(false);
                     if (request == null) return;
+                    _RawPathRequestCounts.AddOrUpdate(request.RawPath, 1, (_, count) => count + 1);
 
                     if ((request.Method == "GET" || request.Method == "HEAD") && request.Path == "/api/tags")
                     {
+                        Interlocked.Increment(ref _TagsRequestCount);
                         await WriteJsonResponseAsync(stream, 200, new
                         {
                             models = new[]
@@ -155,6 +177,7 @@ namespace Test.Shared
                     if (request.Method == "POST" && request.Path == "/api/embed")
                     {
                         Interlocked.Increment(ref _EmbeddingRequestCount);
+                        LastEmbeddingKeepAlive = ReadStringProperty(request.Body, "keep_alive");
                         await DelayIfNeededAsync(EmbeddingDelayMs, token).ConfigureAwait(false);
                         await WriteJsonResponseAsync(stream, 200, BuildEmbeddingResponse(request.Body)).ConfigureAwait(false);
                         return;
@@ -163,6 +186,7 @@ namespace Test.Shared
                     if (request.Method == "POST" && request.Path == "/api/chat")
                     {
                         Interlocked.Increment(ref _ChatRequestCount);
+                        LastCompletionKeepAlive = ReadStringProperty(request.Body, "keep_alive");
                         await DelayIfNeededAsync(ChatDelayMs, token).ConfigureAwait(false);
                         await WriteJsonResponseAsync(stream, 200, new
                         {
@@ -181,6 +205,28 @@ namespace Test.Shared
                             prompt_eval_duration = 1,
                             eval_count = 1,
                             eval_duration = 1
+                        }).ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (request.Method == "POST" && request.Path == "/api/generate")
+                    {
+                        Interlocked.Increment(ref _ChatRequestCount);
+                        LastCompletionKeepAlive = ReadStringProperty(request.Body, "keep_alive");
+                        await DelayIfNeededAsync(ChatDelayMs, token).ConfigureAwait(false);
+                        await WriteJsonResponseAsync(stream, 200, new
+                        {
+                            model = CompletionModel,
+                            created_at = DateTime.UtcNow.ToString("O"),
+                            response = "",
+                            done = true,
+                            done_reason = "load",
+                            total_duration = 1,
+                            load_duration = 1,
+                            prompt_eval_count = 0,
+                            prompt_eval_duration = 0,
+                            eval_count = 0,
+                            eval_duration = 0
                         }).ConfigureAwait(false);
                         return;
                     }
@@ -251,7 +297,7 @@ namespace Test.Shared
                 body = new string(buffer, 0, read);
             }
 
-            return new RawHttpRequest(method, path, body);
+            return new RawHttpRequest(method, path, rawPath, body);
         }
 
         private object BuildEmbeddingResponse(string requestBody)
@@ -292,6 +338,25 @@ namespace Test.Shared
             catch
             {
                 return 1;
+            }
+        }
+
+        private static string? ReadStringProperty(string requestBody, string propertyName)
+        {
+            if (string.IsNullOrWhiteSpace(requestBody))
+                return null;
+
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(requestBody);
+                if (!doc.RootElement.TryGetProperty(propertyName, out JsonElement property))
+                    return null;
+
+                return property.ValueKind == JsonValueKind.String ? property.GetString() : property.GetRawText();
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -348,6 +413,6 @@ namespace Test.Shared
             return port;
         }
 
-        private sealed record RawHttpRequest(string Method, string Path, string Body);
+        private sealed record RawHttpRequest(string Method, string Path, string RawPath, string Body);
     }
 }

@@ -111,6 +111,11 @@ namespace Partio.Core
         public static readonly string ModelHeader = "X-Model";
 
         /// <summary>
+        /// Partio namespaced response header for the model name.
+        /// </summary>
+        public static readonly string PartioModelHeader = "X-Partio-Model";
+
+        /// <summary>
         /// Response header for the resolved tokenizer kind.
         /// </summary>
         public static readonly string TokenizerKindHeader = "X-Partio-Tokenizer-Kind";

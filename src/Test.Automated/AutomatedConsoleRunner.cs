@@ -9,13 +9,20 @@ namespace Test.Automated
         private readonly string _AdminKey;
         private readonly string _TestToken;
         private readonly string _UpstreamEndpoint;
+        private readonly IReadOnlyList<SharedNamedTestCase> _ExtraIntegrationTests;
 
-        public AutomatedConsoleRunner(string endpoint, string adminKey, string testToken, string? upstreamEndpoint = null)
+        public AutomatedConsoleRunner(
+            string endpoint,
+            string adminKey,
+            string testToken,
+            string? upstreamEndpoint = null,
+            IReadOnlyList<SharedNamedTestCase>? extraIntegrationTests = null)
         {
             _Endpoint = endpoint;
             _AdminKey = adminKey;
             _TestToken = testToken;
             _UpstreamEndpoint = string.IsNullOrWhiteSpace(upstreamEndpoint) ? "http://127.0.0.1:11434" : upstreamEndpoint.TrimEnd('/');
+            _ExtraIntegrationTests = extraIntegrationTests ?? Array.Empty<SharedNamedTestCase>();
         }
 
         public async Task<AutomatedRunSummary> RunAsync()
@@ -54,6 +61,8 @@ namespace Test.Automated
             // Run integration tests
             SharedIntegrationTests.Configure(_Endpoint, _AdminKey, _TestToken, _UpstreamEndpoint);
             await ExecuteTestsAsync(SharedIntegrationTests.GetTests(), results);
+            if (_ExtraIntegrationTests.Count > 0)
+                await ExecuteTestsAsync(_ExtraIntegrationTests, results);
 
             totalSw.Stop();
 

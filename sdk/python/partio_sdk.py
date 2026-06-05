@@ -155,6 +155,9 @@ class PartioClient:
     def enumerate_endpoints(self, req=None):
         return self._request("POST", "/v1.0/endpoints/embedding/enumerate", req or {})
 
+    def load_endpoint(self, endpoint_id, request=None):
+        return self._request("POST", f"/v1.0/endpoints/embedding/{endpoint_id}/load", request or {})
+
     # Embedding Endpoint Health
     def get_endpoint_health(self, endpoint_id):
         """Get health status for a specific embedding endpoint."""
@@ -183,6 +186,9 @@ class PartioClient:
 
     def enumerate_completion_endpoints(self, req=None):
         return self._request("POST", "/v1.0/endpoints/completion/enumerate", req or {})
+
+    def load_completion_endpoint(self, endpoint_id, request=None):
+        return self._request("POST", f"/v1.0/endpoints/completion/{endpoint_id}/load", request or {})
 
     # Completion Endpoint Health
     def get_completion_endpoint_health(self, endpoint_id):

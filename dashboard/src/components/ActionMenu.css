@@ -26,15 +26,13 @@
 }
 
 .action-menu-dropdown {
-  position: absolute;
-  right: 0;
-  top: 100%;
+  position: fixed;
   min-width: 160px;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  z-index: 2000;
   overflow: hidden;
 }
 

@@ -38,8 +38,10 @@ namespace Partio.Server
         private static AuthenticationService _AuthService = null!;
         private static RequestHistoryService? _RequestHistoryService;
         private static RequestHistoryCleanupService? _CleanupService;
+        private static SharedHealthCheckCoordinator? _SharedHealthCheckCoordinator;
         private static EmbeddingHealthCheckService? _HealthCheckService;
         private static CompletionHealthCheckService? _CompletionHealthCheckService;
+        private static ModelLoadService _ModelLoadService = null!;
         private static ChunkingEngine _ChunkingEngine = null!;
         private static TokenizationProfileResolver _TokenizationResolver = null!;
         private static PartioSerializer _Serializer = new PartioSerializer();
@@ -91,10 +93,12 @@ namespace Partio.Server
             }
 
             // 6b. Health check services
-            _HealthCheckService = new EmbeddingHealthCheckService(_Database, _Logging, _TokenizationResolver);
+            _SharedHealthCheckCoordinator = new SharedHealthCheckCoordinator(_Logging);
+            _HealthCheckService = new EmbeddingHealthCheckService(_Database, _Logging, _TokenizationResolver, _SharedHealthCheckCoordinator);
             await _HealthCheckService.StartAsync().ConfigureAwait(false);
-            _CompletionHealthCheckService = new CompletionHealthCheckService(_Database, _Logging);
+            _CompletionHealthCheckService = new CompletionHealthCheckService(_Database, _Logging, _SharedHealthCheckCoordinator);
             await _CompletionHealthCheckService.StartAsync().ConfigureAwait(false);
+            _ModelLoadService = new ModelLoadService(_Logging, CreateEmbeddingClient, CreateCompletionClient);
 
             // 7. Initialize Watson
             WebserverSettings webSettings = new WebserverSettings(
@@ -128,6 +132,7 @@ namespace Partio.Server
                     new OpenApiTag { Name = "Credentials", Description = "Credential management (admin)" },
                     new OpenApiTag { Name = "Embedding Endpoints", Description = "Embedding endpoint management (admin)" },
                     new OpenApiTag { Name = "Completion Endpoints", Description = "Completion/inference endpoint management (admin)" },
+                    new OpenApiTag { Name = "Model Loading", Description = "Load or warm configured provider models (admin)" },
                     new OpenApiTag { Name = "Requests", Description = "Request history (admin)" }
                 };
                 settings.SecuritySchemes = new Dictionary<string, OpenApiSecurityScheme>
@@ -473,6 +478,22 @@ namespace Partio.Server
                     .WithDescription("Returns health status for all monitored embedding endpoints. Scoped by tenant for non-admins.")
                     .WithResponse(200, OpenApiResponseMetadata.Json("List of endpoint health statuses", null));
             }, auth: true);
+            server.Post<ModelLoadRequest>("/v1.0/endpoints/embedding/{id}/load", LoadEmbeddingEndpointModel, api => {
+                api.Summary = "Load or warm an embedding endpoint model";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Model Loading")
+                    .WithDescription("Requests that the configured embedding provider load or warm the endpoint model. Ollama uses native keep-alive behavior; hosted providers use a warm embedding request.")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Model load request", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Model load result", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound())
+                    .WithResponse(409, OpenApiResponseMetadata.Json("Unsupported load strategy", null))
+                    .WithResponse(429, OpenApiResponseMetadata.Json("Endpoint concurrency limit reached", null))
+                    .WithResponse(502, OpenApiResponseMetadata.Json("Upstream provider failure", null))
+                    .WithResponse(504, OpenApiResponseMetadata.Json("Upstream provider timeout", null));
+            }, auth: true);
             server.Get("/v1.0/endpoints/embedding/{id}", ReadEndpoint, api => {
                 api.Summary = "Read an embedding endpoint";
                 api.Security = new List<string> { "Bearer" };
@@ -512,6 +533,22 @@ namespace Partio.Server
                 api.WithTag("Completion Endpoints")
                     .WithDescription("Returns health status for all monitored completion endpoints. Scoped by tenant for non-admins.")
                     .WithResponse(200, OpenApiResponseMetadata.Json("List of completion endpoint health statuses", null));
+            }, auth: true);
+            server.Post<ModelLoadRequest>("/v1.0/endpoints/completion/{id}/load", LoadCompletionEndpointModel, api => {
+                api.Summary = "Load or warm a completion endpoint model";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Model Loading")
+                    .WithDescription("Requests that the configured inference provider load or warm the endpoint model. Ollama uses native keep-alive behavior; OpenAI, vLLM, and Gemini use a minimal warm completion request.")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Model load request", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Model load result", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound())
+                    .WithResponse(409, OpenApiResponseMetadata.Json("Unsupported load strategy", null))
+                    .WithResponse(429, OpenApiResponseMetadata.Json("Endpoint concurrency limit reached", null))
+                    .WithResponse(502, OpenApiResponseMetadata.Json("Upstream provider failure", null))
+                    .WithResponse(504, OpenApiResponseMetadata.Json("Upstream provider timeout", null));
             }, auth: true);
             server.Get("/v1.0/endpoints/completion/{id}", ReadCompletionEndpoint, api => {
                 api.Summary = "Read a completion endpoint";
@@ -609,6 +646,8 @@ namespace Partio.Server
                 await _HealthCheckService.StopAsync().ConfigureAwait(false);
             if (_CompletionHealthCheckService != null)
                 await _CompletionHealthCheckService.StopAsync().ConfigureAwait(false);
+            if (_SharedHealthCheckCoordinator != null)
+                await _SharedHealthCheckCoordinator.StopAsync().ConfigureAwait(false);
             if (_CleanupService != null)
                 await _CleanupService.StopAsync().ConfigureAwait(false);
             serverCts.Cancel();
@@ -1188,6 +1227,153 @@ namespace Partio.Server
                     "Completion endpoint " + endpoint.Id + " (" + endpoint.Model + ") is currently unhealthy");
 
             return endpoint;
+        }
+
+        private static async Task<EmbeddingEndpoint> ResolveEmbeddingEndpointForLoadAsync(string id, AuthContext auth, CancellationToken token = default)
+        {
+            if (string.IsNullOrEmpty(id))
+                throw new ArgumentException("Embedding endpoint ID is required.");
+
+            EmbeddingEndpoint? endpoint = await _Database.EmbeddingEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false);
+            if (endpoint == null || (!auth.IsGlobalAdmin && endpoint.TenantId != auth.TenantId))
+                throw new KeyNotFoundException("Embedding endpoint not found: " + id);
+
+            if (!endpoint.Active)
+                throw new ArgumentException("Embedding endpoint '" + id + "' is inactive.");
+
+            return endpoint;
+        }
+
+        private static async Task<CompletionEndpoint> ResolveCompletionEndpointForLoadAsync(string id, AuthContext auth, CancellationToken token = default)
+        {
+            if (string.IsNullOrEmpty(id))
+                throw new ArgumentException("Completion endpoint ID is required.");
+
+            CompletionEndpoint? endpoint = await _Database.CompletionEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false);
+            if (endpoint == null || (!auth.IsGlobalAdmin && endpoint.TenantId != auth.TenantId))
+                throw new KeyNotFoundException("Completion endpoint not found: " + id);
+
+            if (!endpoint.Active)
+                throw new ArgumentException("Completion endpoint '" + id + "' is inactive.");
+
+            return endpoint;
+        }
+
+        private static async Task<object> LoadEmbeddingEndpointModel(ApiRequest req)
+        {
+            RequireAdmin(req);
+
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
+            ModelLoadRequest? loadReq = req.GetData<ModelLoadRequest>();
+            if (loadReq == null) loadReq = new ModelLoadRequest();
+            ValidateModelLoadRequest(loadReq);
+
+            AuthContext auth = (AuthContext)req.Metadata;
+            string id = req.Parameters["id"];
+            EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointForLoadAsync(id, auth, token).ConfigureAwait(false);
+
+            req.Http.Response.Headers[Constants.EndpointIdHeader] = endpoint.Id;
+            req.Http.Response.Headers[Constants.ModelHeader] = endpoint.Model;
+            req.Http.Response.Headers[Constants.PartioModelHeader] = endpoint.Model;
+
+            ModelLoadResponse response = await _ModelLoadService
+                .LoadEmbeddingEndpointAsync(endpoint, loadReq, inflight?.Entry.Id, token)
+                .ConfigureAwait(false);
+            req.Http.Response.StatusCode = response.StatusCode;
+
+            await RecordModelLoadHistoryAsync(req, inflight, loadReq, response).ConfigureAwait(false);
+            return response;
+        }
+
+        private static async Task<object> LoadCompletionEndpointModel(ApiRequest req)
+        {
+            RequireAdmin(req);
+
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
+            ModelLoadRequest? loadReq = req.GetData<ModelLoadRequest>();
+            if (loadReq == null) loadReq = new ModelLoadRequest();
+            ValidateModelLoadRequest(loadReq);
+
+            AuthContext auth = (AuthContext)req.Metadata;
+            string id = req.Parameters["id"];
+            CompletionEndpoint endpoint = await ResolveCompletionEndpointForLoadAsync(id, auth, token).ConfigureAwait(false);
+
+            req.Http.Response.Headers[Constants.EndpointIdHeader] = endpoint.Id;
+            req.Http.Response.Headers[Constants.ModelHeader] = endpoint.Model;
+            req.Http.Response.Headers[Constants.PartioModelHeader] = endpoint.Model;
+
+            ModelLoadResponse response = await _ModelLoadService
+                .LoadCompletionEndpointAsync(endpoint, loadReq, inflight?.Entry.Id, token)
+                .ConfigureAwait(false);
+            req.Http.Response.StatusCode = response.StatusCode;
+
+            await RecordModelLoadHistoryAsync(req, inflight, loadReq, response).ConfigureAwait(false);
+            return response;
+        }
+
+        private static async Task RecordModelLoadHistoryAsync(
+            ApiRequest req,
+            InFlightRequest? inflight,
+            ModelLoadRequest request,
+            ModelLoadResponse response)
+        {
+            if (inflight == null || !request.RecordRequestHistory)
+                return;
+
+            inflight.Stopwatch.Stop();
+            string requestJson = _Serializer.SerializeJson(request, false);
+            string responseJson = _Serializer.SerializeJson(response, false);
+            Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+            Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+            await RecordDetailedHistoryAsync(
+                inflight.Entry,
+                response.StatusCode,
+                inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                requestJson,
+                responseJson,
+                reqHeaders,
+                respHeaders,
+                response.EmbeddingCalls,
+                response.CompletionCalls,
+                BuildModelLoadDetail(response)).ConfigureAwait(false);
+            inflight.DetailRecorded = true;
+        }
+
+        private static Dictionary<string, object?> BuildModelLoadDetail(ModelLoadResponse response)
+        {
+            Dictionary<string, object?> metadata = new Dictionary<string, object?>();
+            metadata["EndpointType"] = response.EndpointType.ToString();
+            metadata["EndpointId"] = response.EndpointId;
+            metadata["TenantId"] = response.TenantId;
+            metadata["ApiFormat"] = response.ApiFormat.ToString();
+            metadata["Model"] = response.Model;
+            metadata["Strategy"] = response.Strategy.ToString();
+            metadata["Outcome"] = response.Outcome.ToString();
+            metadata["Success"] = response.Success;
+            metadata["ResponseTimeMs"] = response.ResponseTimeMs;
+
+            Dictionary<string, object?> detail = new Dictionary<string, object?>();
+            detail["ModelLoad"] = metadata;
+            return detail;
+        }
+
+        private static void ValidateModelLoadRequest(ModelLoadRequest request)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            if (!string.IsNullOrWhiteSpace(request.KeepAlive) && IsUnloadKeepAliveValue(request.KeepAlive))
+                throw new ArgumentException("KeepAlive must not request unload. Use a positive duration such as 30m.");
+        }
+
+        private static bool IsUnloadKeepAliveValue(string value)
+        {
+            string normalized = value.Trim().ToLowerInvariant();
+            return Regex.IsMatch(normalized, "^0+(\\.0+)?(ms|s|m|h)?$");
         }
 
         private static async Task<object> ExploreEmbeddingEndpoint(ApiRequest req)

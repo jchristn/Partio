@@ -61,6 +61,7 @@ export class PartioApi {
   updateEndpoint(id, data) { return this.request('PUT', `/v1.0/endpoints/embedding/${id}`, data); }
   deleteEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/embedding/${id}`); }
   enumerateEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/embedding/enumerate', req); }
+  loadEndpoint(id, request = {}) { return this.request('POST', `/v1.0/endpoints/embedding/${id}/load`, request); }
 
   // Embedding Endpoint Health
   getEndpointHealth(id) { return this.request('GET', `/v1.0/endpoints/embedding/${id}/health`); }
@@ -72,6 +73,7 @@ export class PartioApi {
   updateCompletionEndpoint(id, data) { return this.request('PUT', `/v1.0/endpoints/completion/${id}`, data); }
   deleteCompletionEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/completion/${id}`); }
   enumerateCompletionEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/completion/enumerate', req); }
+  loadCompletionEndpoint(id, request = {}) { return this.request('POST', `/v1.0/endpoints/completion/${id}/load`, request); }
 
   // Completion Endpoint Health
   getCompletionEndpointHealth(id) { return this.request('GET', `/v1.0/endpoints/completion/${id}/health`); }

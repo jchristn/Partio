@@ -493,6 +493,92 @@ If the upstream provider times out, the explorer route still returns `200 OK`, b
 
 ---
 
+## Model Loading (Admin)
+
+Model loading is an explicit control-plane action for a configured endpoint. The route calls the endpoint's configured host and model.
+Loading local models can allocate GPU or system memory on the configured runner. In multi-instance deployments, the API call loads or warms the upstream host reached by the Partio instance handling the request. If the endpoint URL is itself load-balanced, the load or warm request reaches whichever model runner the upstream load balancer selects.
+
+Provider semantics:
+
+| Provider | Completion behavior | Embedding behavior | Success outcome |
+| --- | --- | --- | --- |
+| Ollama | Native `/api/generate` preload with `keep_alive` by default | `/api/embed` probe with `keep_alive` | `Loaded` |
+| OpenAI | Minimal chat completion warm request | Minimal embedding warm request | `Warmed` |
+| vLLM | OpenAI-compatible minimal chat completion warm request | OpenAI-compatible minimal embedding warm request | `Warmed`; the model must already be served by that vLLM process |
+| Gemini | Minimal `generateContent` warm request | Minimal `embedContent` warm request | `Warmed` |
+
+### POST /v1.0/endpoints/embedding/{id}/load
+Load or warm a configured embedding endpoint model.
+
+**Request Body**:
+```json
+{
+    "Strategy": "Auto",
+    "TimeoutMs": 60000,
+    "KeepAlive": "30m",
+    "SampleInput": "Partio model load probe",
+    "MaxTokens": 1,
+    "RecordRequestHistory": true,
+    "RequireNativeLoad": false
+}
+```
+
+### POST /v1.0/endpoints/completion/{id}/load
+Load or warm a configured completion endpoint model.
+
+For an Ollama inference endpoint configured as `gemma3:4b` on `http://localhost:11434`, use:
+
+```bash
+curl -X POST http://localhost:8400/v1.0/endpoints/completion/cep_xxxx/load \
+  -H "Authorization: Bearer partioadmin" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Strategy": "Auto",
+    "KeepAlive": "30m",
+    "SampleInput": "Partio model load probe",
+    "MaxTokens": 1
+  }'
+```
+
+**Response**: `200 OK` on success, or a mapped non-2xx status with the same response shape.
+
+```json
+{
+    "Success": true,
+    "StatusCode": 200,
+    "Outcome": "Loaded",
+    "EndpointType": "Completion",
+    "EndpointId": "cep_xxxx",
+    "TenantId": "default",
+    "ApiFormat": "Ollama",
+    "Model": "gemma3:4b",
+    "Strategy": "NativeProviderLoad",
+    "Message": "Ollama accepted the preload request.",
+    "ResponseTimeMs": 482.5,
+    "StartedUtc": "2026-06-05T18:00:00Z",
+    "CompletedUtc": "2026-06-05T18:00:01Z",
+    "RequestHistoryId": "req_xxxx",
+    "EmbeddingCalls": null,
+    "CompletionCalls": []
+}
+```
+
+Errors:
+
+| Scenario | Status |
+| --- | --- |
+| Invalid request body or `KeepAlive` unload value such as `0` | `400` |
+| Unauthenticated or non-admin caller | `401` |
+| Endpoint not found | `404` |
+| Native load required for OpenAI, Gemini, or vLLM | `409` |
+| Endpoint concurrency limit reached | `429` |
+| Upstream provider failure | `502` |
+| Upstream provider timeout | `504` |
+
+Successful and failed load attempts include `X-Partio-Endpoint-Id`, `X-Model`, and `X-Partio-Model` when the endpoint is known. Request-history detail includes a `ModelLoad` metadata object plus captured upstream call details when detailed history is recorded.
+
+---
+
 ## Tenants (Admin)
 
 ### PUT /v1.0/tenants

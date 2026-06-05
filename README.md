@@ -97,11 +97,13 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Request history and audit logging** with automatic cleanup, filesystem body persistence, configurable retention, and upstream embedding call capture (request/response headers, bodies, timing, and status for each call to the embedding provider)
 - **Bearer token authentication** with global admin API keys and tenant-scoped credentials
 - **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return 502)
+- **Model loading and warming** for configured embedding and inference endpoints, with native Ollama preload support and warm-request semantics for OpenAI, Gemini, and vLLM
 - **Per-endpoint provider timeout caps** with a default 60-second ceiling for embedding and inference calls, configurable in the API and dashboard and enforced independently from health checks
 - **Batch processing** for submitting multiple semantic cells in a single request
 - **Optional summarization** with LLM-powered cell summarization before chunking and embedding, supporting top-down and bottom-up strategies
 - **Completion endpoint management** for configuring LLM inference endpoints (Ollama, OpenAI, Gemini, vLLM) with health checks
 - **API Explorer** in the dashboard for exercising a specific embedding or inference endpoint through the Partio backend path and inspecting upstream call details
+- **Dashboard load action** for endpoint rows, so operators can ask a configured model runner to load or warm a model before sending production traffic
 - **PolyPrompt-backed provider runtime** so provider-specific embeddings and inference wiring is centralized in a dedicated library
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history
 - **SDKs** for C#, Python, and JavaScript
@@ -226,6 +228,15 @@ All endpoints use JSON and require an `Authorization: Bearer {token}` header unl
 |--------|-------|-------------|
 | `POST` | `/v1.0/explorer/embedding` | Exercise one embedding endpoint through Partio and inspect upstream call details |
 | `POST` | `/v1.0/explorer/completion` | Exercise one inference endpoint through Partio and inspect upstream call details |
+
+### Model Loading
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `POST` | `/v1.0/endpoints/embedding/{id}/load` | Load or warm one embedding endpoint model |
+| `POST` | `/v1.0/endpoints/completion/{id}/load` | Load or warm one inference endpoint model |
+
+Ollama endpoints can return `Loaded` because Partio uses Ollama's native keep-alive preload path. OpenAI, Gemini, and vLLM endpoints return `Warmed` when their minimal provider request succeeds; vLLM must already be serving the configured model.
 
 ### Endpoint Health
 

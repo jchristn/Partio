@@ -1,11 +1,12 @@
 import React from 'react';
-import TooltipIcon from './TooltipIcon';
+import Tooltip from './Tooltip';
 
 export default function FormFieldLabel({ text, tooltip, htmlFor, className = '' }) {
   return (
     <label htmlFor={htmlFor} className={className}>
-      {text}
-      <TooltipIcon content={tooltip} />
+      <Tooltip content={tooltip}>
+        <span>{text}</span>
+      </Tooltip>
     </label>
   );
 }

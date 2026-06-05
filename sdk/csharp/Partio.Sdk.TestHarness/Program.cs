@@ -9,8 +9,13 @@ namespace Partio.Sdk.TestHarness
         private static string _Endpoint = "http://localhost:8400";
         private static string _AdminKey = "partioadmin";
         private static string _TestToken = "default";
+        private static string _ProviderEndpoint = "http://localhost:11434";
+        private static string _EmbeddingModel = "nomic-embed-text";
+        private static string _CompletionModel = "gemma3:4b";
+        private static bool _ProviderAvailable = false;
         private static int _Passed = 0;
         private static int _Failed = 0;
+        private static int _Skipped = 0;
         private static List<string> _FailedTests = new List<string>();
         private static Stopwatch _TotalTimer = new Stopwatch();
 
@@ -19,10 +24,21 @@ namespace Partio.Sdk.TestHarness
             if (args.Length >= 1) _Endpoint = args[0];
             if (args.Length >= 2) _AdminKey = args[1];
             if (args.Length >= 3) _TestToken = args[2];
+            if (args.Length >= 4) _ProviderEndpoint = args[3];
+            if (args.Length >= 5) _EmbeddingModel = args[4];
+            if (args.Length >= 6) _CompletionModel = args[5];
+
+            _ProviderEndpoint = Environment.GetEnvironmentVariable("PARTIO_TEST_PROVIDER_ENDPOINT") ?? _ProviderEndpoint;
+            _EmbeddingModel = Environment.GetEnvironmentVariable("PARTIO_TEST_EMBEDDING_MODEL") ?? _EmbeddingModel;
+            _CompletionModel = Environment.GetEnvironmentVariable("PARTIO_TEST_COMPLETION_MODEL") ?? _CompletionModel;
+            _ProviderAvailable = await IsProviderAvailableAsync(_ProviderEndpoint).ConfigureAwait(false);
 
             Console.WriteLine("Partio C# SDK Test Harness");
             Console.WriteLine("Endpoint: " + _Endpoint);
             Console.WriteLine("Admin Key: " + _AdminKey);
+            Console.WriteLine("Provider Endpoint: " + _ProviderEndpoint + " (" + (_ProviderAvailable ? "available" : "unavailable; provider-dependent tests will skip") + ")");
+            Console.WriteLine("Embedding Model: " + _EmbeddingModel);
+            Console.WriteLine("Completion Model: " + _CompletionModel);
             Console.WriteLine();
 
             _TotalTimer.Start();
@@ -141,14 +157,23 @@ namespace Partio.Sdk.TestHarness
                 string testEpId = "";
                 string geminiEpId = "";
                 string vllmEpId = "";
+
+                async Task<EmbeddingEndpoint> GetHarnessEmbeddingEndpointAsync(PartioClient adminClient)
+                {
+                    EmbeddingEndpoint? endpoint = await adminClient.GetEndpointAsync(testEpId).ConfigureAwait(false);
+                    if (endpoint == null || endpoint.Active == false)
+                        throw new SkipTestException("no active embedding endpoint");
+                    return endpoint;
+                }
+
                 await RunTest("Create Endpoint", async () =>
                 {
                     EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint
                     {
                         TenantId = testTenantId,
                         Name = "Test Embedding",
-                        Model = "test-model",
-                        Endpoint = "http://localhost:11434",
+                        Model = _EmbeddingModel,
+                        Endpoint = _ProviderEndpoint,
                         ApiFormat = "Ollama",
                         HealthCheckEnabled = false,
                         MaximumTimeoutMs = 61000,
@@ -172,7 +197,7 @@ namespace Partio.Sdk.TestHarness
                 await RunTest("Read Endpoint", async () =>
                 {
                     EmbeddingEndpoint? ep = await admin.GetEndpointAsync(testEpId);
-                    if (ep == null || ep.Model != "test-model") throw new Exception("Endpoint mismatch");
+                    if (ep == null || ep.Model != _EmbeddingModel) throw new Exception("Endpoint mismatch");
                     if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
                     if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
                     if (ep.Tokenization == null) throw new Exception("Expected tokenization override");
@@ -186,8 +211,8 @@ namespace Partio.Sdk.TestHarness
                     {
                         TenantId = testTenantId,
                         Name = "Updated Embedding",
-                        Model = "test-model-updated",
-                        Endpoint = "http://localhost:11434",
+                        Model = _EmbeddingModel,
+                        Endpoint = _ProviderEndpoint,
                         ApiFormat = "Ollama",
                         HealthCheckEnabled = false,
                         MaximumTimeoutMs = 91000,
@@ -249,7 +274,7 @@ namespace Partio.Sdk.TestHarness
                 string vllmCepId = "";
                 await RunTest("Create Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = "test-model", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 61000, MaxConcurrentRequests = 3 });
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Test Inference", Model = _CompletionModel, Endpoint = _ProviderEndpoint, ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 61000, MaxConcurrentRequests = 3 });
                     if (cep == null) throw new Exception("No response");
                     if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
                     if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
@@ -259,14 +284,14 @@ namespace Partio.Sdk.TestHarness
                 await RunTest("Read Completion Endpoint", async () =>
                 {
                     CompletionEndpoint? cep = await admin.GetCompletionEndpointAsync(testCepId);
-                    if (cep == null || cep.Model != "test-model") throw new Exception("Endpoint mismatch");
+                    if (cep == null || cep.Model != _CompletionModel) throw new Exception("Endpoint mismatch");
                     if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
                     if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
                 });
 
                 await RunTest("Update Completion Endpoint", async () =>
                 {
-                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint { TenantId = testTenantId, Name = "Updated Inference", Model = "test-model-updated", Endpoint = "http://localhost:11434", ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 91000, MaxConcurrentRequests = 5 });
+                    CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(testCepId, new CompletionEndpoint { TenantId = testTenantId, Name = "Updated Inference", Model = _CompletionModel, Endpoint = _ProviderEndpoint, ApiFormat = "Ollama", HealthCheckEnabled = false, MaximumTimeoutMs = 91000, MaxConcurrentRequests = 5 });
                     if (updated == null) throw new Exception("Update failed");
                     if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch");
                     if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch");
@@ -298,8 +323,42 @@ namespace Partio.Sdk.TestHarness
                     vllmCepId = cep.Id;
                 });
 
+                await RunTest("Load Completion Endpoint", async () =>
+                {
+                    SkipIfProviderUnavailable();
+                    ModelLoadResponse? result = await admin.LoadCompletionEndpointAsync(testCepId, new ModelLoadRequest { KeepAlive = "30m" });
+                    if (result == null) throw new Exception("No response");
+                    if (!result.Success) throw new Exception("Load failed: " + result.Message);
+                    if (result.EndpointId != testCepId) throw new Exception("Endpoint mismatch");
+                    if (result.Outcome != "Loaded") throw new Exception("Expected Loaded, got " + result.Outcome);
+                });
+
+                await RunTest("Load Embedding Endpoint", async () =>
+                {
+                    SkipIfProviderUnavailable();
+                    ModelLoadResponse? result = await admin.LoadEndpointAsync(testEpId, new ModelLoadRequest { KeepAlive = "30m" });
+                    if (result == null) throw new Exception("No response");
+                    if (!result.Success) throw new Exception("Load failed: " + result.Message);
+                    if (result.EndpointId != testEpId) throw new Exception("Endpoint mismatch");
+                    if (result.Outcome != "Loaded") throw new Exception("Expected Loaded, got " + result.Outcome);
+                });
+
+                await RunTest("Unsupported Native Load", async () =>
+                {
+                    try
+                    {
+                        await admin.LoadCompletionEndpointAsync(vllmCepId, new ModelLoadRequest { Strategy = "NativeProviderLoad", RequireNativeLoad = true });
+                        throw new Exception("Expected PartioException with 409");
+                    }
+                    catch (PartioException ex) when (ex.StatusCode == 409)
+                    {
+                        // Expected
+                    }
+                });
+
                 await RunTest("Explore Embedding Endpoint", async () =>
                 {
+                    SkipIfProviderUnavailable();
                     EndpointExplorerEmbeddingResponse? result = await admin.ExploreEmbeddingEndpointAsync(new EndpointExplorerEmbeddingRequest
                     {
                         EndpointId = testEpId,
@@ -319,6 +378,7 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Explore Completion Endpoint", async () =>
                 {
+                    SkipIfProviderUnavailable();
                     EndpointExplorerCompletionResponse? result = await admin.ExploreCompletionEndpointAsync(new EndpointExplorerCompletionRequest
                     {
                         EndpointId = testCepId,
@@ -332,9 +392,8 @@ namespace Partio.Sdk.TestHarness
                 // Process Single Cell (requires an active embedding endpoint)
                 await RunTest("Process Single Cell", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     SemanticCellRequest req = new SemanticCellRequest
                     {
@@ -357,9 +416,8 @@ namespace Partio.Sdk.TestHarness
                 // Process Table strategies
                 await RunTest("Process Table (Row)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     SemanticCellRequest req = new SemanticCellRequest
                     {
@@ -380,9 +438,8 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Process Table (RowWithHeaders)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     SemanticCellRequest req = new SemanticCellRequest
                     {
@@ -403,9 +460,8 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Process Table (RowGroupWithHeaders)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     SemanticCellRequest req = new SemanticCellRequest
                     {
@@ -427,9 +483,8 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Process Table (KeyValuePairs)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     SemanticCellRequest req = new SemanticCellRequest
                     {
@@ -449,9 +504,8 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Process Table (WholeTable)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     SemanticCellRequest req = new SemanticCellRequest
                     {
@@ -472,9 +526,8 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Process Text (RegexBased)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     SemanticCellRequest req = new SemanticCellRequest
                     {
@@ -496,9 +549,8 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Regex Strategy Missing Pattern (400)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     try
                     {
@@ -520,9 +572,8 @@ namespace Partio.Sdk.TestHarness
 
                 await RunTest("Table Strategy on Text (400)", async () =>
                 {
-                    EnumerationResult<EmbeddingEndpoint>? eps = await admin.EnumerateEndpointsAsync();
-                    EmbeddingEndpoint? activeEp = eps?.Data?.FirstOrDefault(e => e.Active != false);
-                    if (activeEp == null) throw new Exception("SKIP: no active embedding endpoint");
+                    SkipIfProviderUnavailable();
+                    EmbeddingEndpoint activeEp = await GetHarnessEmbeddingEndpointAsync(admin).ConfigureAwait(false);
 
                     try
                     {
@@ -630,7 +681,7 @@ namespace Partio.Sdk.TestHarness
             // Summary
             Console.WriteLine();
             Console.WriteLine("=== SUMMARY ===");
-            Console.WriteLine($"Total: {_Passed + _Failed}  Passed: {_Passed}  Failed: {_Failed}");
+            Console.WriteLine($"Total: {_Passed + _Failed + _Skipped}  Passed: {_Passed}  Failed: {_Failed}  Skipped: {_Skipped}");
             Console.WriteLine($"Runtime: {_TotalTimer.ElapsedMilliseconds}ms");
             Console.WriteLine($"Result: {(_Failed == 0 ? "PASS" : "FAIL")}");
 
@@ -656,12 +707,46 @@ namespace Partio.Sdk.TestHarness
                 Console.WriteLine($"  PASS  {name} ({sw.ElapsedMilliseconds}ms)");
                 _Passed++;
             }
+            catch (SkipTestException ex)
+            {
+                sw.Stop();
+                Console.WriteLine($"  SKIP  {name} ({sw.ElapsedMilliseconds}ms) - {ex.Message}");
+                _Skipped++;
+            }
             catch (Exception ex)
             {
                 sw.Stop();
                 Console.WriteLine($"  FAIL  {name} ({sw.ElapsedMilliseconds}ms) - {ex.Message}");
                 _Failed++;
                 _FailedTests.Add(name);
+            }
+        }
+
+        private static void SkipIfProviderUnavailable()
+        {
+            if (!_ProviderAvailable)
+                throw new SkipTestException("requires reachable Ollama-compatible provider at " + _ProviderEndpoint);
+        }
+
+        private static async Task<bool> IsProviderAvailableAsync(string endpoint)
+        {
+            try
+            {
+                using HttpClient http = new HttpClient();
+                http.Timeout = TimeSpan.FromSeconds(2);
+                using HttpResponseMessage response = await http.GetAsync(endpoint.TrimEnd('/') + "/api/tags").ConfigureAwait(false);
+                return response.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private sealed class SkipTestException : Exception
+        {
+            public SkipTestException(string message) : base(message)
+            {
             }
         }
     }

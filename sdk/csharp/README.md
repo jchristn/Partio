@@ -12,6 +12,7 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 - Credential CRUD (`CreateCredentialAsync`, `GetCredentialAsync`, `UpdateCredentialAsync`, `DeleteCredentialAsync`, `CredentialExistsAsync`, `EnumerateCredentialsAsync`)
 - Embedding Endpoint CRUD (`CreateEndpointAsync`, `GetEndpointAsync`, `UpdateEndpointAsync`, `DeleteEndpointAsync`, `EndpointExistsAsync`, `EnumerateEndpointsAsync`)
 - Completion Endpoint CRUD (`CreateCompletionEndpointAsync`, `GetCompletionEndpointAsync`, `UpdateCompletionEndpointAsync`, `DeleteCompletionEndpointAsync`, `CompletionEndpointExistsAsync`, `EnumerateCompletionEndpointsAsync`)
+- Model loading and warming (`LoadEndpointAsync`, `LoadCompletionEndpointAsync`)
 - Embedding & Completion Endpoint Health (`GetEndpointHealthAsync`, `GetAllEndpointHealthAsync`, `GetCompletionEndpointHealthAsync`, `GetAllCompletionEndpointHealthAsync`)
 - Semantic cell processing (`ProcessAsync`, `ProcessBatchAsync`)
 - Endpoint explorer (`ExploreEmbeddingEndpointAsync`, `ExploreCompletionEndpointAsync`)
@@ -19,6 +20,7 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 
 Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
 Endpoint models also expose `MaximumTimeoutMs` and `MaxConcurrentRequests`, the per-endpoint caps enforced for upstream provider calls. Process routes that hit the timeout cap return HTTP `504`, while requests rejected by the concurrency cap return HTTP `429`, both surfaced by the SDK as `PartioException`.
+Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.
 
 ## Prerequisites
 
@@ -66,6 +68,16 @@ var explorer = await client.ExploreCompletionEndpointAsync(new EndpointExplorerC
 });
 
 Console.WriteLine($"Explorer success: {explorer?.Success}");
+
+ModelLoadResponse? loadResult = await client.LoadCompletionEndpointAsync(
+    "cep_your_completion_endpoint_id",
+    new ModelLoadRequest
+    {
+        Strategy = "Auto",
+        KeepAlive = "30m"
+    });
+
+Console.WriteLine($"{loadResult?.Outcome}: {loadResult?.Message}");
 ```
 
 ```csharp

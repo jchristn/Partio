@@ -150,6 +150,11 @@
 			"key": "completionModel",
 			"value": "llama3",
 			"type": "string"
+		},
+		{
+			"key": "keepAlive",
+			"value": "30m",
+			"type": "string"
 		}
 	],
 	"item": [
@@ -1701,6 +1706,165 @@
 							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}"]
 						},
 						"description": "Delete a completion endpoint."
+					}
+				}
+			]
+		},
+		{
+			"name": "Model Loading",
+			"description": "Load or warm configured endpoint models. Ollama can report Loaded; hosted providers and vLLM report Warmed when the probe request succeeds.",
+			"item": [
+				{
+					"name": "Load Embedding Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test('Response has load outcome', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.Outcome).to.be.oneOf(['Loaded', 'Warmed', 'Validated']);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Strategy\": \"Auto\",\n    \"KeepAlive\": \"{{keepAlive}}\",\n    \"SampleInput\": \"Postman embedding load probe\",\n    \"RecordRequestHistory\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}/load",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}", "load"]
+						},
+						"description": "Load or warm the configured embedding endpoint model."
+					}
+				},
+				{
+					"name": "Load Completion Endpoint",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Strategy\": \"Auto\",\n    \"KeepAlive\": \"{{keepAlive}}\",\n    \"SampleInput\": \"Postman completion load probe\",\n    \"MaxTokens\": 1,\n    \"RecordRequestHistory\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+						},
+						"description": "Load or warm the configured completion endpoint model."
+					}
+				},
+				{
+					"name": "Load Completion Endpoint - Ollama gemma3:4b",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Strategy\": \"NativeProviderLoad\",\n    \"KeepAlive\": \"{{keepAlive}}\",\n    \"SampleInput\": \"Postman Ollama load probe\",\n    \"MaxTokens\": 1,\n    \"RecordRequestHistory\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+						},
+						"description": "Use this with an Ollama completion endpoint configured for `gemma3:4b`."
+					}
+				},
+				{
+					"name": "Warm Completion Endpoint - OpenAI-compatible",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Strategy\": \"WarmRequest\",\n    \"SampleInput\": \"Postman OpenAI-compatible warm probe\",\n    \"MaxTokens\": 1,\n    \"RecordRequestHistory\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+						},
+						"description": "Warm an OpenAI-compatible completion endpoint, including vLLM."
+					}
+				},
+				{
+					"name": "Unsupported Native Load - Hosted Provider",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 409', function () {",
+									"    pm.response.to.have.status(409);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Strategy\": \"NativeProviderLoad\",\n    \"RequireNativeLoad\": true,\n    \"SampleInput\": \"Postman native load probe\",\n    \"MaxTokens\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+						},
+						"description": "Expected 409 for OpenAI, Gemini, or vLLM endpoints because they do not expose Partio-supported native model loading."
 					}
 				}
 			]

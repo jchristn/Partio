@@ -1,5 +1,6 @@
 namespace Partio.Sdk.Models
 {
+    using System.Text.Json;
     using System.Text.Json.Serialization;
 
     public class RequestHistoryDetail
@@ -24,5 +25,8 @@ namespace Partio.Sdk.Models
 
         [JsonPropertyName("TokenizationProfile")]
         public ResolvedTokenizationProfile? TokenizationProfile { get; set; }
+
+        [JsonPropertyName("ModelLoad")]
+        public Dictionary<string, JsonElement>? ModelLoad { get; set; }
     }
 }
