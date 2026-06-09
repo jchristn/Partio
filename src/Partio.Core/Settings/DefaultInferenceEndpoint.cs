@@ -14,6 +14,8 @@ namespace Partio.Core.Settings
         private string? _ApiKey = null;
         private int _MaximumTimeoutMs = 60000;
         private int _MaxConcurrentRequests = 2;
+        private List<string> _Labels = new List<string>();
+        private Dictionary<string, string> _Tags = new Dictionary<string, string>();
 
         /// <summary>
         /// Display name for the inference endpoint.
@@ -76,6 +78,24 @@ namespace Partio.Core.Settings
         {
             get => _MaxConcurrentRequests;
             set => _MaxConcurrentRequests = value < 1 ? 1 : value;
+        }
+
+        /// <summary>
+        /// Labels to seed onto the default inference endpoint.
+        /// </summary>
+        public List<string> Labels
+        {
+            get => _Labels;
+            set => _Labels = value ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Key-value tags to seed onto the default inference endpoint.
+        /// </summary>
+        public Dictionary<string, string> Tags
+        {
+            get => _Tags;
+            set => _Tags = value ?? new Dictionary<string, string>();
         }
     }
 }

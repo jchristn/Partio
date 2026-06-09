@@ -1,0 +1,56 @@
+.endpoint-metadata-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.endpoint-metadata-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.endpoint-metadata-row {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+
+.endpoint-metadata-label-row {
+  grid-template-columns: minmax(0, 1fr) 36px 36px;
+}
+
+.endpoint-metadata-tag-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px 36px;
+}
+
+.metadata-icon-button,
+.metadata-icon-spacer {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+
+.metadata-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+}
+
+.metadata-icon-button:hover {
+  background: var(--bg-color);
+  color: var(--text-primary);
+}
+
+.metadata-icon-button-danger:hover {
+  color: var(--danger-color);
+  border-color: rgba(231, 76, 60, 0.45);
+}
+
+[data-theme="dark"] .metadata-icon-button-danger:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { PartioApi } from '../utils/api';
 import Modal from './Modal';
@@ -11,6 +11,7 @@ import JsonViewModal from './modals/JsonViewModal';
 import LoadModelModal from './modals/LoadModelModal';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
+import EndpointMetadataEditor, { createLabelRows, createTagRows, normalizeLabelRows, normalizeTagRows } from './EndpointMetadataEditor';
 import { t } from '../i18n';
 import './EmbeddingEndpointsView.css';
 
@@ -304,7 +305,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -358,7 +359,7 @@ export default function EmbeddingEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -378,6 +379,8 @@ export default function EmbeddingEndpointsView() {
       EnableRequestHistory: item.EnableRequestHistory || false,
       MaximumTimeoutMs: (item.MaximumTimeoutMs || defaultMaximumTimeoutMs).toString(),
       MaxConcurrentRequests: (item.MaxConcurrentRequests || defaultMaxConcurrentRequests).toString(),
+      Labels: createLabelRows(item.Labels),
+      Tags: createTagRows(item.Tags),
       Tokenization: createTokenizationForm(item.Tokenization),
       HealthCheckEnabled: item.HealthCheckEnabled || false,
       HealthCheckUrl: item.HealthCheckUrl || '',
@@ -419,6 +422,8 @@ export default function EmbeddingEndpointsView() {
         EnableRequestHistory: form.EnableRequestHistory,
         MaximumTimeoutMs: parsePositiveInteger(form.MaximumTimeoutMs, defaultMaximumTimeoutMs),
         MaxConcurrentRequests: parsePositiveInteger(form.MaxConcurrentRequests, defaultMaxConcurrentRequests),
+        Labels: normalizeLabelRows(form.Labels),
+        Tags: normalizeTagRows(form.Tags),
         HealthCheckEnabled: form.HealthCheckEnabled,
         HealthCheckUrl: form.HealthCheckUrl || null,
         HealthCheckMethod: form.HealthCheckMethod === 'HEAD' ? 1 : 0,
@@ -641,6 +646,16 @@ export default function EmbeddingEndpointsView() {
                 <input value={form.Endpoint} onChange={e => handleEndpointChange(e.target.value)} placeholder="http://localhost:11434" />
               </Tooltip>
             </div>
+          </div>
+
+          <div className="endpoint-form-section">
+            <div className="endpoint-form-section-header">Metadata</div>
+            <EndpointMetadataEditor
+              labels={form.Labels}
+              tags={form.Tags}
+              onLabelsChange={Labels => setForm({ ...form, Labels })}
+              onTagsChange={Tags => setForm({ ...form, Tags })}
+            />
           </div>
 
           {/* Options Section */}

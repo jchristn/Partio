@@ -65,10 +65,10 @@ namespace Partio.Sdk.Models
         public bool HealthCheckUseAuth { get; set; } = false;
 
         [JsonPropertyName("Labels")]
-        public List<string>? Labels { get; set; }
+        public List<string> Labels { get; set; } = new List<string>();
 
         [JsonPropertyName("Tags")]
-        public Dictionary<string, string>? Tags { get; set; }
+        public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
 
         [JsonPropertyName("CreatedUtc")]
         public DateTime CreatedUtc { get; set; }

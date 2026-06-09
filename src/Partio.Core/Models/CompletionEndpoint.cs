@@ -18,8 +18,8 @@ namespace Partio.Core.Models
         private string _Model = string.Empty;
         private bool _Active = true;
         private bool _EnableRequestHistory = true;
-        private List<string>? _Labels = null;
-        private Dictionary<string, string>? _Tags = null;
+        private List<string> _Labels = new List<string>();
+        private Dictionary<string, string> _Tags = new Dictionary<string, string>();
         private bool _HealthCheckEnabled = true;
         private string? _HealthCheckUrl = null;
         private HealthCheckMethodEnum _HealthCheckMethod = HealthCheckMethodEnum.GET;
@@ -124,19 +124,19 @@ namespace Partio.Core.Models
         /// <summary>
         /// Labels for categorization.
         /// </summary>
-        public List<string>? Labels
+        public List<string> Labels
         {
             get => _Labels;
-            set => _Labels = value;
+            set => _Labels = value ?? new List<string>();
         }
 
         /// <summary>
         /// Key-value tags for metadata.
         /// </summary>
-        public Dictionary<string, string>? Tags
+        public Dictionary<string, string> Tags
         {
             get => _Tags;
-            set => _Tags = value;
+            set => _Tags = value ?? new Dictionary<string, string>();
         }
 
         /// <summary>
@@ -294,13 +294,19 @@ namespace Partio.Core.Models
             ep.UnhealthyThreshold = Convert.ToInt32(row["unhealthy_threshold"]);
             ep.HealthCheckUseAuth = Convert.ToBoolean(row["health_check_use_auth"]);
 
-            string? labelsJson = row["labels_json"] == DBNull.Value ? null : row["labels_json"].ToString();
-            if (!string.IsNullOrEmpty(labelsJson))
-                ep.Labels = new SerializationHelper.Serializer().DeserializeJson<List<string>>(labelsJson) ?? new List<string>();
+            if (row.Table.Columns.Contains("labels_json"))
+            {
+                string? labelsJson = row["labels_json"] == DBNull.Value ? null : row["labels_json"].ToString();
+                if (!string.IsNullOrEmpty(labelsJson))
+                    ep.Labels = new SerializationHelper.Serializer().DeserializeJson<List<string>>(labelsJson) ?? new List<string>();
+            }
 
-            string? tagsJson = row["tags_json"] == DBNull.Value ? null : row["tags_json"].ToString();
-            if (!string.IsNullOrEmpty(tagsJson))
-                ep.Tags = new SerializationHelper.Serializer().DeserializeJson<Dictionary<string, string>>(tagsJson) ?? new Dictionary<string, string>();
+            if (row.Table.Columns.Contains("tags_json"))
+            {
+                string? tagsJson = row["tags_json"] == DBNull.Value ? null : row["tags_json"].ToString();
+                if (!string.IsNullOrEmpty(tagsJson))
+                    ep.Tags = new SerializationHelper.Serializer().DeserializeJson<Dictionary<string, string>>(tagsJson) ?? new Dictionary<string, string>();
+            }
 
             return ep;
         }

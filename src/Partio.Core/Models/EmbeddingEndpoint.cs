@@ -304,13 +304,19 @@ namespace Partio.Core.Models
             ep.UnhealthyThreshold = Convert.ToInt32(row["unhealthy_threshold"]);
             ep.HealthCheckUseAuth = Convert.ToBoolean(row["health_check_use_auth"]);
 
-            string? labelsJson = row["labels_json"] == DBNull.Value ? null : row["labels_json"].ToString();
-            if (!string.IsNullOrEmpty(labelsJson))
-                ep.Labels = new SerializationHelper.Serializer().DeserializeJson<List<string>>(labelsJson) ?? new List<string>();
+            if (row.Table.Columns.Contains("labels_json"))
+            {
+                string? labelsJson = row["labels_json"] == DBNull.Value ? null : row["labels_json"].ToString();
+                if (!string.IsNullOrEmpty(labelsJson))
+                    ep.Labels = new SerializationHelper.Serializer().DeserializeJson<List<string>>(labelsJson) ?? new List<string>();
+            }
 
-            string? tagsJson = row["tags_json"] == DBNull.Value ? null : row["tags_json"].ToString();
-            if (!string.IsNullOrEmpty(tagsJson))
-                ep.Tags = new SerializationHelper.Serializer().DeserializeJson<Dictionary<string, string>>(tagsJson) ?? new Dictionary<string, string>();
+            if (row.Table.Columns.Contains("tags_json"))
+            {
+                string? tagsJson = row["tags_json"] == DBNull.Value ? null : row["tags_json"].ToString();
+                if (!string.IsNullOrEmpty(tagsJson))
+                    ep.Tags = new SerializationHelper.Serializer().DeserializeJson<Dictionary<string, string>>(tagsJson) ?? new Dictionary<string, string>();
+            }
 
             if (row.Table.Columns.Contains("tokenization_json"))
             {

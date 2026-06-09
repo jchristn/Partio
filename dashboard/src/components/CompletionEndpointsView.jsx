@@ -11,6 +11,7 @@ import JsonViewModal from './modals/JsonViewModal';
 import LoadModelModal from './modals/LoadModelModal';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
+import EndpointMetadataEditor, { createLabelRows, createTagRows, normalizeLabelRows, normalizeTagRows } from './EndpointMetadataEditor';
 import { t } from '../i18n';
 import './EmbeddingEndpointsView.css';
 
@@ -263,7 +264,7 @@ export default function CompletionEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Labels: createLabelRows(), Tags: createTagRows(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -316,7 +317,7 @@ export default function CompletionEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), HealthCheckEnabled: true, ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: true, ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -336,6 +337,8 @@ export default function CompletionEndpointsView() {
       EnableRequestHistory: item.EnableRequestHistory || false,
       MaximumTimeoutMs: (item.MaximumTimeoutMs || defaultMaximumTimeoutMs).toString(),
       MaxConcurrentRequests: (item.MaxConcurrentRequests || defaultMaxConcurrentRequests).toString(),
+      Labels: createLabelRows(item.Labels),
+      Tags: createTagRows(item.Tags),
       HealthCheckEnabled: item.HealthCheckEnabled || false,
       HealthCheckUrl: item.HealthCheckUrl || '',
       HealthCheckMethod: item.HealthCheckMethod === 1 ? 'HEAD' : 'GET',
@@ -376,6 +379,8 @@ export default function CompletionEndpointsView() {
         EnableRequestHistory: form.EnableRequestHistory,
         MaximumTimeoutMs: parsePositiveInteger(form.MaximumTimeoutMs, defaultMaximumTimeoutMs),
         MaxConcurrentRequests: parsePositiveInteger(form.MaxConcurrentRequests, defaultMaxConcurrentRequests),
+        Labels: normalizeLabelRows(form.Labels),
+        Tags: normalizeTagRows(form.Tags),
         HealthCheckEnabled: form.HealthCheckEnabled,
         HealthCheckUrl: form.HealthCheckUrl || null,
         HealthCheckMethod: form.HealthCheckMethod === 'HEAD' ? 1 : 0,
@@ -597,6 +602,16 @@ export default function CompletionEndpointsView() {
                 <input value={form.Endpoint} onChange={e => handleEndpointChange(e.target.value)} placeholder="http://localhost:11434" />
               </Tooltip>
             </div>
+          </div>
+
+          <div className="endpoint-form-section">
+            <div className="endpoint-form-section-header">Metadata</div>
+            <EndpointMetadataEditor
+              labels={form.Labels}
+              tags={form.Tags}
+              onLabelsChange={Labels => setForm({ ...form, Labels })}
+              onTagsChange={Tags => setForm({ ...form, Tags })}
+            />
           </div>
 
           {/* Options Section */}

@@ -16,6 +16,8 @@ namespace Partio.Core.Settings
         private int _MaximumTimeoutMs = 60000;
         private int _MaxConcurrentRequests = 2;
         private EndpointTokenizationSettings? _Tokenization = null;
+        private List<string> _Labels = new List<string>();
+        private Dictionary<string, string> _Tags = new Dictionary<string, string>();
 
         /// <summary>
         /// Human-readable name for the endpoint.
@@ -87,6 +89,24 @@ namespace Partio.Core.Settings
         {
             get => _Tokenization;
             set => _Tokenization = value;
+        }
+
+        /// <summary>
+        /// Labels to seed onto the default endpoint.
+        /// </summary>
+        public List<string> Labels
+        {
+            get => _Labels;
+            set => _Labels = value ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Key-value tags to seed onto the default endpoint.
+        /// </summary>
+        public Dictionary<string, string> Tags
+        {
+            get => _Tags;
+            set => _Tags = value ?? new Dictionary<string, string>();
         }
     }
 }

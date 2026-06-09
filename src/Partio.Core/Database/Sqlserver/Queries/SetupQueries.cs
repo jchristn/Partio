@@ -181,6 +181,24 @@ namespace Partio.Core.Database.Sqlserver.Queries
             END;";
 
         /// <summary>
+        /// Migration: add labels_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddLabelsJson =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'labels_json')
+            BEGIN
+                ALTER TABLE embedding_endpoints ADD labels_json NVARCHAR(MAX) NULL;
+            END;";
+
+        /// <summary>
+        /// Migration: add tags_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddTagsJson =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'tags_json')
+            BEGIN
+                ALTER TABLE embedding_endpoints ADD tags_json NVARCHAR(MAX) NULL;
+            END;";
+
+        /// <summary>
         /// Migration: add maximum_timeout_ms column to embedding_endpoints for existing databases.
         /// </summary>
         public static readonly string AlterEmbeddingEndpointsAddMaximumTimeoutMs =
@@ -214,6 +232,24 @@ namespace Partio.Core.Database.Sqlserver.Queries
             @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'max_concurrent_requests')
             BEGIN
                 ALTER TABLE completion_endpoints ADD max_concurrent_requests INT NOT NULL DEFAULT 2;
+            END;";
+
+        /// <summary>
+        /// Migration: add labels_json column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddLabelsJson =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'labels_json')
+            BEGIN
+                ALTER TABLE completion_endpoints ADD labels_json NVARCHAR(MAX) NULL;
+            END;";
+
+        /// <summary>
+        /// Migration: add tags_json column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddTagsJson =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'tags_json')
+            BEGIN
+                ALTER TABLE completion_endpoints ADD tags_json NVARCHAR(MAX) NULL;
             END;";
 
         /// <summary>

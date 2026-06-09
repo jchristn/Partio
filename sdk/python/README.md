@@ -18,7 +18,7 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 - Endpoint explorer (`explore_embedding_endpoint`, `explore_completion_endpoint`)
 - Request history (`get_request_history`, `get_request_history_detail`, `delete_request_history`, `enumerate_request_history`)
 
-Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
 Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
 Use `MaximumTimeoutMs` and `MaxConcurrentRequests` on embedding or completion endpoints to cap upstream provider calls per endpoint. Process routes that hit the timeout cap raise `PartioError` with status code `504`; concurrency-limit rejections raise `PartioError` with status code `429`.
 Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.

@@ -261,11 +261,15 @@ namespace Test.Shared
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 61000,
-                    MaxConcurrentRequests = 3
+                    MaxConcurrentRequests = 3,
+                    Labels = new List<string> { "endpoint-metadata", "embedding-create" },
+                    Tags = new Dictionary<string, string> { { "purpose", "metadata-test" }, { "kind", "embedding" } }
                 });
                 if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No endpoint returned");
                 if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
                 if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch on create");
+                if (ep.Labels == null || !ep.Labels.Contains("embedding-create")) throw new Exception("Embedding endpoint labels not returned on create");
+                if (ep.Tags == null || !ep.Tags.ContainsKey("purpose") || ep.Tags["purpose"] != "metadata-test") throw new Exception("Embedding endpoint tags not returned on create");
                 _TestEpId = ep.Id;
             }
         }
@@ -279,6 +283,8 @@ namespace Test.Shared
                 if (ep.Model != "test-model") throw new Exception("Model mismatch");
                 if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
                 if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
+                if (ep.Labels == null || !ep.Labels.Contains("embedding-create")) throw new Exception("Embedding endpoint labels did not round-trip");
+                if (ep.Tags == null || !ep.Tags.ContainsKey("kind") || ep.Tags["kind"] != "embedding") throw new Exception("Embedding endpoint tags did not round-trip");
             }
         }
 
@@ -294,11 +300,15 @@ namespace Test.Shared
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 91000,
-                    MaxConcurrentRequests = 5
+                    MaxConcurrentRequests = 5,
+                    Labels = new List<string> { "endpoint-metadata", "embedding-updated" },
+                    Tags = new Dictionary<string, string> { { "purpose", "updated" }, { "kind", "embedding" } }
                 });
                 if (updated == null) throw new Exception("Update failed");
                 if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
                 if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch on update");
+                if (updated.Labels == null || !updated.Labels.Contains("embedding-updated")) throw new Exception("Embedding endpoint labels not returned on update");
+                if (updated.Tags == null || !updated.Tags.ContainsKey("purpose") || updated.Tags["purpose"] != "updated") throw new Exception("Embedding endpoint tags not returned on update");
             }
         }
 
@@ -317,6 +327,16 @@ namespace Test.Shared
             {
                 EnumerationResult<EmbeddingEndpoint>? result = await admin.EnumerateEndpointsAsync(new EnumerationRequest { MaxResults = 10 });
                 if (result == null || result.Data.Count == 0) throw new Exception("No endpoints returned");
+
+                EnumerationResult<EmbeddingEndpoint>? metadataResult = await admin.EnumerateEndpointsAsync(new EnumerationRequest
+                {
+                    MaxResults = 10,
+                    LabelFilter = "embedding-updated",
+                    TagKeyFilter = "purpose",
+                    TagValueFilter = "updated"
+                });
+                if (metadataResult == null || metadataResult.Data.All(ep => ep.Id != _TestEpId))
+                    throw new Exception("Updated embedding endpoint not returned by metadata filters");
             }
         }
 
@@ -372,11 +392,15 @@ namespace Test.Shared
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 61000,
-                    MaxConcurrentRequests = 3
+                    MaxConcurrentRequests = 3,
+                    Labels = new List<string> { "endpoint-metadata", "completion-create" },
+                    Tags = new Dictionary<string, string> { { "purpose", "metadata-test" }, { "kind", "completion" } }
                 });
                 if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
                 if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
                 if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch on create");
+                if (cep.Labels == null || !cep.Labels.Contains("completion-create")) throw new Exception("Completion endpoint labels not returned on create");
+                if (cep.Tags == null || !cep.Tags.ContainsKey("purpose") || cep.Tags["purpose"] != "metadata-test") throw new Exception("Completion endpoint tags not returned on create");
                 _TestCepId = cep.Id;
             }
         }
@@ -390,6 +414,8 @@ namespace Test.Shared
                 if (cep.Model != "test-model") throw new Exception("Model mismatch");
                 if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
                 if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
+                if (cep.Labels == null || !cep.Labels.Contains("completion-create")) throw new Exception("Completion endpoint labels did not round-trip");
+                if (cep.Tags == null || !cep.Tags.ContainsKey("kind") || cep.Tags["kind"] != "completion") throw new Exception("Completion endpoint tags did not round-trip");
             }
         }
 
@@ -406,11 +432,15 @@ namespace Test.Shared
                     ApiFormat = "Ollama",
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 91000,
-                    MaxConcurrentRequests = 5
+                    MaxConcurrentRequests = 5,
+                    Labels = new List<string> { "endpoint-metadata", "completion-updated" },
+                    Tags = new Dictionary<string, string> { { "purpose", "updated" }, { "kind", "completion" } }
                 });
                 if (updated == null) throw new Exception("Update failed");
                 if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
                 if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch on update");
+                if (updated.Labels == null || !updated.Labels.Contains("completion-updated")) throw new Exception("Completion endpoint labels not returned on update");
+                if (updated.Tags == null || !updated.Tags.ContainsKey("purpose") || updated.Tags["purpose"] != "updated") throw new Exception("Completion endpoint tags not returned on update");
             }
         }
 
@@ -429,6 +459,16 @@ namespace Test.Shared
             {
                 EnumerationResult<CompletionEndpoint>? result = await admin.EnumerateCompletionEndpointsAsync(new EnumerationRequest { MaxResults = 10 });
                 if (result == null || result.Data.Count == 0) throw new Exception("No endpoints returned");
+
+                EnumerationResult<CompletionEndpoint>? metadataResult = await admin.EnumerateCompletionEndpointsAsync(new EnumerationRequest
+                {
+                    MaxResults = 10,
+                    LabelFilter = "completion-updated",
+                    TagKeyFilter = "purpose",
+                    TagValueFilter = "updated"
+                });
+                if (metadataResult == null || metadataResult.Data.All(ep => ep.Id != _TestCepId))
+                    throw new Exception("Updated completion endpoint not returned by metadata filters");
             }
         }
 

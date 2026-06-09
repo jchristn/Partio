@@ -766,6 +766,8 @@ namespace Partio.Server
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
                 ep.Tokenization = defaultEp.Tokenization;
+                ep.Labels = defaultEp.Labels;
+                ep.Tags = defaultEp.Tags;
                 ep.HealthCheckEnabled = true;
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
                 await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
@@ -786,6 +788,8 @@ namespace Partio.Server
                 cep.ApiKey = defaultIep.ApiKey;
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
+                cep.Labels = defaultIep.Labels;
+                cep.Tags = defaultIep.Tags;
                 cep.HealthCheckEnabled = true;
                 CompletionEndpoint.ApplyHealthCheckDefaults(cep);
                 await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);
@@ -2556,6 +2560,8 @@ namespace Partio.Server
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
                 ep.Tokenization = defaultEp.Tokenization;
+                ep.Labels = defaultEp.Labels;
+                ep.Tags = defaultEp.Tags;
                 ep.HealthCheckEnabled = true;
                 EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
                 EmbeddingEndpoint createdEp = await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
@@ -2573,6 +2579,8 @@ namespace Partio.Server
                 cep.ApiKey = defaultIep.ApiKey;
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
+                cep.Labels = defaultIep.Labels;
+                cep.Tags = defaultIep.Tags;
                 cep.HealthCheckEnabled = true;
                 CompletionEndpoint.ApplyHealthCheckDefaults(cep);
                 CompletionEndpoint createdCep = await _Database.CompletionEndpoint.CreateAsync(cep).ConfigureAwait(false);

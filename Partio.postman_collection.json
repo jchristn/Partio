@@ -1574,7 +1574,9 @@
 									"var jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
-									"}"
+									"}",
+									"pm.expect(jsonData.Labels).to.be.an('array');",
+									"pm.expect(jsonData.Tags).to.be.an('object');"
 								]
 							}
 						}
@@ -1589,7 +1591,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"My Inference Endpoint\",\n    \"Model\": \"{{completionModel}}\",\n    \"Endpoint\": \"{{completionEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"HealthCheckEnabled\": false\n}"
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"My Inference Endpoint\",\n    \"Model\": \"{{completionModel}}\",\n    \"Endpoint\": \"{{completionEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"ApiKey\": \"{{apiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"HealthCheckEnabled\": false,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"endpointType\": \"completion\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
@@ -1624,7 +1626,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"Id\": \"{{completionEndpointId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Updated Inference Endpoint\",\n    \"Model\": \"{{completionModel}}\",\n    \"Endpoint\": \"{{completionEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"Active\": true,\n    \"MaximumTimeoutMs\": 90000,\n    \"MaxConcurrentRequests\": 4\n}"
+							"raw": "{\n    \"Id\": \"{{completionEndpointId}}\",\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Updated Inference Endpoint\",\n    \"Model\": \"{{completionModel}}\",\n    \"Endpoint\": \"{{completionEndpointUrl}}\",\n    \"ApiFormat\": \"{{apiFormat}}\",\n    \"Active\": true,\n    \"MaximumTimeoutMs\": 90000,\n    \"MaxConcurrentRequests\": 4,\n    \"Labels\": [\"postman-test\", \"updated\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"endpointType\": \"completion\",\n        \"updated\": \"true\"\n    }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}",

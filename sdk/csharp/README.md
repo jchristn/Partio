@@ -18,7 +18,7 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 - Endpoint explorer (`ExploreEmbeddingEndpointAsync`, `ExploreCompletionEndpointAsync`)
 - Request history (`GetRequestHistoryAsync`, `GetRequestHistoryDetailAsync`, `DeleteRequestHistoryAsync`, `EnumerateRequestHistoryAsync`)
 
-Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`.
+Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
 Endpoint models also expose `MaximumTimeoutMs` and `MaxConcurrentRequests`, the per-endpoint caps enforced for upstream provider calls. Process routes that hit the timeout cap return HTTP `504`, while requests rejected by the concurrency cap return HTTP `429`, both surfaced by the SDK as `PartioException`.
 Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.
 

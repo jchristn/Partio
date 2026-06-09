@@ -749,6 +749,11 @@ Create an embedding endpoint.
     "HealthyThreshold": 3,
     "UnhealthyThreshold": 3,
     "HealthCheckUseAuth": false,
+    "Labels": ["production", "embedding"],
+    "Tags": {
+        "owner": "search",
+        "env": "prod"
+    },
     "Tokenization": {
         "TokenizerKind": "BertWordPiece",
         "TokenizerModel": "bert-base-uncased",
@@ -759,6 +764,13 @@ Create an embedding endpoint.
     }
 }
 ```
+
+#### Endpoint Metadata Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Labels` | `List<string>` | `[]` | Free-form labels stored with the embedding endpoint |
+| `Tags` | `Dictionary<string, string>` | `{}` | Free-form key/value metadata stored with the embedding endpoint |
 
 #### Health Check Properties
 
@@ -888,11 +900,23 @@ Create a completion endpoint.
     "EnableRequestHistory": true,
     "MaximumTimeoutMs": 60000,
     "MaxConcurrentRequests": 2,
-    "HealthCheckEnabled": false
+    "HealthCheckEnabled": false,
+    "Labels": ["production", "inference"],
+    "Tags": {
+        "owner": "search",
+        "env": "prod"
+    }
 }
 ```
 
 **Response**: `201 Created` â€” `CompletionEndpoint`
+
+#### Completion Endpoint Metadata Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Labels` | `List<string>` | `[]` | Free-form labels stored with the completion/inference endpoint |
+| `Tags` | `Dictionary<string, string>` | `{}` | Free-form key/value metadata stored with the completion/inference endpoint |
 
 #### Completion Endpoint Timeout and Health Properties
 

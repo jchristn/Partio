@@ -157,6 +157,18 @@ namespace Partio.Core.Database.Sqlite.Queries
             @"ALTER TABLE embedding_endpoints ADD COLUMN tokenization_json TEXT NULL;";
 
         /// <summary>
+        /// Migration: add labels_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddLabelsJson =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN labels_json TEXT NULL;";
+
+        /// <summary>
+        /// Migration: add tags_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddTagsJson =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN tags_json TEXT NULL;";
+
+        /// <summary>
         /// Migration: add maximum_timeout_ms column to embedding_endpoints for existing databases.
         /// </summary>
         public static readonly string AlterEmbeddingEndpointsAddMaximumTimeoutMs =
@@ -179,6 +191,18 @@ namespace Partio.Core.Database.Sqlite.Queries
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaxConcurrentRequests =
             @"ALTER TABLE completion_endpoints ADD COLUMN max_concurrent_requests INTEGER NOT NULL DEFAULT 2;";
+
+        /// <summary>
+        /// Migration: add labels_json column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddLabelsJson =
+            @"ALTER TABLE completion_endpoints ADD COLUMN labels_json TEXT NULL;";
+
+        /// <summary>
+        /// Migration: add tags_json column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddTagsJson =
+            @"ALTER TABLE completion_endpoints ADD COLUMN tags_json TEXT NULL;";
 
         /// <summary>
         /// All table creation queries in dependency order.

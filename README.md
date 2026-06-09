@@ -97,6 +97,7 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 - **Request history and audit logging** with automatic cleanup, filesystem body persistence, configurable retention, and upstream embedding call capture (request/response headers, bodies, timing, and status for each call to the embedding provider)
 - **Bearer token authentication** with global admin API keys and tenant-scoped credentials
 - **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return 502)
+- **Endpoint metadata** with `Labels` and string key/value `Tags` on embedding and inference endpoints for operator-owned grouping and routing context
 - **Model loading and warming** for configured embedding and inference endpoints, with native Ollama preload support and warm-request semantics for OpenAI, Gemini, and vLLM
 - **Per-endpoint provider timeout caps** with a default 60-second ceiling for embedding and inference calls, configurable in the API and dashboard and enforced independently from health checks
 - **Batch processing** for submitting multiple semantic cells in a single request
@@ -397,7 +398,11 @@ Partio is configured via `partio.json`, created automatically on first run.
       "Endpoint": "http://localhost:11434",
       "ApiFormat": "Ollama",
       "MaximumTimeoutMs": 60000,
-      "MaxConcurrentRequests": 2
+      "MaxConcurrentRequests": 2,
+      "Labels": ["default", "embedding"],
+      "Tags": {
+        "provider": "ollama"
+      }
     }
   ],
   "DefaultInferenceEndpoints": [
@@ -406,13 +411,17 @@ Partio is configured via `partio.json`, created automatically on first run.
       "Endpoint": "http://localhost:11434",
       "ApiFormat": "Ollama",
       "MaximumTimeoutMs": 60000,
-      "MaxConcurrentRequests": 2
+      "MaxConcurrentRequests": 2,
+      "Labels": ["default", "inference"],
+      "Tags": {
+        "provider": "ollama"
+      }
     }
   ]
 }
 ```
 
-Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `MaximumTimeoutMs`, stored in milliseconds and clamped server-side to a positive non-zero integer, plus `MaxConcurrentRequests`, clamped to `>= 1` with a default of `2`.
+Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `Labels` and string key/value `Tags`, plus `MaximumTimeoutMs`, stored in milliseconds and clamped server-side to a positive non-zero integer, and `MaxConcurrentRequests`, clamped to `>= 1` with a default of `2`.
 
 ### Database Options
 
@@ -562,6 +571,10 @@ Both images support `linux/amd64` and `linux/arm64`.
 ### Building Locally
 
 ```bash
+# Server and dashboard
+build-all.bat <tag>
+./build-all.sh <tag>
+
 # Server
 build-server.bat [tag]
 
