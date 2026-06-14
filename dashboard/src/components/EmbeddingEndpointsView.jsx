@@ -98,6 +98,12 @@ function applyApiFormatDefaults(currentForm, newFormat, healthFieldsEdited) {
   return nextForm;
 }
 
+function formatTenantOption(tenant) {
+  const id = tenant.Id || '';
+  const name = tenant.Name || id;
+  return name && name !== id ? `${name} (${id})` : id;
+}
+
 function HealthHistogram({ history, width = 120, height = 24 }) {
   if (!history || history.length === 0) return <span className="text-muted">No data</span>;
 
@@ -471,6 +477,10 @@ export default function EmbeddingEndpointsView() {
     setLoadModal({ isOpen: true, endpoint: item });
   };
 
+  const tenantOptions = form.TenantId && !tenants.some(t => t.Id === form.TenantId)
+    ? [{ Id: form.TenantId, Name: '' }, ...tenants]
+    : tenants;
+
   const columns = [
     {
       key: 'Id',
@@ -478,6 +488,13 @@ export default function EmbeddingEndpointsView() {
       tooltip: 'Unique endpoint identifier (click to copy)',
       width: '18%',
       render: (item) => <CopyableId value={item.Id} />
+    },
+    {
+      key: 'TenantId',
+      label: 'Tenant ID',
+      tooltip: 'Tenant identifier that owns this endpoint (click to copy)',
+      width: '14%',
+      render: (item) => item.TenantId ? <CopyableId value={item.TenantId} /> : '-'
     },
     {
       key: 'Name',
@@ -580,16 +597,14 @@ export default function EmbeddingEndpointsView() {
           <div className="endpoint-form-section">
             <div className="endpoint-form-section-header">Connection</div>
             <div className="endpoint-form-row">
-              {!editing && (
-                <div className="form-group">
-                  <FormFieldLabel text="Tenant" tooltip="The tenant this endpoint belongs to. Each tenant has isolated data." />
-                  <Tooltip content="The tenant this endpoint belongs to. Each tenant has isolated data." block>
-                    <select value={form.TenantId} onChange={e => setForm({ ...form, TenantId: e.target.value })}>
-                      {tenants.map(t => <option key={t.Id} value={t.Id}>{t.Name || t.Id}</option>)}
-                    </select>
-                  </Tooltip>
-                </div>
-              )}
+              <div className="form-group">
+                <FormFieldLabel text="Tenant ID" tooltip="The tenant ID this endpoint belongs to. Each tenant has isolated data." />
+                <Tooltip content="The tenant ID this endpoint belongs to. Each tenant has isolated data." block>
+                  <select value={form.TenantId} onChange={e => setForm({ ...form, TenantId: e.target.value })}>
+                    {tenantOptions.map(t => <option key={t.Id} value={t.Id}>{formatTenantOption(t)}</option>)}
+                  </select>
+                </Tooltip>
+              </div>
               <div className="form-group">
                 <FormFieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." />
                 <Tooltip content="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." block>
