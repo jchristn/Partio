@@ -1,85 +1,34 @@
 namespace Test.Nunit
 {
-    using System.Diagnostics;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
     using NUnit.Framework;
     using Test.Shared;
+    using Touchstone.Core;
+    using Touchstone.NunitAdapter;
 
+    /// <summary>
+    /// Runs the shared Partio integration suite under NUnit. The suite starts an in-process
+    /// Partio server and Ollama-compatible upstream through its before/after hooks, then executes
+    /// its stateful cases in order via the fact-style adapter.
+    /// </summary>
     [TestFixture]
-    public class IntegrationTests
+    public sealed class IntegrationTests : TouchstoneNunitBase
     {
-        [TestCaseSource(nameof(GetTestNames))]
-        public void IntegrationTestPasses(string testName)
+        /// <inheritdoc />
+        protected override IReadOnlyList<TestSuiteDescriptor> Suites
         {
-            bool found = IntegrationResultCache.Results.TryGetValue(testName, out AutomatedTestResult? result);
-            Assert.That(found, Is.True, "Integration result not found for '" + testName + "'.");
-            Assert.That(result!.Passed, Is.True, result.ErrorMessage ?? ("Integration test failed for '" + testName + "'."));
+            get { return new List<TestSuiteDescriptor> { SharedIntegrationTests.SelfHostedSuite() }; }
         }
 
-        public static IEnumerable<string> GetTestNames()
+        /// <summary>
+        /// Execute the full integration suite as a single test.
+        /// </summary>
+        /// <returns>Task.</returns>
+        [Test]
+        public async Task RunAll()
         {
-            IReadOnlyList<SharedNamedTestCase> tests = SharedIntegrationTests.GetTests();
-            for (int i = 0; i < tests.Count; i++)
-            {
-                yield return tests[i].Name;
-            }
-        }
-
-        private static class IntegrationResultCache
-        {
-            private static readonly object _Sync = new object();
-            private static IReadOnlyDictionary<string, AutomatedTestResult>? _Results;
-
-            public static IReadOnlyDictionary<string, AutomatedTestResult> Results
-            {
-                get
-                {
-                    lock (_Sync)
-                    {
-                        if (_Results != null)
-                            return _Results;
-
-                        Dictionary<string, AutomatedTestResult> results = new Dictionary<string, AutomatedTestResult>(StringComparer.Ordinal);
-
-                        using (SelfHostedPartioTestEnvironment environment = SelfHostedPartioTestEnvironment.StartAsync().GetAwaiter().GetResult())
-                        {
-                            SharedIntegrationTests.Configure(
-                                environment.Endpoint,
-                                environment.AdminKey,
-                                environment.TestToken,
-                                environment.UpstreamEndpoint);
-                            IReadOnlyList<SharedNamedTestCase> tests = SharedIntegrationTests.GetTests();
-
-                            for (int i = 0; i < tests.Count; i++)
-                            {
-                                SharedNamedTestCase test = tests[i];
-                                Stopwatch sw = Stopwatch.StartNew();
-                                AutomatedTestResult result = new AutomatedTestResult { TestName = test.Name };
-
-                                try
-                                {
-                                    test.ExecuteAsync().GetAwaiter().GetResult();
-                                    result.Passed = true;
-                                }
-                                catch (Exception ex)
-                                {
-                                    result.Passed = false;
-                                    result.ErrorMessage = ex.Message;
-                                }
-                                finally
-                                {
-                                    sw.Stop();
-                                    result.ElapsedMilliseconds = sw.ElapsedMilliseconds;
-                                }
-
-                                results[test.Name] = result;
-                            }
-                        }
-
-                        _Results = results;
-                        return _Results;
-                    }
-                }
-            }
+            await RunAllAsync();
         }
     }
 }

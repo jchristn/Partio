@@ -1,34 +1,33 @@
 namespace Test.XUnit
 {
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
     using Test.Shared;
+    using Touchstone.Core;
+    using Touchstone.XunitAdapter;
     using Xunit;
 
-    [Collection("Integration")]
-    public class IntegrationTests
+    /// <summary>
+    /// Runs the shared Partio integration suite under xUnit. The suite starts an in-process
+    /// Partio server and Ollama-compatible upstream through its before/after hooks, then executes
+    /// its stateful cases in order. Using the fact-style adapter keeps the environment lifecycle
+    /// correct and the ordered cases sequential.
+    /// </summary>
+    public sealed class IntegrationTests : TouchstoneFactBase
     {
-        private readonly IntegrationFixture _Fixture;
-
-        public IntegrationTests(IntegrationFixture fixture)
+        /// <inheritdoc />
+        protected override IReadOnlyList<TestSuiteDescriptor> Suites
         {
-            _Fixture = fixture;
+            get { return new List<TestSuiteDescriptor> { SharedIntegrationTests.SelfHostedSuite() }; }
         }
 
-        [Theory]
-        [MemberData(nameof(GetTestNames))]
-        public void IntegrationTestPasses(string testName)
+        /// <summary>
+        /// Execute the full integration suite as a single fact.
+        /// </summary>
+        [Fact]
+        public async Task RunAll()
         {
-            bool found = _Fixture.Results.TryGetValue(testName, out AutomatedTestResult? result);
-            Assert.True(found, "Integration result not found for '" + testName + "'.");
-            Assert.True(result!.Passed, result.ErrorMessage ?? ("Integration test failed for '" + testName + "'."));
-        }
-
-        public static IEnumerable<object[]> GetTestNames()
-        {
-            IReadOnlyList<SharedNamedTestCase> tests = SharedIntegrationTests.GetTests();
-            for (int i = 0; i < tests.Count; i++)
-            {
-                yield return new object[] { tests[i].Name };
-            }
+            await RunAllAsync();
         }
     }
 }

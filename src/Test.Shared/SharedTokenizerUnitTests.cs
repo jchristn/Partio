@@ -8,14 +8,27 @@ namespace Test.Shared
     using Partio.Core.ThirdParty;
     using Partio.Core.Tokenization;
     using SyslogLogging;
+    using Touchstone.Core;
 
     public static class SharedTokenizerUnitTests
     {
-        public static IReadOnlyList<SharedNamedTestCase> GetTests()
+        /// <summary>
+        /// Build the Touchstone suite of tokenization and chunking unit tests.
+        /// </summary>
+        /// <returns>A suite descriptor exposing every case.</returns>
+        public static TestSuiteDescriptor Suite()
         {
-            List<SharedNamedTestCase> tests = new List<SharedNamedTestCase>();
+            return new TestSuiteDescriptor(
+                "Tokenization",
+                "Tokenization & chunking unit tests",
+                BuildCases());
+        }
 
-            tests.Add(SharedNamedTestCase.CreateAsync("Tokenization resolver: endpoint override beats capabilities and defaults", async () =>
+        private static List<TestCaseDescriptor> BuildCases()
+        {
+            List<TestCaseDescriptor> tests = new List<TestCaseDescriptor>();
+
+            tests.Add(TestCaseFactory.Async("Tokenization","Tokenization resolver: endpoint override beats capabilities and defaults", async () =>
             {
                 ServerSettings settings = new ServerSettings();
                 LoggingModule logging = CreateLogging();
@@ -63,7 +76,7 @@ namespace Test.Shared
                     throw new Exception("Expected effective budget 368, got " + profile.EffectiveInputBudget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateAsync("Tokenization resolver: global fallback is used when no endpoint-specific resolution exists", async () =>
+            tests.Add(TestCaseFactory.Async("Tokenization","Tokenization resolver: global fallback is used when no endpoint-specific resolution exists", async () =>
             {
                 ServerSettings settings = new ServerSettings();
                 settings.TokenizationDefaults.GlobalFallback = new EndpointTokenizationSettings
@@ -98,7 +111,7 @@ namespace Test.Shared
                     throw new Exception("Expected effective budget 1200, got " + profile.EffectiveInputBudget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateAsync("Tokenization resolver: provider calibration discovers effective budget and per-input batch mode", async () =>
+            tests.Add(TestCaseFactory.Async("Tokenization","Tokenization resolver: provider calibration discovers effective budget and per-input batch mode", async () =>
             {
                 ServerSettings settings = new ServerSettings();
                 LoggingModule logging = CreateLogging();
@@ -147,7 +160,7 @@ namespace Test.Shared
                 }
             }));
 
-            tests.Add(SharedNamedTestCase.CreateAsync("Tokenization resolver: endpoint override derives effective budget from reserved tokens", async () =>
+            tests.Add(TestCaseFactory.Async("Tokenization","Tokenization resolver: endpoint override derives effective budget from reserved tokens", async () =>
             {
                 ServerSettings settings = new ServerSettings();
                 LoggingModule logging = CreateLogging();
@@ -194,7 +207,7 @@ namespace Test.Shared
                     throw new Exception("Expected derived effective budget 250, got " + profile.EffectiveInputBudget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateSync("BERT token slicing: regression sample never exceeds requested token count", () =>
+            tests.Add(TestCaseFactory.Sync("Tokenization","BERT token slicing: regression sample never exceeds requested token count", () =>
             {
                 ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
                 string text = string.Join(" ", Enumerable.Repeat(
@@ -222,7 +235,7 @@ namespace Test.Shared
                 }
             }));
 
-            tests.Add(SharedNamedTestCase.CreateSync("Sentence chunker: oversized single sentence descends into in-budget token spans", () =>
+            tests.Add(TestCaseFactory.Sync("Tokenization","Sentence chunker: oversized single sentence descends into in-budget token spans", () =>
             {
                 ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
                 int budget = 12;
@@ -238,7 +251,7 @@ namespace Test.Shared
                 AssertChunksInBudget(chunks, tokenizer, budget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateSync("Paragraph chunker: oversized single paragraph descends to sentence and token spans", () =>
+            tests.Add(TestCaseFactory.Sync("Tokenization","Paragraph chunker: oversized single paragraph descends to sentence and token spans", () =>
             {
                 ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
                 int budget = 18;
@@ -252,7 +265,7 @@ namespace Test.Shared
                 AssertChunksInBudget(chunks, tokenizer, budget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateSync("Regex chunker: oversized regex segment descends into token spans", () =>
+            tests.Add(TestCaseFactory.Sync("Tokenization","Regex chunker: oversized regex segment descends into token spans", () =>
             {
                 ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
                 int budget = 10;
@@ -269,7 +282,7 @@ namespace Test.Shared
                 AssertChunksInBudget(chunks, tokenizer, budget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateSync("List chunkers: oversized list items are reduced before emission", () =>
+            tests.Add(TestCaseFactory.Sync("Tokenization","List chunkers: oversized list items are reduced before emission", () =>
             {
                 ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
                 int budget = 10;
@@ -295,7 +308,7 @@ namespace Test.Shared
                 AssertChunksInBudget(chunks, tokenizer, budget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateSync("Table chunkers: oversized grouped rows descend to row and cell boundaries", () =>
+            tests.Add(TestCaseFactory.Sync("Tokenization","Table chunkers: oversized grouped rows descend to row and cell boundaries", () =>
             {
                 ITokenizerAdapter tokenizer = new BertWordPieceTokenizerAdapter();
                 int budget = 14;
@@ -323,7 +336,7 @@ namespace Test.Shared
                 AssertChunksInBudget(chunks, tokenizer, budget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateSync("Regression: text that fits cl100k assumptions still splits safely in Bert token space", () =>
+            tests.Add(TestCaseFactory.Sync("Tokenization","Regression: text that fits cl100k assumptions still splits safely in Bert token space", () =>
             {
                 ITokenizerAdapter cl100k = new SharpTokenTokenizerAdapter("cl100k_base");
                 ITokenizerAdapter bert = new BertWordPieceTokenizerAdapter();
@@ -348,7 +361,7 @@ namespace Test.Shared
                 AssertChunksInBudget(chunks, bert, budget);
             }));
 
-            tests.Add(SharedNamedTestCase.CreateAsync("Embedding endpoint persistence: tokenization settings round-trip through SQLite", async () =>
+            tests.Add(TestCaseFactory.Async("Tokenization","Embedding endpoint persistence: tokenization settings round-trip through SQLite", async () =>
             {
                 string tempRoot = Path.Combine(Path.GetTempPath(), "partio-tokenizer-tests", Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(tempRoot);

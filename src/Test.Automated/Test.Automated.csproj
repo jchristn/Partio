@@ -8,6 +8,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Touchstone.Cli" Version="0.1.12" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\sdk\csharp\Partio.Sdk\Partio.Sdk.csproj" />
     <ProjectReference Include="..\Partio.Server\Partio.Server.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />

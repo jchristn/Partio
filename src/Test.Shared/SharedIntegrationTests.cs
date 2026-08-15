@@ -4,9 +4,11 @@ namespace Test.Shared
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using Partio.Sdk;
     using Partio.Sdk.Models;
+    using Touchstone.Core;
 
     public static class SharedIntegrationTests
     {
@@ -253,9 +255,11 @@ namespace Test.Shared
         {
             using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
             {
+                // Created in the "default" tenant so the global-admin, tenant-scoped enumerate can
+                // exercise the label/tag metadata filters against this endpoint.
                 EmbeddingEndpoint? ep = await admin.CreateEndpointAsync(new EmbeddingEndpoint
                 {
-                    TenantId = _TestTenantId,
+                    TenantId = "default",
                     Model = "test-model",
                     Endpoint = _OllamaEndpoint,
                     ApiFormat = "Ollama",
@@ -294,7 +298,7 @@ namespace Test.Shared
             {
                 EmbeddingEndpoint? updated = await admin.UpdateEndpointAsync(_TestEpId, new EmbeddingEndpoint
                 {
-                    TenantId = _TestTenantId,
+                    TenantId = "default",
                     Model = "test-model-v2",
                     Endpoint = _OllamaEndpoint,
                     ApiFormat = "Ollama",
@@ -383,9 +387,11 @@ namespace Test.Shared
         {
             using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
             {
+                // Created in the "default" tenant so the global-admin, tenant-scoped enumerate can
+                // exercise the label/tag metadata filters against this endpoint.
                 CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
                 {
-                    TenantId = _TestTenantId,
+                    TenantId = "default",
                     Name = "Test Inference",
                     Model = "test-model",
                     Endpoint = _OllamaEndpoint,
@@ -425,7 +431,7 @@ namespace Test.Shared
             {
                 CompletionEndpoint? updated = await admin.UpdateCompletionEndpointAsync(_TestCepId, new CompletionEndpoint
                 {
-                    TenantId = _TestTenantId,
+                    TenantId = "default",
                     Name = "Updated Inference",
                     Model = "test-model-v2",
                     Endpoint = _OllamaEndpoint,
@@ -1644,108 +1650,246 @@ namespace Test.Shared
         }
 
         /// <summary>
-        /// Returns all integration tests as SharedNamedTestCase instances, ordered for sequential execution.
+        /// Build the integration suite against a self-hosted, in-process Partio server and
+        /// Ollama-compatible upstream. The environment lifecycle is managed by the suite's
+        /// before/after hooks so descriptor enumeration never starts a server.
+        /// </summary>
+        /// <returns>A self-hosted integration suite descriptor.</returns>
+        public static TestSuiteDescriptor SelfHostedSuite()
+        {
+            SelfHostedPartioTestEnvironment? environment = null;
+            List<TestCaseDescriptor> cases = BuildCases();
+
+            cases.Add(TestCaseFactory.Async("Integration", "Health Checks Share Same URL Probe (self-hosted)", async () =>
+            {
+                if (environment == null) throw new InvalidOperationException("Self-hosted environment was not started.");
+                await HealthCheckUrlProbeAsync(environment).ConfigureAwait(false);
+            }));
+
+            return new TestSuiteDescriptor(
+                "Integration",
+                "Partio server integration (self-hosted)",
+                cases,
+                beforeSuiteAsync: async ct =>
+                {
+                    environment = await SelfHostedPartioTestEnvironment.StartAsync(ct).ConfigureAwait(false);
+                    Configure(environment.Endpoint, environment.AdminKey, environment.TestToken, environment.UpstreamEndpoint);
+                },
+                afterSuiteAsync: async ct =>
+                {
+                    if (environment != null)
+                    {
+                        await environment.DisposeAsync().ConfigureAwait(false);
+                        environment = null;
+                    }
+                });
+        }
+
+        /// <summary>
+        /// Build the integration suite against an already-running external Partio server.
+        /// </summary>
+        /// <param name="endpoint">Partio server endpoint.</param>
+        /// <param name="adminKey">Administrative bearer token.</param>
+        /// <param name="testToken">Tenant/test bearer token.</param>
+        /// <param name="upstreamEndpoint">Upstream provider endpoint.</param>
+        /// <returns>An external integration suite descriptor.</returns>
+        public static TestSuiteDescriptor ExternalSuite(string endpoint, string adminKey, string testToken, string upstreamEndpoint)
+        {
+            return new TestSuiteDescriptor(
+                "Integration",
+                "Partio server integration (external)",
+                BuildCases(),
+                beforeSuiteAsync: ct =>
+                {
+                    Configure(endpoint, adminKey, testToken, upstreamEndpoint);
+                    return ValueTask.CompletedTask;
+                });
+        }
+
+        /// <summary>
+        /// Self-hosted-only probe verifying that embedding and completion endpoints sharing a
+        /// health-check URL are serviced by a single probe loop.
+        /// </summary>
+        /// <param name="environment">Running self-hosted environment.</param>
+        /// <returns>Task.</returns>
+        public static async Task HealthCheckUrlProbeAsync(SelfHostedPartioTestEnvironment environment)
+        {
+            string uniquePath = "/api/tags?health-singleton=" + Guid.NewGuid().ToString("N");
+            string healthUrl = environment.UpstreamEndpoint.TrimEnd('/') + uniquePath;
+            int baseline = environment.GetUpstreamRawPathRequestCount(uniquePath);
+            string? embeddingEndpointId = null;
+            string? completionEndpointId = null;
+
+            using PartioClient admin = new PartioClient(environment.Endpoint, environment.AdminKey);
+
+            try
+            {
+                EmbeddingEndpoint? embeddingEndpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = "default",
+                    Name = "Singleton Health Embedding",
+                    Model = "singleton-embed",
+                    Endpoint = environment.UpstreamEndpoint,
+                    ApiFormat = "Ollama",
+                    Active = true,
+                    HealthCheckEnabled = true,
+                    HealthCheckUrl = healthUrl,
+                    HealthCheckMethod = "GET",
+                    HealthCheckIntervalMs = 200,
+                    HealthCheckTimeoutMs = 2000,
+                    HealthCheckExpectedStatusCode = 200,
+                    HealthyThreshold = 1,
+                    UnhealthyThreshold = 1
+                }).ConfigureAwait(false);
+                embeddingEndpointId = embeddingEndpoint?.Id;
+
+                CompletionEndpoint? completionEndpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = "default",
+                    Name = "Singleton Health Completion",
+                    Model = "singleton-chat",
+                    Endpoint = environment.UpstreamEndpoint,
+                    ApiFormat = "Ollama",
+                    Active = true,
+                    HealthCheckEnabled = true,
+                    HealthCheckUrl = healthUrl,
+                    HealthCheckMethod = "GET",
+                    HealthCheckIntervalMs = 200,
+                    HealthCheckTimeoutMs = 2000,
+                    HealthCheckExpectedStatusCode = 200,
+                    HealthyThreshold = 1,
+                    UnhealthyThreshold = 1
+                }).ConfigureAwait(false);
+                completionEndpointId = completionEndpoint?.Id;
+
+                if (string.IsNullOrEmpty(embeddingEndpointId) || string.IsNullOrEmpty(completionEndpointId))
+                    throw new InvalidOperationException("Expected both health-check test endpoints to be created.");
+
+                await environment.WaitForUpstreamRawPathRequestCountAsync(uniquePath, baseline + 2, 5000).ConfigureAwait(false);
+                await Task.Delay(350).ConfigureAwait(false);
+
+                int delta = environment.GetUpstreamRawPathRequestCount(uniquePath) - baseline;
+                if (delta > 4)
+                    throw new InvalidOperationException("Expected shared URL health checks to use one probe loop; observed " + delta + " probes for " + healthUrl + ".");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(completionEndpointId))
+                {
+                    try { await admin.DeleteCompletionEndpointAsync(completionEndpointId).ConfigureAwait(false); } catch { }
+                }
+
+                if (!string.IsNullOrEmpty(embeddingEndpointId))
+                {
+                    try { await admin.DeleteEndpointAsync(embeddingEndpointId).ConfigureAwait(false); } catch { }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns all integration tests as Touchstone descriptors, ordered for sequential execution.
         /// Tests are stateful and must run in the returned order.
         /// </summary>
-        public static IReadOnlyList<SharedNamedTestCase> GetTests()
+        /// <returns>Ordered list of integration test cases.</returns>
+        private static List<TestCaseDescriptor> BuildCases()
         {
-            List<SharedNamedTestCase> tests = new List<SharedNamedTestCase>();
+            List<TestCaseDescriptor> tests = new List<TestCaseDescriptor>();
 
             // Health
-            tests.Add(SharedNamedTestCase.CreateAsync("Health Check GET /", async () => await TestHealthCheckAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Health Check GET /", async () => await TestHealthCheckAsync()));
 
             // Tenant CRUD
-            tests.Add(SharedNamedTestCase.CreateAsync("Create Tenant", async () => await TestCreateTenantAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Read Tenant", async () => await TestReadTenantAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Update Tenant", async () => await TestUpdateTenantAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Tenant Exists (HEAD)", async () => await TestTenantExistsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Tenants", async () => await TestEnumerateTenantsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create Tenant", async () => await TestCreateTenantAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Read Tenant", async () => await TestReadTenantAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Update Tenant", async () => await TestUpdateTenantAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Tenant Exists (HEAD)", async () => await TestTenantExistsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Enumerate Tenants", async () => await TestEnumerateTenantsAsync()));
 
             // User CRUD
-            tests.Add(SharedNamedTestCase.CreateAsync("Create User", async () => await TestCreateUserAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Read User", async () => await TestReadUserAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Update User", async () => await TestUpdateUserAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("User Exists (HEAD)", async () => await TestUserExistsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Users", async () => await TestEnumerateUsersAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create User", async () => await TestCreateUserAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Read User", async () => await TestReadUserAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Update User", async () => await TestUpdateUserAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","User Exists (HEAD)", async () => await TestUserExistsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Enumerate Users", async () => await TestEnumerateUsersAsync()));
 
             // Credential CRUD
-            tests.Add(SharedNamedTestCase.CreateAsync("Create Credential", async () => await TestCreateCredentialAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Read Credential", async () => await TestReadCredentialAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Update Credential", async () => await TestUpdateCredentialAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Credential Exists (HEAD)", async () => await TestCredentialExistsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Credentials", async () => await TestEnumerateCredentialsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Authenticate with New Credential", async () => await TestAuthenticateWithNewCredentialAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create Credential", async () => await TestCreateCredentialAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Read Credential", async () => await TestReadCredentialAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Update Credential", async () => await TestUpdateCredentialAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Credential Exists (HEAD)", async () => await TestCredentialExistsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Enumerate Credentials", async () => await TestEnumerateCredentialsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Authenticate with New Credential", async () => await TestAuthenticateWithNewCredentialAsync()));
 
             // Embedding Endpoint CRUD
-            tests.Add(SharedNamedTestCase.CreateAsync("Create Embedding Endpoint", async () => await TestCreateEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Read Embedding Endpoint", async () => await TestReadEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Update Embedding Endpoint", async () => await TestUpdateEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Endpoint Exists (HEAD)", async () => await TestEndpointExistsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Endpoints", async () => await TestEnumerateEndpointsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Create Gemini Embedding Endpoint", async () => await TestCreateGeminiEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Create vLLM Embedding Endpoint", async () => await TestCreateVllmEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create Embedding Endpoint", async () => await TestCreateEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Read Embedding Endpoint", async () => await TestReadEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Update Embedding Endpoint", async () => await TestUpdateEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Endpoint Exists (HEAD)", async () => await TestEndpointExistsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Enumerate Endpoints", async () => await TestEnumerateEndpointsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create Gemini Embedding Endpoint", async () => await TestCreateGeminiEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create vLLM Embedding Endpoint", async () => await TestCreateVllmEmbeddingEndpointAsync()));
 
             // Completion Endpoint CRUD
-            tests.Add(SharedNamedTestCase.CreateAsync("Create Completion Endpoint", async () => await TestCreateCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Read Completion Endpoint", async () => await TestReadCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Update Completion Endpoint", async () => await TestUpdateCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Completion Endpoint Exists (HEAD)", async () => await TestCompletionEndpointExistsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Completion Endpoints", async () => await TestEnumerateCompletionEndpointsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Create Gemini Completion Endpoint", async () => await TestCreateGeminiCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Create vLLM Completion Endpoint", async () => await TestCreateVllmCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create Completion Endpoint", async () => await TestCreateCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Read Completion Endpoint", async () => await TestReadCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Update Completion Endpoint", async () => await TestUpdateCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Completion Endpoint Exists (HEAD)", async () => await TestCompletionEndpointExistsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Enumerate Completion Endpoints", async () => await TestEnumerateCompletionEndpointsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create Gemini Completion Endpoint", async () => await TestCreateGeminiCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create vLLM Completion Endpoint", async () => await TestCreateVllmCompletionEndpointAsync()));
 
             // Model Loading
-            tests.Add(SharedNamedTestCase.CreateAsync("Load Ollama Completion Endpoint Model", async () => await TestLoadOllamaCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Load Ollama Embedding Endpoint Model", async () => await TestLoadOllamaEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Warm OpenAI Completion Endpoint Model", async () => await TestWarmOpenAiCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Warm OpenAI Embedding Endpoint Model", async () => await TestWarmOpenAiEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Warm vLLM Completion Endpoint Model", async () => await TestWarmVllmCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Warm vLLM Embedding Endpoint Model", async () => await TestWarmVllmEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Warm Gemini Completion Endpoint Model", async () => await TestWarmGeminiCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Warm Gemini Embedding Endpoint Model", async () => await TestWarmGeminiEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Unsupported Native Completion Load (409)", async () => await TestUnsupportedNativeCompletionLoadAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Invalid Load KeepAlive (400)", async () => await TestInvalidLoadKeepAliveAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Load Missing Endpoint (404)", async () => await TestLoadMissingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Load Inactive Endpoint (400)", async () => await TestLoadInactiveEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Load Completion Timeout (504)", async () => await TestLoadCompletionTimeoutStatusAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Load Completion Concurrency Limit (429)", async () => await TestLoadCompletionConcurrencyLimitStatusAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Load Ollama Completion Endpoint Model", async () => await TestLoadOllamaCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Load Ollama Embedding Endpoint Model", async () => await TestLoadOllamaEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm OpenAI Completion Endpoint Model", async () => await TestWarmOpenAiCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm OpenAI Embedding Endpoint Model", async () => await TestWarmOpenAiEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm vLLM Completion Endpoint Model", async () => await TestWarmVllmCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm vLLM Embedding Endpoint Model", async () => await TestWarmVllmEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm Gemini Completion Endpoint Model", async () => await TestWarmGeminiCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm Gemini Embedding Endpoint Model", async () => await TestWarmGeminiEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Unsupported Native Completion Load (409)", async () => await TestUnsupportedNativeCompletionLoadAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Invalid Load KeepAlive (400)", async () => await TestInvalidLoadKeepAliveAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Load Missing Endpoint (404)", async () => await TestLoadMissingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Load Inactive Endpoint (400)", async () => await TestLoadInactiveEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Load Completion Timeout (504)", async () => await TestLoadCompletionTimeoutStatusAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Load Completion Concurrency Limit (429)", async () => await TestLoadCompletionConcurrencyLimitStatusAsync()));
 
             // Request History
-            tests.Add(SharedNamedTestCase.CreateAsync("Enumerate Request History", async () => await TestEnumerateRequestHistoryAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Enumerate Request History", async () => await TestEnumerateRequestHistoryAsync()));
 
             // API Explorer
-            tests.Add(SharedNamedTestCase.CreateAsync("Explore Embedding Endpoint", async () => await TestExploreEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Endpoint", async () => await TestExploreCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Explore Embedding Concurrency Limit (429)", async () => await TestExploreEmbeddingConcurrencyLimitStatusAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Concurrency Limit (429)", async () => await TestExploreCompletionConcurrencyLimitStatusAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Explore Completion Timeout Status (504)", async () => await TestExploreCompletionTimeoutStatusAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Process Embedding Timeout (504)", async () => await TestProcessEmbeddingTimeoutAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Process Summarization Timeout (504)", async () => await TestProcessSummarizationTimeoutAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Explore Embedding Endpoint", async () => await TestExploreEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Explore Completion Endpoint", async () => await TestExploreCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Explore Embedding Concurrency Limit (429)", async () => await TestExploreEmbeddingConcurrencyLimitStatusAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Explore Completion Concurrency Limit (429)", async () => await TestExploreCompletionConcurrencyLimitStatusAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Explore Completion Timeout Status (504)", async () => await TestExploreCompletionTimeoutStatusAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Process Embedding Timeout (504)", async () => await TestProcessEmbeddingTimeoutAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Process Summarization Timeout (504)", async () => await TestProcessSummarizationTimeoutAsync()));
 
             // Process (RegexBased)
-            tests.Add(SharedNamedTestCase.CreateAsync("Process Text (RegexBased - Markdown Headings)", async () => await TestProcessTextRegexMarkdownHeadingsAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Process Text (RegexBased - Double Newline)", async () => await TestProcessTextRegexDoubleNewlineAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Process Text (RegexBased - Single Segment)", async () => await TestProcessTextRegexSingleSegmentAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Process Code (RegexBased)", async () => await TestProcessCodeRegexBasedAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Regex Strategy Missing Pattern (400)", async () => await TestRegexStrategyMissingPatternAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Regex Strategy Empty Pattern (400)", async () => await TestRegexStrategyEmptyPatternAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Regex Strategy Invalid Pattern (400)", async () => await TestRegexStrategyInvalidPatternAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Process Text (RegexBased - Markdown Headings)", async () => await TestProcessTextRegexMarkdownHeadingsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Process Text (RegexBased - Double Newline)", async () => await TestProcessTextRegexDoubleNewlineAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Process Text (RegexBased - Single Segment)", async () => await TestProcessTextRegexSingleSegmentAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Process Code (RegexBased)", async () => await TestProcessCodeRegexBasedAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Regex Strategy Missing Pattern (400)", async () => await TestRegexStrategyMissingPatternAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Regex Strategy Empty Pattern (400)", async () => await TestRegexStrategyEmptyPatternAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Regex Strategy Invalid Pattern (400)", async () => await TestRegexStrategyInvalidPatternAsync()));
 
             // Error Cases
-            tests.Add(SharedNamedTestCase.CreateAsync("Unauthenticated Request (401)", async () => await TestUnauthenticatedRequestAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Invalid Bearer Token (401)", async () => await TestInvalidBearerTokenAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Non-existent Resource (404)", async () => await TestNonExistentResourceAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Unauthenticated Request (401)", async () => await TestUnauthenticatedRequestAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Invalid Bearer Token (401)", async () => await TestInvalidBearerTokenAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Non-existent Resource (404)", async () => await TestNonExistentResourceAsync()));
 
             // Cleanup
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete Completion Endpoint", async () => await TestDeleteCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete Gemini Completion Endpoint", async () => await TestDeleteGeminiCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete vLLM Completion Endpoint", async () => await TestDeleteVllmCompletionEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete Embedding Endpoint", async () => await TestDeleteEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete Gemini Embedding Endpoint", async () => await TestDeleteGeminiEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete vLLM Embedding Endpoint", async () => await TestDeleteVllmEmbeddingEndpointAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete Credential", async () => await TestDeleteCredentialAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete User", async () => await TestDeleteUserAsync()));
-            tests.Add(SharedNamedTestCase.CreateAsync("Delete Tenant", async () => await TestDeleteTenantAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete Completion Endpoint", async () => await TestDeleteCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete Gemini Completion Endpoint", async () => await TestDeleteGeminiCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete vLLM Completion Endpoint", async () => await TestDeleteVllmCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete Embedding Endpoint", async () => await TestDeleteEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete Gemini Embedding Endpoint", async () => await TestDeleteGeminiEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete vLLM Embedding Endpoint", async () => await TestDeleteVllmEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete Credential", async () => await TestDeleteCredentialAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete User", async () => await TestDeleteUserAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Delete Tenant", async () => await TestDeleteTenantAsync()));
 
             return tests;
         }

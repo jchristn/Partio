@@ -1,12 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Touchstone.Core" Version="0.1.12" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\sdk\csharp\Partio.Sdk\Partio.Sdk.csproj" />
     <ProjectReference Include="..\Partio.Core\Partio.Core.csproj" />
+    <ProjectReference Include="..\Partio.Server\Partio.Server.csproj" />
   </ItemGroup>
 </Project>
