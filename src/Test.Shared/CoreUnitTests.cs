@@ -57,6 +57,38 @@ namespace Test.Shared
                 }
             }));
 
+            tests.Add(TestCaseFactory.Sync("Core", "IdGenerator: identifiers are unique across all entity types", () =>
+            {
+                HashSet<string> generated = new HashSet<string>(StringComparer.Ordinal);
+                for (int i = 0; i < 50; i++)
+                {
+                    foreach (string id in new[]
+                    {
+                        IdGenerator.NewTenantId(),
+                        IdGenerator.NewUserId(),
+                        IdGenerator.NewCredentialId(),
+                        IdGenerator.NewEmbeddingEndpointId(),
+                        IdGenerator.NewCompletionEndpointId(),
+                        IdGenerator.NewRequestHistoryId()
+                    })
+                    {
+                        if (!generated.Add(id))
+                            throw new Exception("Duplicate id generated across entity types: " + id);
+                    }
+                }
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "IdGenerator: bearer token uses only the alphanumeric alphabet", () =>
+            {
+                const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                for (int i = 0; i < 20; i++)
+                {
+                    string token = IdGenerator.NewBearerToken();
+                    Check.Equal(64, token.Length);
+                    Check.All(token, c => Check.True(alphabet.IndexOf(c) >= 0, "Unexpected character in bearer token: '" + c + "'"));
+                }
+            }));
+
             tests.Add(TestCaseFactory.Sync("Core", "IdGenerator: bearer token is 64 alphanumeric characters", () =>
             {
                 string token = IdGenerator.NewBearerToken();
@@ -124,6 +156,80 @@ namespace Test.Shared
                 }
             }));
 
+            tests.Add(TestCaseFactory.Sync("Core", "UserMaster: Redact copies labels and tags without aliasing the original", () =>
+            {
+                UserMaster user = new UserMaster
+                {
+                    TenantId = "ten_test",
+                    Email = "person@partio.test",
+                    Labels = new List<string> { "alpha" },
+                    Tags = new Dictionary<string, string> { { "env", "test" } }
+                };
+                user.SetPassword("Sup3rSecret!");
+
+                UserMaster redacted = UserMaster.Redact(user);
+                redacted.Labels.Add("beta");
+                redacted.Tags["env"] = "mutated";
+
+                Check.Single(user.Labels);
+                Check.Equal("test", user.Tags["env"]);
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "UserMaster: SetPassword rejects null or empty input", () =>
+            {
+                UserMaster user = new UserMaster();
+                try
+                {
+                    user.SetPassword(string.Empty);
+                    throw new Exception("Expected ArgumentException for empty password.");
+                }
+                catch (ArgumentException)
+                {
+                    // Expected
+                }
+
+                try
+                {
+                    user.SetPassword(null!);
+                    throw new Exception("Expected ArgumentException for null password.");
+                }
+                catch (ArgumentException)
+                {
+                    // Expected
+                }
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "UserMaster: VerifyPassword is false when no password has been set", () =>
+            {
+                UserMaster user = new UserMaster();
+                Check.False(user.VerifyPassword("anything"));
+                Check.False(user.VerifyPassword(string.Empty));
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "UserMaster: Email setter rejects null or empty", () =>
+            {
+                UserMaster user = new UserMaster();
+                try
+                {
+                    user.Email = string.Empty;
+                    throw new Exception("Expected ArgumentException for empty email.");
+                }
+                catch (ArgumentException)
+                {
+                    // Expected
+                }
+
+                try
+                {
+                    user.Email = null!;
+                    throw new Exception("Expected ArgumentException for null email.");
+                }
+                catch (ArgumentException)
+                {
+                    // Expected
+                }
+            }));
+
             // ===== Serialization round-trip =====
 
             tests.Add(TestCaseFactory.Sync("Core", "PartioSerializer: embedding endpoint round-trips through JSON", () =>
@@ -151,6 +257,55 @@ namespace Test.Shared
                 Check.Equal(original.MaximumTimeoutMs, restored.MaximumTimeoutMs);
                 Check.Equal(original.MaxConcurrentRequests, restored.MaxConcurrentRequests);
                 Check.Equal(ApiFormatEnum.OpenAI, restored.ApiFormat);
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "PartioSerializer: completion endpoint round-trips through JSON", () =>
+            {
+                PartioSerializer serializer = new PartioSerializer();
+                CompletionEndpoint original = new CompletionEndpoint
+                {
+                    Id = "cep_serialize",
+                    TenantId = "default",
+                    Name = "Round Trip Inference",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = "https://api.openai.com",
+                    ApiFormat = ApiFormatEnum.OpenAI,
+                    MaximumTimeoutMs = 90000,
+                    MaxConcurrentRequests = 5,
+                    Labels = new List<string> { "prod" },
+                    Tags = new Dictionary<string, string> { { "region", "us-east" } }
+                };
+
+                string json = serializer.SerializeJson(original, true);
+                Check.NotNull(json);
+                Check.Contains("gpt-4.1-mini", json);
+
+                CompletionEndpoint restored = serializer.DeserializeJson<CompletionEndpoint>(json);
+                Check.NotNull(restored);
+                Check.Equal(original.Id, restored.Id);
+                Check.Equal(original.Model, restored.Model);
+                Check.Equal(original.MaximumTimeoutMs, restored.MaximumTimeoutMs);
+                Check.Equal(original.MaxConcurrentRequests, restored.MaxConcurrentRequests);
+                Check.Equal(ApiFormatEnum.OpenAI, restored.ApiFormat);
+                Check.Contains("prod", restored.Labels);
+                Check.Equal("us-east", restored.Tags["region"]);
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "PartioSerializer: deserializing malformed JSON throws", () =>
+            {
+                PartioSerializer serializer = new PartioSerializer();
+                bool threw = false;
+                try
+                {
+                    serializer.DeserializeJson<EmbeddingEndpoint>("{ this is not valid json ");
+                }
+                catch
+                {
+                    // Expected: the serializer surfaces a parse failure rather than returning silently.
+                    threw = true;
+                }
+
+                Check.True(threw, "Expected deserialization of malformed JSON to throw.");
             }));
 
             // ===== Chunking engine =====
