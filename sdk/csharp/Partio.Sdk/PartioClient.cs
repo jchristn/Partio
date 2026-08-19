@@ -85,6 +85,13 @@ namespace Partio.Sdk
         public Task<List<SemanticCellResponse>?> ProcessBatchAsync(List<SemanticCellRequest> requests) =>
             MakeRequestAsync<List<SemanticCellResponse>>(HttpMethod.Post, "/v1.0/process/batch", requests);
 
+        // Chunk & Embed
+        public Task<ChunkResponse?> ChunkAsync(ChunkRequest request) =>
+            MakeRequestAsync<ChunkResponse>(HttpMethod.Post, "/v1.0/chunk", request);
+
+        public Task<EmbedResponse?> EmbedAsync(EmbedRequest request) =>
+            MakeRequestAsync<EmbedResponse>(HttpMethod.Post, "/v1.0/embed", request);
+
         // Explorer
         public Task<EndpointExplorerEmbeddingResponse?> ExploreEmbeddingEndpointAsync(EndpointExplorerEmbeddingRequest request) =>
             MakeRequestAsync<EndpointExplorerEmbeddingResponse>(HttpMethod.Post, "/v1.0/explorer/embedding", request);

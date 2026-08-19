@@ -1649,6 +1649,109 @@ namespace Test.Shared
             }
         }
 
+        // ===== Chunk & Embed =====
+
+        public static async Task TestChunkTextAsync()
+        {
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            string text = "";
+            for (int i = 0; i < 12; i++) text += "The quick brown fox jumps over the lazy dog. ";
+
+            ChunkResponse? resp = await admin.ChunkAsync(new ChunkRequest
+            {
+                Type = "Text",
+                Text = text,
+                ChunkingConfiguration = new ChunkingConfiguration { Strategy = "FixedTokenCount", FixedTokenCount = 16 }
+            }).ConfigureAwait(false);
+
+            if (resp == null) throw new Exception("No chunk response returned");
+            if (resp.Chunks.Count < 2) throw new Exception("Expected multiple chunks, got " + resp.Chunks.Count);
+            if (resp.Count != resp.Chunks.Count) throw new Exception("Count does not match chunk list length");
+            foreach (ChunkResult chunk in resp.Chunks)
+            {
+                if (string.IsNullOrEmpty(chunk.Text)) throw new Exception("Chunk text was empty");
+                if (chunk.Embeddings != null && chunk.Embeddings.Count > 0)
+                    throw new Exception("Chunk-only response must not include embeddings");
+            }
+        }
+
+        public static async Task TestChunkEmptyRegexAsync()
+        {
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+            try
+            {
+                await admin.ChunkAsync(new ChunkRequest
+                {
+                    Type = "Text",
+                    Text = "Some text to chunk.",
+                    ChunkingConfiguration = new ChunkingConfiguration { Strategy = "RegexBased", RegexPattern = "" }
+                }).ConfigureAwait(false);
+                throw new Exception("Expected PartioException with 400");
+            }
+            catch (PartioException ex) when (ex.StatusCode == 400)
+            {
+            }
+        }
+
+        public static async Task TestEmbedBatchAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(embeddingDelayMs: 0);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            EmbeddingEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Embed Batch Test",
+                    Model = "text-embedding-3-small",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000
+                }).ConfigureAwait(false);
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No embedding endpoint returned");
+
+                EmbedResponse? resp = await admin.EmbedAsync(new EmbedRequest
+                {
+                    EndpointId = endpoint.Id,
+                    Input = new List<string> { "first input", "second input" }
+                }).ConfigureAwait(false);
+
+                if (resp == null || !resp.Success) throw new Exception("Embed request did not succeed");
+                if (resp.Count != 2 || resp.Embeddings.Count != 2)
+                    throw new Exception("Expected 2 embeddings, got " + resp.Count);
+                if (resp.Embeddings[0].Count == 0) throw new Exception("Embedding vector was empty");
+                if (resp.Dimensions != resp.Embeddings[0].Count) throw new Exception("Dimensions mismatch");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestEmbedMissingEndpointAsync()
+        {
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+            try
+            {
+                await admin.EmbedAsync(new EmbedRequest
+                {
+                    EndpointId = "",
+                    Input = new List<string> { "text" }
+                }).ConfigureAwait(false);
+                throw new Exception("Expected PartioException with 400");
+            }
+            catch (PartioException ex) when (ex.StatusCode == 400)
+            {
+            }
+        }
+
         /// <summary>
         /// Build the integration suite against a self-hosted, in-process Partio server and
         /// Ollama-compatible upstream. The environment lifecycle is managed by the suite's
@@ -1874,6 +1977,12 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Regex Strategy Missing Pattern (400)", async () => await TestRegexStrategyMissingPatternAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Regex Strategy Empty Pattern (400)", async () => await TestRegexStrategyEmptyPatternAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Regex Strategy Invalid Pattern (400)", async () => await TestRegexStrategyInvalidPatternAsync()));
+
+            // Chunk & Embed
+            tests.Add(TestCaseFactory.Async("Integration","Chunk Text (FixedTokenCount)", async () => await TestChunkTextAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Chunk Empty Regex (400)", async () => await TestChunkEmptyRegexAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Embed Batch (OpenAI)", async () => await TestEmbedBatchAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Embed Missing Endpoint (400)", async () => await TestEmbedMissingEndpointAsync()));
 
             // Error Cases
             tests.Add(TestCaseFactory.Async("Integration","Unauthenticated Request (401)", async () => await TestUnauthenticatedRequestAsync()));

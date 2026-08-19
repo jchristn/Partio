@@ -68,6 +68,13 @@ class PartioClient:
     def process_batch(self, requests_list):
         return self._request("POST", "/v1.0/process/batch", requests_list)
 
+    # Chunk & Embed
+    def chunk(self, request):
+        return self._request("POST", "/v1.0/chunk", request)
+
+    def embed(self, request):
+        return self._request("POST", "/v1.0/embed", request)
+
     # Explorer
     def explore_embedding_endpoint(self, request):
         return self._request("POST", "/v1.0/explorer/embedding", request)

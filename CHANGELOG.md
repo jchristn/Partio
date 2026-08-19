@@ -1,8 +1,19 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 - 2026-08-19
 
 ### Added
+- **Standalone chunking and embedding endpoints** so the two stages can be run and timed independently:
+  - `POST /v1.0/chunk` — chunks a semantic cell into text chunks WITHOUT embedding them. Requires no
+    embedding endpoint: it uses a built-in `cl100k_base` tokenizer to honor the token budget.
+  - `POST /v1.0/embed` — generates embedding vectors for one or more input strings (batch) through a
+    specified embedding endpoint, without chunking.
+- New `ChunkRequest`/`ChunkResponse` and `EmbedRequest`/`EmbedResponse` models.
+- C#, JavaScript, and Python SDK methods for chunk and embed (`ChunkAsync`/`EmbedAsync`, `chunk`/`embed`).
+- Dashboard "Process" playground gains **Process / Chunk only / Embed only** modes.
+- Postman collection examples for `POST /v1.0/chunk` and `POST /v1.0/embed`.
+- Shared integration coverage: positive and negative cases for both endpoints (chunk text, chunk empty-regex
+  400, embed batch, embed missing-endpoint 400).
 - Model loading and warming API for configured embedding and inference endpoints:
   - `POST /v1.0/endpoints/embedding/{id}/load`
   - `POST /v1.0/endpoints/completion/{id}/load`
@@ -11,6 +22,9 @@
 - C#, JavaScript, and Python SDK methods for model loading.
 - Postman collection examples for embedding load, inference load, Ollama `gemma3:4b`, OpenAI-compatible warm requests, and unsupported native-load handling.
 - Shared integration coverage for Ollama load, hosted-provider warm behavior, unsupported native load, and invalid unload-style keep-alive values.
+
+### Changed
+- Server, dashboard, JavaScript SDK, and C# SDK package version metadata are synchronized at `0.4.0`.
 
 ## v0.3.0 - 2026-05-18
 

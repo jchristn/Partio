@@ -122,6 +122,8 @@ export default function ChunkEmbedView() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  // Operation mode: full process (chunk + embed [+ summarize]), chunk-only, or embed-only.
+  const [mode, setMode] = useState('process');
   const [endpoints, setEndpoints] = useState([]);
   const [completionEndpoints, setCompletionEndpoints] = useState([]);
   const [endpointsLoading, setEndpointsLoading] = useState(true);
@@ -242,7 +244,30 @@ export default function ChunkEmbedView() {
     }
 
     try {
-      const res = await api.process(request);
+      let res;
+      if (mode === 'chunk') {
+        // Chunk-only: no embedding endpoint or summarization.
+        const chunkRequest = {
+          Type: request.Type,
+          ChunkingConfiguration: chunkingConfig,
+          Labels: request.Labels,
+          Tags: request.Tags
+        };
+        if (request.Table) chunkRequest.Table = request.Table;
+        else if (request.UnorderedList) chunkRequest.UnorderedList = request.UnorderedList;
+        else chunkRequest.Text = request.Text;
+        res = await api.chunk(chunkRequest);
+      } else if (mode === 'embed') {
+        // Embed-only: embed each non-empty line of the input text as its own vector.
+        const inputs = (form.Text || '').split('\n').map(s => s.trim()).filter(Boolean);
+        res = await api.embed({
+          EndpointId: form.EndpointId,
+          Input: inputs.length > 0 ? inputs : [form.Text || ''],
+          L2Normalization: form.L2Normalization
+        });
+      } else {
+        res = await api.process(request);
+      }
       setResult(res);
     } catch (err) {
       setError(err.message);
@@ -252,7 +277,7 @@ export default function ChunkEmbedView() {
 
   const update = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
 
-  const hasHierarchicalResult = result && (result.Children || result.Type);
+  const hasHierarchicalResult = result && mode === 'process' && (result.Children || result.Type);
 
   return (
     <div className="chunk-embed">
@@ -468,8 +493,26 @@ export default function ChunkEmbedView() {
             />
           </div>
 
-          <button className="primary" onClick={handleSubmit} disabled={loading || !form.EndpointId} style={{ marginTop: 12 }}>
-            {loading ? 'Processing...' : 'Process'}
+          <div className="field" style={{ marginTop: 12 }}>
+            <FormFieldLabel text="Mode" tooltip="Process runs chunking and embedding (and optional summarization). Chunk only splits text without embedding and needs no endpoint. Embed only embeds each input line without chunking." />
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['process', 'chunk', 'embed'].map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  className={mode === m ? 'primary' : ''}
+                  onClick={() => { setMode(m); setResult(null); setError(null); }}
+                >
+                  {m === 'process' ? 'Process' : m === 'chunk' ? 'Chunk only' : 'Embed only'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button className="primary" onClick={handleSubmit} disabled={loading || (mode !== 'chunk' && !form.EndpointId)} style={{ marginTop: 12 }}>
+            {loading
+              ? (mode === 'embed' ? 'Embedding...' : mode === 'chunk' ? 'Chunking...' : 'Processing...')
+              : (mode === 'embed' ? 'Embed' : mode === 'chunk' ? 'Chunk' : 'Process')}
           </button>
         </div>
 
@@ -478,7 +521,23 @@ export default function ChunkEmbedView() {
           {result && (
             <div className="card">
               <h3>Results</h3>
-              {hasHierarchicalResult ? (
+              {mode === 'embed' ? (
+                <>
+                  <p>
+                    Embeddings: {result.Count || (result.Embeddings ? result.Embeddings.length : 0)}
+                    {' · '}Dimensions: {result.Dimensions || 0}
+                    {result.Model ? ` · Model: ${result.Model}` : ''}
+                  </p>
+                  {result.Embeddings && result.Embeddings.map((vec, i) => (
+                    <div key={i} className="chunk-result">
+                      <div className="chunk-header"><span>Vector {i + 1}</span></div>
+                      <div className="chunk-field">
+                        <strong>Embedding:</strong> [{vec.slice(0, 8).map(e => e.toFixed(4)).join(', ')}{vec.length > 8 ? ', ...' : ''}] ({vec.length} dims)
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : hasHierarchicalResult ? (
                 <>
                   <p>Response contains hierarchical cell data{result.Children ? ` with ${result.Children.length} child cells` : ''}.</p>
                   {renderCellTree(result, 0, copiedChunk, setCopiedChunk, expandedEmbeddings, setExpandedEmbeddings, 'root')}

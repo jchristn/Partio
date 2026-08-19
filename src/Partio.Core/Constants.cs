@@ -23,7 +23,7 @@ namespace Partio.Core
         /// <summary>
         /// Current version string.
         /// </summary>
-        public static readonly string Version = "0.3.0";
+        public static readonly string Version = "0.4.0";
 
         /// <summary>
         /// Settings filename.

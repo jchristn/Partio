@@ -141,4 +141,4 @@ Result: PASS
 
 ## Release Versioning
 
-The Python SDK is currently source-distributed from this repository rather than published as a separate package artifact. Its release version tracks the Partio repository release tag for this feature set, which is `0.3.0`.
+The Python SDK is currently source-distributed from this repository rather than published as a separate package artifact. Its release version tracks the Partio repository release tag for this feature set, which is `0.4.0`.

@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.3.0" }
+{ "Status": "Healthy", "Version": "0.4.0" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.3.0" }
+{ "Status": "Healthy", "Version": "0.4.0" }
 ```
 
 ---
@@ -401,7 +401,83 @@ Process multiple semantic cells.
 
 **Request Body**: `List<SemanticCellRequest>`
 
-**Response**: `200 OK` â€” `List<SemanticCellResponse>`
+**Response**: `200 OK` — `List<SemanticCellResponse>`
+
+---
+
+### POST /v1.0/chunk
+Chunk a single semantic cell into text chunks **without embedding them**. Unlike `/v1.0/process`, this
+requires no embedding endpoint: chunking uses a built-in `cl100k_base` tokenizer to honor the token budget,
+so the token budget comes straight from `ChunkingConfiguration.FixedTokenCount`. Useful for running (and
+timing) chunking independently of embedding.
+
+**Request Body**: `ChunkRequest`
+
+```json
+{
+  "Type": "Text",
+  "Text": "Long text to split into chunks ...",
+  "ChunkingConfiguration": { "Strategy": "FixedTokenCount", "FixedTokenCount": 256, "OverlapCount": 0 },
+  "Labels": [],
+  "Tags": {}
+}
+```
+
+`ChunkRequest` mirrors the content and `ChunkingConfiguration` fields of `SemanticCellRequest` but omits
+`EmbeddingConfiguration` and `SummarizationConfiguration`. See [ChunkingConfiguration Properties](#chunkingconfiguration-properties).
+
+**Response**: `200 OK` — `ChunkResponse`
+
+```json
+{
+  "GUID": "…",
+  "Type": "Text",
+  "Text": "Long text to split into chunks ...",
+  "Chunks": [ { "CellGUID": "…", "Text": "chunk 1 text", "Labels": [], "Tags": {}, "Embeddings": [] } ],
+  "Count": 1
+}
+```
+
+Each returned chunk has an empty `Embeddings` array (this endpoint never embeds).
+
+**Errors**: `400` (e.g. a `RegexBased` strategy with a missing/invalid `RegexPattern`, or a `ContextPrefix`
+that consumes the entire token budget), `401`.
+
+---
+
+### POST /v1.0/embed
+Generate embedding vectors for one or more input strings using a configured embedding endpoint, **without
+chunking**. Each input is embedded as-is and returned in order.
+
+**Request Body**: `EmbedRequest`
+
+```json
+{
+  "EndpointId": "eep_...",
+  "Input": [ "first input", "second input" ],
+  "L2Normalization": false
+}
+```
+
+**Response**: `200 OK` — `EmbedResponse`
+
+```json
+{
+  "Success": true,
+  "StatusCode": 200,
+  "EndpointId": "eep_...",
+  "Model": "text-embedding-3-small",
+  "Embeddings": [ [0.1, 0.2, 0.3], [0.4, 0.5, 0.6] ],
+  "Count": 2,
+  "Dimensions": 3,
+  "L2Normalization": false,
+  "ResponseTimeMs": 31.0,
+  "EmbeddingCalls": [ ],
+  "TokenizationProfile": { }
+}
+```
+
+**Errors**: `400` (missing `EndpointId` or empty `Input`), `401`, `404` (unknown endpoint).
 
 ---
 

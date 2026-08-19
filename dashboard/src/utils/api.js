@@ -89,6 +89,8 @@ export class PartioApi {
   // Process
   process(data) { return this.request('POST', '/v1.0/process', data); }
   processBatch(data) { return this.request('POST', '/v1.0/process/batch', data); }
+  chunk(data) { return this.request('POST', '/v1.0/chunk', data); }
+  embed(data) { return this.request('POST', '/v1.0/embed', data); }
 
   // Explorer
   exploreEmbeddingEndpoint(data) { return this.request('POST', '/v1.0/explorer/embedding', data); }

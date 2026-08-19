@@ -653,7 +653,7 @@ Have a question, found a bug, or want to request a feature?
 - **Questions and discussions**: [Start a discussion](https://github.com/jchristn/partio/discussions)
 
 When filing an issue, please include:
-1. The Partio version (`v0.3.0`, or the Docker image tag)
+1. The Partio version (`v0.4.0`, or the Docker image tag)
 2. Steps to reproduce the problem
 3. The request/response (redact any credentials)
 4. Relevant log output from `./logs/`

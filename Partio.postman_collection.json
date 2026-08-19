@@ -259,6 +259,50 @@
 					}
 				},
 				{
+					"name": "Chunk Cell (No Embedding)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Type\": \"Text\",\n    \"Text\": \"Partio can chunk text without embedding it. This endpoint uses a built-in tokenizer so no embedding endpoint is required.\",\n    \"ChunkingConfiguration\": {\n        \"Strategy\": \"{{chunkStrategy}}\",\n        \"FixedTokenCount\": {{fixedTokenCount}},\n        \"OverlapCount\": {{overlapCount}}\n    },\n    \"Labels\": [\"test\"],\n    \"Tags\": {\n        \"source\": \"postman\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/chunk",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "chunk"]
+						},
+						"description": "Chunk a semantic cell into text chunks without embedding them. No embedding endpoint required."
+					}
+				},
+				{
+					"name": "Embed Texts",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"EndpointId\": \"{{endpointId}}\",\n    \"Input\": [\n        \"First text to embed.\",\n        \"Second text to embed.\"\n    ],\n    \"L2Normalization\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/embed",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "embed"]
+						},
+						"description": "Generate embedding vectors for one or more input strings using the specified embedding endpoint. Does not chunk."
+					}
+				},
+				{
 					"name": "Process Single Cell (Sentence-Based)",
 					"request": {
 						"method": "POST",

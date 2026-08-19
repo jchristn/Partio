@@ -379,6 +379,27 @@ namespace Partio.Server
                     .WithResponse(200, OpenApiResponseMetadata.Json("Inference explorer result", null))
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized());
             }, auth: true);
+            server.Post<ChunkRequest>("/v1.0/chunk", ChunkOnly, api => {
+                api.Summary = "Chunk a semantic cell (no embedding)";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Process")
+                    .WithDescription("Chunks a single semantic cell into text chunks without embedding them. Uses a built-in tokenizer (cl100k_base) to honor the token budget, so no embedding endpoint is required.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Semantic cell to chunk", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Chunked cell (text chunks, no embeddings)", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized());
+            }, auth: true);
+            server.Post<EmbedRequest>("/v1.0/embed", EmbedTexts, api => {
+                api.Summary = "Embed one or more texts";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Process")
+                    .WithDescription("Generates embedding vectors for one or more input strings using the specified embedding endpoint. Does not chunk; each input is embedded as-is.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Embedding request", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Embedding vectors", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
 
             #endregion
 
@@ -979,6 +1000,197 @@ namespace Partio.Server
         #endregion
 
         #region Process
+
+        private static async Task<object> ChunkOnly(ApiRequest req)
+        {
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
+
+            ChunkRequest? chunkReq = null;
+
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                chunkReq = req.GetData<ChunkRequest>();
+                if (chunkReq == null) throw new ArgumentException("Request body is required.");
+
+                SemanticCellRequest cell = new SemanticCellRequest
+                {
+                    GUID = chunkReq.GUID,
+                    Type = chunkReq.Type,
+                    Text = chunkReq.Text,
+                    UnorderedList = chunkReq.UnorderedList,
+                    OrderedList = chunkReq.OrderedList,
+                    Table = chunkReq.Table,
+                    Binary = chunkReq.Binary,
+                    ChunkingConfiguration = chunkReq.ChunkingConfiguration ?? new ChunkingConfiguration(),
+                    Labels = chunkReq.Labels,
+                    Tags = chunkReq.Tags
+                };
+
+                ValidateStrategyForAtomType(cell);
+
+                if (cell.ChunkingConfiguration.Strategy == ChunkStrategyEnum.RegexBased)
+                {
+                    if (string.IsNullOrWhiteSpace(cell.ChunkingConfiguration.RegexPattern))
+                        throw new ArgumentException("RegexPattern is required when using the RegexBased strategy.");
+                    try
+                    {
+                        _ = new Regex(cell.ChunkingConfiguration.RegexPattern, RegexOptions.None, TimeSpan.FromSeconds(5));
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        throw new ArgumentException("RegexPattern is not a valid regular expression: " + ex.Message);
+                    }
+                }
+
+                // Chunk-only uses a built-in tokenizer so no embedding endpoint is needed; the token budget
+                // comes straight from the requested FixedTokenCount (there is no endpoint budget to cap against).
+                ITokenizerAdapter tokenizer = new SharpTokenTokenizerAdapter("cl100k_base");
+                int tokenBudget = Math.Max(1, cell.ChunkingConfiguration.FixedTokenCount);
+
+                if (!string.IsNullOrEmpty(cell.ChunkingConfiguration.ContextPrefix))
+                {
+                    int contextPrefixTokens = tokenizer.CountTokens(cell.ChunkingConfiguration.ContextPrefix);
+                    if (contextPrefixTokens >= tokenBudget)
+                        throw new ArgumentException("ContextPrefix consumes the entire chunking token budget.");
+                    tokenBudget = Math.Max(1, tokenBudget - contextPrefixTokens);
+                }
+
+                List<ChunkResult> chunks = _ChunkingEngine.Chunk(cell, tokenizer, tokenBudget);
+                chunks = NormalizeChunksForEmbeddingBudget(chunks, tokenizer, tokenBudget);
+
+                List<string> labels = cell.Labels ?? new List<string>();
+                Dictionary<string, string> tags = cell.Tags ?? new Dictionary<string, string>();
+                foreach (ChunkResult chunk in chunks)
+                {
+                    chunk.CellGUID = cell.GUID;
+                    chunk.Labels = new List<string>(labels);
+                    chunk.Tags = new Dictionary<string, string>(tags);
+                }
+
+                ChunkResponse response = new ChunkResponse
+                {
+                    GUID = cell.GUID,
+                    Type = cell.Type,
+                    Text = cell.Text ?? string.Empty,
+                    Chunks = chunks,
+                    Count = chunks.Count
+                };
+
+                if (inflight != null)
+                {
+                    inflight.Stopwatch.Stop();
+                    string requestJson = _Serializer.SerializeJson(chunkReq, false);
+                    string responseJson = _Serializer.SerializeJson(response, false);
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                    await RecordDetailedHistoryAsync(inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestJson, responseJson, reqHeaders, respHeaders, null, null, null).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
+                }
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                if (inflight != null)
+                {
+                    inflight.Stopwatch.Stop();
+                    int statusCode = MapExceptionToStatusCode(ex);
+                    string? requestBody = chunkReq != null ? _Serializer.SerializeJson(chunkReq, false) : null;
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                    await RecordDetailedHistoryAsync(inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestBody, ex.Message, reqHeaders, respHeaders, null, null, null).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
+                }
+                throw;
+            }
+        }
+
+        private static async Task<object> EmbedTexts(ApiRequest req)
+        {
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
+
+            EmbedResponse response = new EmbedResponse();
+            EmbedRequest? embedReq = null;
+            Stopwatch sw = Stopwatch.StartNew();
+
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                AuthContext auth = (AuthContext)req.Metadata;
+                embedReq = req.GetData<EmbedRequest>();
+                if (embedReq == null) throw new ArgumentException("Request body is required.");
+                if (string.IsNullOrWhiteSpace(embedReq.EndpointId)) throw new ArgumentException("EndpointId is required.");
+
+                List<string> inputs = (embedReq.Input ?? new List<string>()).Where(x => x != null).ToList();
+                if (inputs.Count == 0) throw new ArgumentException("At least one input is required.");
+
+                EmbeddingEndpoint endpoint = await ResolveEmbeddingEndpointFromBody(embedReq.EndpointId, auth, token).ConfigureAwait(false);
+                response.EndpointId = endpoint.Id;
+                response.Model = endpoint.Model;
+                response.L2Normalization = embedReq.L2Normalization;
+                if (inflight != null) response.RequestHistoryId = inflight.Entry.Id;
+
+                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
+                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+
+                using EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
+                response.TokenizationProfile = await _TokenizationResolver.ResolveAsync(endpoint, endpoint.Model, client, token: token).ConfigureAwait(false);
+                ApplyRuntimeEmbeddingSafeguards(endpoint, response.TokenizationProfile);
+                ApplyTokenizationProfileHeaders(req.Http.Response.Headers, response.TokenizationProfile);
+
+                List<List<float>> embeddings = await client.EmbedBatchAsync(inputs, endpoint.Model, token).ConfigureAwait(false);
+                if (embedReq.L2Normalization)
+                {
+                    for (int i = 0; i < embeddings.Count; i++) embeddings[i] = client.NormalizeL2(embeddings[i]);
+                }
+
+                sw.Stop();
+                response.Success = true;
+                response.StatusCode = 200;
+                response.Embeddings = embeddings;
+                response.Count = embeddings.Count;
+                response.Dimensions = embeddings.Count > 0 ? embeddings[0].Count : 0;
+                response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                response.EmbeddingCalls = client.CallDetails.ToList();
+
+                if (inflight != null)
+                {
+                    inflight.Stopwatch.Stop();
+                    string requestJson = _Serializer.SerializeJson(embedReq, false);
+                    string responseJson = _Serializer.SerializeJson(response, false);
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                    await RecordDetailedHistoryAsync(inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestJson, responseJson, reqHeaders, respHeaders, response.EmbeddingCalls, null,
+                        BuildTokenizationDetail(response.TokenizationProfile)).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
+                }
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                if (inflight != null)
+                {
+                    inflight.Stopwatch.Stop();
+                    int statusCode = MapExceptionToStatusCode(ex);
+                    string? requestBody = embedReq != null ? _Serializer.SerializeJson(embedReq, false) : null;
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                    await RecordDetailedHistoryAsync(inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestBody, ex.Message, reqHeaders, respHeaders, null, null, null).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
+                }
+                throw;
+            }
+        }
 
         private static async Task<object> ProcessSingle(ApiRequest req)
         {

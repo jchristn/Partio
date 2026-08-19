@@ -54,6 +54,10 @@ export class PartioClient {
   async process(request) { return this._request('POST', '/v1.0/process', request); }
   async processBatch(requests) { return this._request('POST', '/v1.0/process/batch', requests); }
 
+  // Chunk & Embed
+  async chunk(request) { return this._request('POST', '/v1.0/chunk', request); }
+  async embed(request) { return this._request('POST', '/v1.0/embed', request); }
+
   // Explorer
   async exploreEmbeddingEndpoint(request) { return this._request('POST', '/v1.0/explorer/embedding', request); }
   async exploreCompletionEndpoint(request) { return this._request('POST', '/v1.0/explorer/completion', request); }
