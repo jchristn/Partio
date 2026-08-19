@@ -265,6 +265,19 @@ export default function ChunkEmbedView() {
           Input: inputs.length > 0 ? inputs : [form.Text || ''],
           L2Normalization: form.L2Normalization
         });
+      } else if (mode === 'summarize') {
+        // Summarize-only: summarize the input text through a completion endpoint.
+        res = await api.summarize({
+          Text: form.Text,
+          SummarizationConfiguration: {
+            CompletionEndpointId: form.CompletionEndpointId,
+            Order: form.SummarizationOrder,
+            MaxSummaryTokens: parseInt(form.MaxSummaryTokens) || 1024,
+            MinCellLength: parseInt(form.MinCellLength) || 0,
+            MaxParallelTasks: parseInt(form.MaxParallelTasks) || 4,
+            SummarizationPrompt: form.SummarizationPrompt || null
+          }
+        });
       } else {
         res = await api.process(request);
       }
@@ -335,7 +348,7 @@ export default function ChunkEmbedView() {
             </Tooltip>
           </div>
 
-          {form.EnableSummarization && (
+          {(form.EnableSummarization || mode === 'summarize') && (
             <div className="summarization-config">
               <div className="form-group">
                 <FormFieldLabel text="Inference Endpoint" tooltip="Completion endpoint used to generate summaries for cells." />
@@ -495,24 +508,29 @@ export default function ChunkEmbedView() {
 
           <div className="field" style={{ marginTop: 12 }}>
             <FormFieldLabel text="Mode" tooltip="Process runs chunking and embedding (and optional summarization). Chunk only splits text without embedding and needs no endpoint. Embed only embeds each input line without chunking." />
-            <div style={{ display: 'flex', gap: 8 }}>
-              {['process', 'chunk', 'embed'].map(m => (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {['process', 'chunk', 'embed', 'summarize'].map(m => (
                 <button
                   key={m}
                   type="button"
                   className={mode === m ? 'primary' : ''}
                   onClick={() => { setMode(m); setResult(null); setError(null); }}
                 >
-                  {m === 'process' ? 'Process' : m === 'chunk' ? 'Chunk only' : 'Embed only'}
+                  {m === 'process' ? 'Process' : m === 'chunk' ? 'Chunk only' : m === 'embed' ? 'Embed only' : 'Summarize only'}
                 </button>
               ))}
             </div>
           </div>
 
-          <button className="primary" onClick={handleSubmit} disabled={loading || (mode !== 'chunk' && !form.EndpointId)} style={{ marginTop: 12 }}>
+          <button
+            className="primary"
+            onClick={handleSubmit}
+            disabled={loading || (mode === 'summarize' ? !form.CompletionEndpointId : mode === 'chunk' ? false : !form.EndpointId)}
+            style={{ marginTop: 12 }}
+          >
             {loading
-              ? (mode === 'embed' ? 'Embedding...' : mode === 'chunk' ? 'Chunking...' : 'Processing...')
-              : (mode === 'embed' ? 'Embed' : mode === 'chunk' ? 'Chunk' : 'Process')}
+              ? (mode === 'embed' ? 'Embedding...' : mode === 'chunk' ? 'Chunking...' : mode === 'summarize' ? 'Summarizing...' : 'Processing...')
+              : (mode === 'embed' ? 'Embed' : mode === 'chunk' ? 'Chunk' : mode === 'summarize' ? 'Summarize' : 'Process')}
           </button>
         </div>
 
@@ -521,7 +539,14 @@ export default function ChunkEmbedView() {
           {result && (
             <div className="card">
               <h3>Results</h3>
-              {mode === 'embed' ? (
+              {mode === 'summarize' ? (
+                <>
+                  <p>{result.Model ? `Model: ${result.Model}` : ''}</p>
+                  {result.Summary
+                    ? <div className="chunk-result"><div className="chunk-header"><span>Summary</span></div><div className="chunk-field">{result.Summary}</div></div>
+                    : <p>No summary was produced (input may be shorter than the minimum length).</p>}
+                </>
+              ) : mode === 'embed' ? (
                 <>
                   <p>
                     Embeddings: {result.Count || (result.Embeddings ? result.Embeddings.length : 0)}

@@ -400,6 +400,17 @@ namespace Partio.Server
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                     .WithResponse(404, OpenApiResponseMetadata.NotFound());
             }, auth: true);
+            server.Post<SummarizeRequest>("/v1.0/summarize", SummarizeText, api => {
+                api.Summary = "Summarize text";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Process")
+                    .WithDescription("Summarizes a piece of text through the specified completion endpoint using the same summarization engine as /v1.0/process. Does not chunk or embed.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Summarize request", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Generated summary", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
 
             #endregion
 
@@ -1189,6 +1200,94 @@ namespace Partio.Server
                     inflight.DetailRecorded = true;
                 }
                 throw;
+            }
+        }
+
+        private static async Task<object> SummarizeText(ApiRequest req)
+        {
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
+
+            SummarizeResponse response = new SummarizeResponse();
+            SummarizeRequest? sumReq = null;
+            Stopwatch sw = Stopwatch.StartNew();
+
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                AuthContext auth = (AuthContext)req.Metadata;
+                sumReq = req.GetData<SummarizeRequest>();
+                if (sumReq == null) throw new ArgumentException("Request body is required.");
+                if (string.IsNullOrWhiteSpace(sumReq.Text)) throw new ArgumentException("Text is required.");
+                if (sumReq.SummarizationConfiguration == null) throw new ArgumentException("SummarizationConfiguration is required.");
+                if (string.IsNullOrWhiteSpace(sumReq.SummarizationConfiguration.CompletionEndpointId))
+                    throw new ArgumentException("SummarizationConfiguration.CompletionEndpointId is required.");
+
+                CompletionEndpoint endpoint = await ResolveCompletionEndpointFromBody(sumReq.SummarizationConfiguration.CompletionEndpointId, auth, token).ConfigureAwait(false);
+                response.CompletionEndpointId = endpoint.Id;
+                response.Model = endpoint.Model;
+                if (inflight != null) response.RequestHistoryId = inflight.Entry.Id;
+
+                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
+                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+
+                using CompletionClientBase client = CreateCompletionClient(endpoint);
+
+                SemanticCellRequest cell = new SemanticCellRequest { Type = AtomTypeEnum.Text, Text = sumReq.Text };
+                SummarizationEngine summarizer = new SummarizationEngine(_Logging);
+                List<SemanticCellRequest> resultCells = await summarizer.SummarizeAsync(
+                    new List<SemanticCellRequest> { cell }, sumReq.SummarizationConfiguration, client, endpoint.Model, token).ConfigureAwait(false);
+
+                List<string> summaries = new List<string>();
+                CollectSummaries(resultCells, summaries);
+
+                sw.Stop();
+                response.Success = true;
+                response.StatusCode = 200;
+                response.Summaries = summaries;
+                response.Summary = summaries.Count > 0 ? summaries[0] : string.Empty;
+                response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                response.CompletionCalls = client.CallDetails.ToList();
+
+                if (inflight != null)
+                {
+                    inflight.Stopwatch.Stop();
+                    string requestJson = _Serializer.SerializeJson(sumReq, false);
+                    string responseJson = _Serializer.SerializeJson(response, false);
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                    await RecordDetailedHistoryAsync(inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
+                }
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                if (inflight != null)
+                {
+                    inflight.Stopwatch.Stop();
+                    int statusCode = MapExceptionToStatusCode(ex);
+                    string? requestBody = sumReq != null ? _Serializer.SerializeJson(sumReq, false) : null;
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                    await RecordDetailedHistoryAsync(inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
+                }
+                throw;
+            }
+        }
+
+        private static void CollectSummaries(List<SemanticCellRequest> cells, List<string> summaries)
+        {
+            if (cells == null) return;
+            foreach (SemanticCellRequest cell in cells)
+            {
+                if (cell.Type == AtomTypeEnum.Summary && !string.IsNullOrEmpty(cell.Text)) summaries.Add(cell.Text!);
+                if (cell.Children != null && cell.Children.Count > 0) CollectSummaries(cell.Children, summaries);
             }
         }
 

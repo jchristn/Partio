@@ -1752,6 +1752,68 @@ namespace Test.Shared
             }
         }
 
+        public static async Task TestSummarizeTextAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 0);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Summarize Test",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000
+                }).ConfigureAwait(false);
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No completion endpoint returned");
+
+                string text = "";
+                for (int i = 0; i < 12; i++) text += "The quick brown fox jumps over the lazy dog. ";
+
+                SummarizeResponse? resp = await admin.SummarizeAsync(new SummarizeRequest
+                {
+                    Text = text,
+                    SummarizationConfiguration = new SummarizationConfiguration
+                    {
+                        CompletionEndpointId = endpoint.Id,
+                        MinCellLength = 0
+                    }
+                }).ConfigureAwait(false);
+
+                if (resp == null || !resp.Success) throw new Exception("Summarize did not succeed");
+                if (string.IsNullOrEmpty(resp.Summary)) throw new Exception("Expected a non-empty summary");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestSummarizeMissingEndpointAsync()
+        {
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+            try
+            {
+                await admin.SummarizeAsync(new SummarizeRequest
+                {
+                    Text = "Some text to summarize.",
+                    SummarizationConfiguration = new SummarizationConfiguration { CompletionEndpointId = "" }
+                }).ConfigureAwait(false);
+                throw new Exception("Expected PartioException with 400");
+            }
+            catch (PartioException ex) when (ex.StatusCode == 400)
+            {
+            }
+        }
+
         /// <summary>
         /// Build the integration suite against a self-hosted, in-process Partio server and
         /// Ollama-compatible upstream. The environment lifecycle is managed by the suite's
@@ -1983,6 +2045,8 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Chunk Empty Regex (400)", async () => await TestChunkEmptyRegexAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Embed Batch (OpenAI)", async () => await TestEmbedBatchAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Embed Missing Endpoint (400)", async () => await TestEmbedMissingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Summarize Text", async () => await TestSummarizeTextAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Summarize Missing Endpoint (400)", async () => await TestSummarizeMissingEndpointAsync()));
 
             // Error Cases
             tests.Add(TestCaseFactory.Async("Integration","Unauthenticated Request (401)", async () => await TestUnauthenticatedRequestAsync()));

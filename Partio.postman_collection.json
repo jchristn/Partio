@@ -303,6 +303,28 @@
 					}
 				},
 				{
+					"name": "Summarize Text",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Text\": \"Partio can summarize text through a completion endpoint. This is a longer passage so that it exceeds the minimum summarization length and produces a summary.\",\n    \"SummarizationConfiguration\": {\n        \"CompletionEndpointId\": \"{{completionEndpointId}}\",\n        \"Order\": \"BottomUp\",\n        \"MaxSummaryTokens\": 512,\n        \"MinCellLength\": 0\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/summarize",
+							"host": ["{{baseUrl}}"],
+							"path": ["v1.0", "summarize"]
+						},
+						"description": "Summarize text through the specified completion endpoint. Does not chunk or embed."
+					}
+				},
+				{
 					"name": "Process Single Cell (Sentence-Based)",
 					"request": {
 						"method": "POST",

@@ -75,6 +75,9 @@ class PartioClient:
     def embed(self, request):
         return self._request("POST", "/v1.0/embed", request)
 
+    def summarize(self, request):
+        return self._request("POST", "/v1.0/summarize", request)
+
     # Explorer
     def explore_embedding_endpoint(self, request):
         return self._request("POST", "/v1.0/explorer/embedding", request)

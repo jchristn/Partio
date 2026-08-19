@@ -481,6 +481,46 @@ chunking**. Each input is embedded as-is and returned in order.
 
 ---
 
+### POST /v1.0/summarize
+Summarize a piece of text through a completion endpoint, **without chunking or embedding**. Uses the same
+summarization engine as `/v1.0/process`.
+
+**Request Body**: `SummarizeRequest`
+
+```json
+{
+  "Text": "Long text to summarize ...",
+  "SummarizationConfiguration": {
+    "CompletionEndpointId": "cep_...",
+    "Order": "BottomUp",
+    "MaxSummaryTokens": 1024,
+    "MinCellLength": 0
+  }
+}
+```
+
+**Response**: `200 OK` — `SummarizeResponse`
+
+```json
+{
+  "Success": true,
+  "StatusCode": 200,
+  "CompletionEndpointId": "cep_...",
+  "Model": "gpt-4.1-mini",
+  "Summary": "Short summary of the input text.",
+  "Summaries": [ "Short summary of the input text." ],
+  "ResponseTimeMs": 54.0,
+  "CompletionCalls": [ ]
+}
+```
+
+`Summary` is empty when the input did not meet `SummarizationConfiguration.MinCellLength`.
+
+**Errors**: `400` (missing `Text` or `CompletionEndpointId`), `401`, `404` (unknown endpoint), `504`
+(completion timeout).
+
+---
+
 ## Explorer
 
 The explorer endpoints are intended for diagnostics from the dashboard or SDKs. They execute the selected configured endpoint through Partio's own backend client path and always return a structured result payload with `Success`, `StatusCode`, any `Error`, and the captured upstream call details.

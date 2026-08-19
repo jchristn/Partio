@@ -57,6 +57,7 @@ export class PartioClient {
   // Chunk & Embed
   async chunk(request) { return this._request('POST', '/v1.0/chunk', request); }
   async embed(request) { return this._request('POST', '/v1.0/embed', request); }
+  async summarize(request) { return this._request('POST', '/v1.0/summarize', request); }
 
   // Explorer
   async exploreEmbeddingEndpoint(request) { return this._request('POST', '/v1.0/explorer/embedding', request); }

@@ -3,17 +3,20 @@
 ## v0.4.0 - 2026-08-19
 
 ### Added
-- **Standalone chunking and embedding endpoints** so the two stages can be run and timed independently:
+- **Standalone chunking, embedding, and summarization endpoints** so the stages can be run and timed
+  independently:
   - `POST /v1.0/chunk` — chunks a semantic cell into text chunks WITHOUT embedding them. Requires no
     embedding endpoint: it uses a built-in `cl100k_base` tokenizer to honor the token budget.
   - `POST /v1.0/embed` — generates embedding vectors for one or more input strings (batch) through a
     specified embedding endpoint, without chunking.
-- New `ChunkRequest`/`ChunkResponse` and `EmbedRequest`/`EmbedResponse` models.
-- C#, JavaScript, and Python SDK methods for chunk and embed (`ChunkAsync`/`EmbedAsync`, `chunk`/`embed`).
+  - `POST /v1.0/summarize` — summarizes text through a completion endpoint (same summarization engine as
+    `/v1.0/process`), without chunking or embedding.
+- New `ChunkRequest`/`ChunkResponse`, `EmbedRequest`/`EmbedResponse`, and `SummarizeRequest`/`SummarizeResponse` models.
+- C#, JavaScript, and Python SDK methods for chunk, embed, and summarize.
 - Dashboard "Process" playground gains **Process / Chunk only / Embed only** modes.
-- Postman collection examples for `POST /v1.0/chunk` and `POST /v1.0/embed`.
-- Shared integration coverage: positive and negative cases for both endpoints (chunk text, chunk empty-regex
-  400, embed batch, embed missing-endpoint 400).
+- Postman collection examples for `POST /v1.0/chunk`, `POST /v1.0/embed`, and `POST /v1.0/summarize`.
+- Shared integration coverage: positive and negative cases for all three endpoints (chunk text, chunk
+  empty-regex 400, embed batch, embed missing-endpoint 400, summarize text, summarize missing-endpoint 400).
 - Model loading and warming API for configured embedding and inference endpoints:
   - `POST /v1.0/endpoints/embedding/{id}/load`
   - `POST /v1.0/endpoints/completion/{id}/load`
