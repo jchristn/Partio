@@ -89,6 +89,7 @@ Each type unlocks different chunking strategies. Text can be split by tokens, se
 
 ## Features
 
+- **Standalone chunk, embed, and summarize endpoints** (`POST /v1.0/chunk`, `/v1.0/embed`, `/v1.0/summarize`) so chunking, embedding, and summarization can each be run and timed independently, in addition to the combined `/v1.0/process`. Chunking uses a built-in tokenizer and needs no embedding endpoint
 - **Multiple chunking strategies** including fixed token count, sentence-based, paragraph-based, whole list, and list entry, with configurable overlap via sliding window
 - **Endpoint-aware token budgeting** with model-native token counting, endpoint overrides, provider probing where available, provider defaults, and a required global fallback profile
 - **Pluggable provider support** for Ollama, OpenAI, Gemini, and OpenAI-compatible backends such as vLLM, selectable per endpoint
