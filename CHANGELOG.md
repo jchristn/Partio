@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.5.0 - Unreleased
+## v0.5.0 - 2026-08-26
 
 ### Added
 - **Observability, built in.** Metrics and traces are emitted from the whole product, collected into a
@@ -31,11 +31,19 @@
 - **`docker/update.bat`** — one-shot stack refresh: `docker compose pull` → `down` → `up -d` → `ps -a`.
 
 ### Changed
+- Version metadata synchronized at `0.5.0` across the server (`Constants.Version`), dashboard, and the
+  C# and JavaScript SDKs.
 - `docker/compose.yaml` now pins the Partio images to **`v0.5.0`** (`jchristn77/partio-server:v0.5.0`,
   `jchristn77/partio-dashboard:v0.5.0`) instead of `latest`.
 - The `Telemetry` settings section is present in both `docker/partio.json` and `docker/factory/partio.json`.
-- Moved `LOAD_MODELS.md` into `archive/` — the model-loading API is documented in `README.md`, `REST_API.md`,
-  and the Postman collection.
+- Dashboard **Process Cells** mode selector no longer renders a redundant "Process" button; the three
+  "…only" modes toggle against the default full-process mode, leaving a single Process action.
+- Dashboard **Processing** navigation reordered to Process Cells, API Explorer, Request History.
+- Dashboard remembers the Request History **timeframe** and **request type** filters and the table
+  **rows-per-page** choice across navigation and reloads (via `localStorage`).
+- Grafana **Overview → Server Up** stat now renders `UP` (green) / `DOWN` (red) instead of a bare `1`.
+- Moved `LOAD_MODELS.md` and `TELEMETRY_PLAN.md` into `archive/` — the model-loading API is documented
+  in `README.md`, `REST_API.md`, and the Postman collection.
 
 ## v0.4.0 - 2026-08-19
 

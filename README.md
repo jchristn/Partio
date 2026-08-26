@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-alpha-orange?style=flat-square" alt="Alpha">
-  <img src="https://img.shields.io/badge/version-0.4.0-blue?style=flat-square" alt="v0.4.0">
+  <img src="https://img.shields.io/badge/version-0.5.0-blue?style=flat-square" alt="v0.5.0">
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square" alt=".NET 10.0">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--server-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Server">
@@ -13,7 +13,7 @@
 
 ---
 
-> ### ⚠️ v0.4.0 — Alpha
+> ### ⚠️ v0.5.0 — Alpha
 >
 > Partio is **alpha software**. It works, it's tested, and it's useful today — but APIs, models, configuration keys, and response shapes are **subject to change** while we iterate toward a stable surface.
 >
@@ -83,8 +83,8 @@ It ships as a server, a React admin dashboard, three SDKs (C#, Python, JavaScrip
 
 ```
                                                   ┌─────────────────────┐
-  Semantic Cell  ─────►  Partio  ──►  Chunk  ──►  Embedding endpoint    │
-  (Text/List/Table/…)      │           engine     (Ollama/OpenAI/…)     │
+  Semantic Cell  ─────►  Partio  ──►  Chunk  ──►  |  Embedding endpoint │
+  (Text/List/Table/…)      │           engine     |  (Ollama/OpenAI/…)  │
   + chunking policy        │             │        └──────────┬──────────┘
   + embedding endpoint     │             │                   │
                            │        ┌────▼────┐         embeddings
@@ -653,7 +653,7 @@ Partio is alpha and moving fast — feedback and contributions are welcome.
 
 [Open an issue](https://github.com/jchristn/partio/issues) and include:
 
-1. The Partio version (`v0.4.0`, or the Docker image tag)
+1. The Partio version (`v0.5.0`, or the Docker image tag)
 2. Steps to reproduce
 3. The request/response (redact any credentials)
 4. Relevant log output from `./logs/`

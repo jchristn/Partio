@@ -19,9 +19,9 @@ const endpointLinks = [
 ];
 
 const processingLinks = [
+  { to: '/process', label: 'Process Cells', tourId: 'nav-process' },
   { to: '/explorer', label: 'API Explorer', tourId: 'nav-explorer' },
   { to: '/history', label: 'Request History', tourId: 'nav-history' },
-  { to: '/process', label: 'Process Cells', tourId: 'nav-process' },
 ];
 
 export default function Sidebar() {

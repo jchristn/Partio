@@ -20,8 +20,8 @@
       "title": "Server Up",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "unit": "none", "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } } ], "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "textMode": "auto" },
       "targets": [
         { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "watson_server_up", "refId": "A", "legendFormat": "up" }
       ]

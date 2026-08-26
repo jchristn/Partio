@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Tooltip from './Tooltip';
+import { usePersistedState } from '../utils/usePersistedState';
 
 export default function DataTable({
   data = [],
@@ -7,10 +8,16 @@ export default function DataTable({
   loading = false,
   pageSize: defaultPageSize = 25,
   onRowClick = null,
-  hidePagination = false
+  hidePagination = false,
+  persistKey = null
 }) {
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize, setPageSize] = useState(defaultPageSize);
+  // Rows-per-page is a remembered preference. Persist per-table when a persistKey is given,
+  // otherwise under a shared key so the choice carries across the enumeration table views.
+  const [pageSize, setPageSize] = usePersistedState(
+    persistKey ? `partio.table.pageSize.${persistKey}` : 'partio.table.pageSize',
+    defaultPageSize
+  );
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [filters, setFilters] = useState({});
   const [pageInput, setPageInput] = useState('1');

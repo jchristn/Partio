@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { PartioApi } from '../utils/api';
+import { usePersistedState } from '../utils/usePersistedState';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import './RequestHistoryChart.css';
 
@@ -48,8 +49,8 @@ function RefreshIcon({ spinning }) {
 
 export default function RequestHistoryChart({ title = 'Request History' }) {
   const { serverUrl, bearerToken } = useApp();
-  const [timeframe, setTimeframe] = useState('Day');
-  const [requestType, setRequestType] = useState('');
+  const [timeframe, setTimeframe] = usePersistedState('partio.history.timeframe', 'Day');
+  const [requestType, setRequestType] = usePersistedState('partio.history.requestType', '');
   const [endpointFilter, setEndpointFilter] = useState('');
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);

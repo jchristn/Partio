@@ -509,14 +509,14 @@ export default function ChunkEmbedView() {
           <div className="field" style={{ marginTop: 12 }}>
             <FormFieldLabel text="Mode" tooltip="Process runs chunking and embedding (and optional summarization). Chunk only splits text without embedding and needs no endpoint. Embed only embeds each input line without chunking." />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {['process', 'chunk', 'embed', 'summarize'].map(m => (
+              {['chunk', 'embed', 'summarize'].map(m => (
                 <button
                   key={m}
                   type="button"
                   className={mode === m ? 'primary' : ''}
-                  onClick={() => { setMode(m); setResult(null); setError(null); }}
+                  onClick={() => { setMode(mode === m ? 'process' : m); setResult(null); setError(null); }}
                 >
-                  {m === 'process' ? 'Process' : m === 'chunk' ? 'Chunk only' : m === 'embed' ? 'Embed only' : 'Summarize only'}
+                  {m === 'chunk' ? 'Chunk only' : m === 'embed' ? 'Embed only' : 'Summarize only'}
                 </button>
               ))}
             </div>
