@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import RequestHistoryChart from './RequestHistoryChart';
+import ExternalServicesCard from './ExternalServicesCard';
 import './DashboardView.css';
 
 export default function DashboardView() {
@@ -38,6 +39,8 @@ export default function DashboardView() {
           </button>
         </div>
       </div>
+
+      <ExternalServicesCard />
     </div>
   );
 }

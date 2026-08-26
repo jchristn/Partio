@@ -2,6 +2,7 @@ namespace Partio.Core.Chunking
 {
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using Partio.Core.Tokenization;
     using SyslogLogging;
 
@@ -31,6 +32,8 @@ namespace Partio.Core.Chunking
             if (tokenizer == null) throw new ArgumentNullException(nameof(tokenizer));
             if (tokenBudget < 1) throw new ArgumentOutOfRangeException(nameof(tokenBudget));
 
+            using ProcessStageScope stage = ProcessStageScope.Begin("chunk");
+
             List<string> rawChunks = GetRawChunks(request, tokenizer, tokenBudget);
 
             List<ChunkResult> results = new List<ChunkResult>();
@@ -42,6 +45,7 @@ namespace Partio.Core.Chunking
                 results.Add(result);
             }
 
+            stage.Complete();
             return results;
         }
 

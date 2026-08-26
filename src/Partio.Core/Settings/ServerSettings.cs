@@ -11,6 +11,7 @@ namespace Partio.Core.Settings
         private DebugSettings _Debug = new DebugSettings();
         private CorsSettings _Cors = new CorsSettings();
         private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
+        private TelemetrySettings _Telemetry = new TelemetrySettings();
         private TokenizationDefaultsSettings _TokenizationDefaults = new TokenizationDefaultsSettings();
         private List<string> _AdminApiKeys = new List<string> { "partioadmin" };
         private List<DefaultEmbeddingEndpoint> _DefaultEmbeddingEndpoints = new List<DefaultEmbeddingEndpoint>();
@@ -68,6 +69,15 @@ namespace Partio.Core.Settings
         {
             get => _RequestHistory;
             set => _RequestHistory = value ?? throw new ArgumentNullException(nameof(RequestHistory));
+        }
+
+        /// <summary>
+        /// Telemetry (Watson built-in, Radiant/OTLP traces, Prometheus scrape) settings.
+        /// </summary>
+        public TelemetrySettings Telemetry
+        {
+            get => _Telemetry;
+            set => _Telemetry = value ?? throw new ArgumentNullException(nameof(Telemetry));
         }
 
         /// <summary>

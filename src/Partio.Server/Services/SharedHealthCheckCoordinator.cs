@@ -1,8 +1,10 @@
 namespace Partio.Server.Services
 {
     using System.Collections.Concurrent;
+    using System.Diagnostics;
     using System.Net.Http;
     using Partio.Core.Enums;
+    using Partio.Core.Observability;
     using SyslogLogging;
 
     /// <summary>
@@ -194,6 +196,9 @@ namespace Partio.Server.Services
 
                 bool success = false;
                 string? errorMessage = null;
+                long checkStartTs = Stopwatch.GetTimestamp();
+                using Activity? checkSpan = PartioTelemetry.ActivitySource.StartActivity("health_check:" + probeSubscription.Kind, ActivityKind.Client);
+                checkSpan?.SetTag(PartioTelemetry.TagKind, probeSubscription.Kind);
 
                 try
                 {
@@ -215,6 +220,10 @@ namespace Partio.Server.Services
                     errorMessage = ex.Message;
                     _Logging.Debug(_Header + "error for shared health target " + DescribeMonitorKey(monitorKey) + ": " + errorMessage);
                 }
+
+                double checkSeconds = Stopwatch.GetElapsedTime(checkStartTs).TotalSeconds;
+                if (!success) checkSpan?.SetStatus(ActivityStatusCode.Error, errorMessage);
+                PartioMetrics.RecordEndpointHealthCheck(probeSubscription.Kind, success ? "healthy" : "unhealthy", checkSeconds);
 
                 foreach (SharedHealthCheckSubscription subscription in subscriptions)
                 {
@@ -299,6 +308,7 @@ namespace Partio.Server.Services
         public ApiFormatEnum ApiFormat { get; set; } = ApiFormatEnum.Ollama;
         public string? ApiKey { get; set; }
         public string Description { get; set; } = "endpoint";
+        public string Kind { get; set; } = "endpoint";
         public Action<bool, string?> UpdateState { get; set; } = (_, _) => { };
     }
 }

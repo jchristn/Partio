@@ -61,6 +61,29 @@ namespace Test.Shared
             }
         }
 
+        // ===== Telemetry =====
+
+        public static async Task TestMetricsEndpointsAsync()
+        {
+            string baseUrl = _Endpoint.TrimEnd('/');
+            using (System.Net.Http.HttpClient http = new System.Net.Http.HttpClient())
+            {
+                // Application metrics (partio_*), served anonymously at /v1.0/metrics.
+                System.Net.Http.HttpResponseMessage appResp = await http.GetAsync(baseUrl + "/v1.0/metrics").ConfigureAwait(false);
+                if (!appResp.IsSuccessStatusCode) throw new Exception("app /v1.0/metrics returned " + (int)appResp.StatusCode);
+                string appBody = await appResp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (!appBody.Contains("partio_uptime_seconds")) throw new Exception("app metrics missing partio_uptime_seconds");
+                if (!appBody.Contains("partio_authz_decisions_total")) throw new Exception("app metrics missing partio_authz_decisions_total");
+
+                // Watson built-in HTTP/watson.* metrics, served on the in-process endpoint at /metrics.
+                System.Net.Http.HttpResponseMessage watsonResp = await http.GetAsync(baseUrl + "/metrics").ConfigureAwait(false);
+                if (!watsonResp.IsSuccessStatusCode) throw new Exception("watson /metrics returned " + (int)watsonResp.StatusCode);
+                string watsonBody = await watsonResp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (!watsonBody.Contains("watson_") && !watsonBody.Contains("http_server_"))
+                    throw new Exception("watson /metrics missing expected watson_/http_server_ families");
+            }
+        }
+
         // ===== Tenant CRUD =====
 
         public static async Task TestCreateTenantAsync()
@@ -1962,6 +1985,9 @@ namespace Test.Shared
 
             // Health
             tests.Add(TestCaseFactory.Async("Integration","Health Check GET /", async () => await TestHealthCheckAsync()));
+
+            // Telemetry
+            tests.Add(TestCaseFactory.Async("Integration","Metrics endpoints expose partio_ and watson_ families", async () => await TestMetricsEndpointsAsync()));
 
             // Tenant CRUD
             tests.Add(TestCaseFactory.Async("Integration","Create Tenant", async () => await TestCreateTenantAsync()));

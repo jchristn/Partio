@@ -1,0 +1,30 @@
+receivers:
+  # Tail Partio's rolling log files (partio.log.YYYYMMDD). start_at: end so a restart does not
+  # re-ingest history.
+  filelog:
+    include:
+      - /logs/*.log*
+    start_at: end
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  batch: {}
+  resource/logs:
+    attributes:
+      - key: service.name
+        value: partio
+        action: upsert
+
+exporters:
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+service:
+  pipelines:
+    logs:
+      receivers: [filelog]
+      processors: [memory_limiter, resource/logs, batch]
+      exporters: [otlphttp/loki]

@@ -1,6 +1,7 @@
 namespace Partio.Server.Services
 {
     using Partio.Core.Database;
+    using Partio.Core.Observability;
     using Partio.Core.Settings;
     using SyslogLogging;
 
@@ -100,6 +101,7 @@ namespace Partio.Server.Services
                     await _Database.RequestHistory.DeleteExpiredAsync(cutoff, token).ConfigureAwait(false);
 
                     _Logging.Info(_Header + "cleanup complete, " + filesDeleted + " files deleted, " + objectKeys.Count + " entries cleaned");
+                    PartioMetrics.RecordRequestHistoryCleanup("ok");
                 }
                 catch (OperationCanceledException)
                 {
@@ -108,6 +110,7 @@ namespace Partio.Server.Services
                 catch (Exception ex)
                 {
                     _Logging.Warn(_Header + "cleanup error: " + ex.Message);
+                    PartioMetrics.RecordRequestHistoryCleanup("error");
                 }
             }
         }

@@ -4,6 +4,7 @@ namespace Partio.Server.Services
     using Partio.Core.Enums;
     using Partio.Core.Exceptions;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using Partio.Core.ThirdParty;
     using SyslogLogging;
 
@@ -193,6 +194,9 @@ namespace Partio.Server.Services
             response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
             if (string.IsNullOrWhiteSpace(response.Message))
                 response.Message = response.Success ? "Model load request succeeded." : "Model load request failed.";
+
+            string kind = response.EndpointType == EndpointTypeEnum.Completion ? "completion" : "embedding";
+            PartioMetrics.RecordModelLoad(kind, response.Success ? "ok" : "error", sw.Elapsed.TotalSeconds);
         }
 
         private void LogModelLoadResult(ModelLoadResponse response)

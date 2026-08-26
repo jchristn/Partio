@@ -13,6 +13,7 @@ namespace Partio.Server
     using Partio.Core.Enums;
     using Partio.Core.Exceptions;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using Partio.Core.Serialization;
     using Partio.Core.Settings;
     using Partio.Core.Summarization;
@@ -44,6 +45,7 @@ namespace Partio.Server
         private static ModelLoadService _ModelLoadService = null!;
         private static ChunkingEngine _ChunkingEngine = null!;
         private static TokenizationProfileResolver _TokenizationResolver = null!;
+        private static TelemetryService? _Telemetry;
         private static PartioSerializer _Serializer = new PartioSerializer();
         private static SerializationHelper.Serializer _JsonSerializer = new SerializationHelper.Serializer();
         private static DateTime _StartTimeUtc = DateTime.UtcNow;
@@ -83,6 +85,10 @@ namespace Partio.Server
             _ChunkingEngine = new ChunkingEngine(_Logging);
             _TokenizationResolver = new TokenizationProfileResolver(_Settings, _Logging);
 
+            // 5b. Telemetry — Radiant OTLP trace host (subscribes to Watson + Partio activity sources).
+            // Best-effort: an init failure logs a warning and leaves telemetry inert.
+            _Telemetry = new TelemetryService(_Settings.Telemetry, _Logging);
+
             // 6. Request history
             if (_Settings.RequestHistory.Enabled)
             {
@@ -105,6 +111,18 @@ namespace Partio.Server
                 _Settings.Rest.Hostname,
                 _Settings.Rest.Port,
                 _Settings.Rest.Ssl);
+
+            // 7a. Watson built-in telemetry: HTTP + watson.* metrics and one server span per request.
+            // Metrics are exposed on Watson's in-process Prometheus endpoint at /metrics; traces are picked
+            // up by the Radiant collector subscribing to the "Watson" activity source. Application-level
+            // telemetry (partio_* metrics at /v1.0/metrics, "Partio" spans) extends this behind the route.
+            webSettings.Telemetry.Enable = _Settings.Telemetry.Enabled;
+            webSettings.Telemetry.EnableMetrics = true;
+            webSettings.Telemetry.EnableTraces = true;
+            webSettings.Telemetry.PropagateContext = true;
+            webSettings.Telemetry.Prometheus.Enable = _Settings.Telemetry.Enabled && _Settings.Telemetry.PrometheusEnabled;
+            webSettings.Telemetry.Prometheus.Path = "/metrics";
+
             Webserver server = new Webserver(webSettings, async (ctx) =>
             {
                 ctx.Response.StatusCode = 404;
@@ -151,6 +169,7 @@ namespace Partio.Server
                     token = authHeader.Substring(Constants.BearerPrefix.Length).Trim();
 
                 AuthContext authCtx = await _AuthService.AuthenticateBearerAsync(token ?? string.Empty).ConfigureAwait(false);
+                Partio.Core.Observability.PartioMetrics.RecordAuthzDecision(authCtx.IsAuthenticated ? "permit" : "deny");
                 string connId = ctx.Guid.ToString();
                 _AuthContexts[connId] = authCtx;
                 ctx.Metadata = authCtx;
@@ -208,8 +227,9 @@ namespace Partio.Server
                 int statusCode = 500;
                 _RequestTokens[connId] = token;
 
-                // Create request history entry before the route handler runs
-                if (_Settings.RequestHistory.Enabled && _RequestHistoryService != null)
+                // Create request history entry before the route handler runs (skip metrics scrapes)
+                if (_Settings.RequestHistory.Enabled && _RequestHistoryService != null
+                    && !IsMetricsScrapePath(ctx.Request.Url.RawWithoutQuery))
                 {
                     try
                     {
@@ -326,6 +346,22 @@ namespace Partio.Server
                 api.WithTag("Health")
                     .WithResponse(200, OpenApiResponseMetadata.Json("Health status", null));
             });
+
+            // Prometheus scrape for application (partio_*) metrics. Watson serves its own HTTP/watson.*
+            // metrics at /metrics via its in-process endpoint; this exposes everything behind the route.
+            // Registered as a raw pre-authentication route so it emits text/plain (not JSON) and is
+            // anonymous by design — keep it on an internal network, per the telemetry security notes.
+            if (_Settings.Telemetry.PrometheusEnabled)
+            {
+                server.Routes.PreAuthentication.Static.Add(
+                    WatsonWebserver.Core.HttpMethod.GET,
+                    "/v1.0/metrics",
+                    MetricsHandler,
+                    MetricsExceptionHandler,
+                    Guid.NewGuid(),
+                    null,
+                    null);
+            }
             server.Get("/v1.0/whoami", WhoAmI, api => {
                 api.Summary = "Returns the role and tenant of the authenticated caller";
                 api.Security = new List<string> { "Bearer" };
@@ -684,6 +720,7 @@ namespace Partio.Server
                 await _CleanupService.StopAsync().ConfigureAwait(false);
             serverCts.Cancel();
             server.Dispose();
+            _Telemetry?.Dispose();
             _Logging.Info(_Header + "shutdown complete");
         }
 
@@ -963,6 +1000,29 @@ namespace Partio.Server
             return null!;
         }
 
+        private static async Task MetricsHandler(HttpContextBase ctx)
+        {
+            ctx.Response.StatusCode = 200;
+            ctx.Response.ContentType = "text/plain; version=0.0.4";
+            await ctx.Response.Send(Partio.Core.Observability.PartioMetrics.Render()).ConfigureAwait(false);
+        }
+
+        private static async Task MetricsExceptionHandler(HttpContextBase ctx, Exception e)
+        {
+            if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "metrics render failed: " + e.Message);
+            ctx.Response.StatusCode = 500;
+            ctx.Response.ContentType = "text/plain";
+            await ctx.Response.Send("# metrics unavailable\n").ConfigureAwait(false);
+        }
+
+        /// <summary>True for the anonymous Prometheus scrape paths, which are excluded from request history.</summary>
+        private static bool IsMetricsScrapePath(string? rawPath)
+        {
+            if (String.IsNullOrEmpty(rawPath)) return false;
+            return rawPath.Equals("/metrics", StringComparison.OrdinalIgnoreCase)
+                || rawPath.Equals("/v1.0/metrics", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static async Task<object> HealthGet(ApiRequest req)
         {
             req.Http.Response.StatusCode = 200;
@@ -1019,6 +1079,7 @@ namespace Partio.Server
             CancellationToken token = GetRequestCancellationToken(req);
 
             ChunkRequest? chunkReq = null;
+            using ProcessOperationScope op = ProcessOperationScope.Begin("chunk");
 
             try
             {
@@ -1102,10 +1163,12 @@ namespace Partio.Server
                     inflight.DetailRecorded = true;
                 }
 
+                op.Complete();
                 return response;
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException) op.Outcome = "cancelled";
                 if (inflight != null)
                 {
                     inflight.Stopwatch.Stop();
@@ -1130,6 +1193,7 @@ namespace Partio.Server
             EmbedResponse response = new EmbedResponse();
             EmbedRequest? embedReq = null;
             Stopwatch sw = Stopwatch.StartNew();
+            using ProcessOperationScope op = ProcessOperationScope.Begin("embed");
 
             try
             {
@@ -1156,7 +1220,12 @@ namespace Partio.Server
                 ApplyRuntimeEmbeddingSafeguards(endpoint, response.TokenizationProfile);
                 ApplyTokenizationProfileHeaders(req.Http.Response.Headers, response.TokenizationProfile);
 
-                List<List<float>> embeddings = await client.EmbedBatchAsync(inputs, endpoint.Model, token).ConfigureAwait(false);
+                List<List<float>> embeddings;
+                using (ProcessStageScope embedStage = ProcessStageScope.Begin("embed"))
+                {
+                    embeddings = await client.EmbedBatchAsync(inputs, endpoint.Model, token).ConfigureAwait(false);
+                    embedStage.Complete();
+                }
                 if (embedReq.L2Normalization)
                 {
                     for (int i = 0; i < embeddings.Count; i++) embeddings[i] = client.NormalizeL2(embeddings[i]);
@@ -1184,10 +1253,12 @@ namespace Partio.Server
                     inflight.DetailRecorded = true;
                 }
 
+                op.Complete();
                 return response;
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException) op.Outcome = "cancelled";
                 if (inflight != null)
                 {
                     inflight.Stopwatch.Stop();
@@ -1212,6 +1283,7 @@ namespace Partio.Server
             SummarizeResponse response = new SummarizeResponse();
             SummarizeRequest? sumReq = null;
             Stopwatch sw = Stopwatch.StartNew();
+            using ProcessOperationScope op = ProcessOperationScope.Begin("summarize");
 
             try
             {
@@ -1262,10 +1334,12 @@ namespace Partio.Server
                     inflight.DetailRecorded = true;
                 }
 
+                op.Complete();
                 return response;
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException) op.Outcome = "cancelled";
                 if (inflight != null)
                 {
                     inflight.Stopwatch.Stop();
@@ -1298,6 +1372,7 @@ namespace Partio.Server
             CancellationToken token = GetRequestCancellationToken(req);
 
             SemanticCellRequest? cellReq = null;
+            using ProcessOperationScope op = ProcessOperationScope.Begin("process");
 
             try
             {
@@ -1335,10 +1410,12 @@ namespace Partio.Server
                     inflight.DetailRecorded = true;
                 }
 
+                op.Complete();
                 return cellResult.Response;
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException || ex.InnerException is OperationCanceledException) op.Outcome = "cancelled";
                 ProcessCellResult? partialResult = ex is ProcessCellException ? ((ProcessCellException)ex).Result : null;
                 if (inflight != null)
                 {
@@ -1376,6 +1453,7 @@ namespace Partio.Server
             List<CompletionCallDetail> allCompletionCalls = new List<CompletionCallDetail>();
             List<ChunkProcessingDiagnostic> allChunkDiagnostics = new List<ChunkProcessingDiagnostic>();
             ResolvedTokenizationProfile? tokenizationProfile = null;
+            using ProcessOperationScope op = ProcessOperationScope.Begin("process_batch");
 
             try
             {
@@ -1436,10 +1514,12 @@ namespace Partio.Server
                     inflight.DetailRecorded = true;
                 }
 
+                op.Complete();
                 return responses;
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException || ex.InnerException is OperationCanceledException) op.Outcome = "cancelled";
                 if (ex is ProcessCellException processEx)
                 {
                     allEmbeddingCalls.AddRange(processEx.Result.EmbeddingCalls);
@@ -2229,7 +2309,12 @@ namespace Partio.Server
                     });
                 }
 
-                List<List<float>> embeddings = await EmbedTextsAsync(textsToEmbed, client, model, profile, tokenizer, token).ConfigureAwait(false);
+                List<List<float>> embeddings;
+                using (ProcessStageScope embedStage = ProcessStageScope.Begin("embed"))
+                {
+                    embeddings = await EmbedTextsAsync(textsToEmbed, client, model, profile, tokenizer, token).ConfigureAwait(false);
+                    embedStage.Complete();
+                }
 
                 for (int i = 0; i < chunks.Count && i < embeddings.Count; i++)
                 {
@@ -2803,33 +2888,58 @@ namespace Partio.Server
 
         private static EmbeddingClientBase CreateEmbeddingClient(EmbeddingEndpoint endpoint)
         {
+            EmbeddingClientBase client;
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    return new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    break;
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    return new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    break;
                 case ApiFormatEnum.Gemini:
-                    return new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
+            client.ServiceName = ServiceLabelFor(endpoint.ApiFormat);
+            return client;
         }
 
         private static CompletionClientBase CreateCompletionClient(CompletionEndpoint endpoint)
         {
+            CompletionClientBase client;
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    return new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    break;
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    return new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    break;
                 case ApiFormatEnum.Gemini:
-                    return new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
+            }
+            client.ServiceName = ServiceLabelFor(endpoint.ApiFormat);
+            return client;
+        }
+
+        /// <summary>Low-cardinality provider service label for telemetry (ollama, openai, gemini, vllm).</summary>
+        private static string ServiceLabelFor(ApiFormatEnum format)
+        {
+            switch (format)
+            {
+                case ApiFormatEnum.Ollama: return "ollama";
+                case ApiFormatEnum.OpenAI: return "openai";
+                case ApiFormatEnum.vLLM: return "vllm";
+                case ApiFormatEnum.Gemini: return "gemini";
+                default: return "(unknown)";
             }
         }
 

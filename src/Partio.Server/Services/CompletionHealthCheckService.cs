@@ -4,6 +4,7 @@ namespace Partio.Server.Services
     using Partio.Core.Database;
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using SyslogLogging;
 
     /// <summary>
@@ -180,6 +181,7 @@ namespace Partio.Server.Services
                 ApiFormat = endpoint.ApiFormat,
                 ApiKey = endpoint.ApiKey,
                 Description = "completion endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + ")",
+                Kind = "completion",
                 UpdateState = (success, errorMessage) =>
                 {
                     if (_States.TryGetValue(endpoint.Id, out EndpointHealthState? currentState))
@@ -279,6 +281,23 @@ namespace Partio.Server.Services
                     }
                 }
             }
+
+            UpdateHealthGauges();
+        }
+
+        /// <summary>Publish the current healthy/unhealthy completion-endpoint counts as gauges.</summary>
+        private void UpdateHealthGauges()
+        {
+            int healthy = 0;
+            int unhealthy = 0;
+            foreach (EndpointHealthState s in _States.Values)
+            {
+                bool isHealthy;
+                lock (s.Lock) { isHealthy = s.IsHealthy; }
+                if (isHealthy) healthy++;
+                else unhealthy++;
+            }
+            PartioMetrics.SetEndpointHealthGauges("completion", healthy, unhealthy);
         }
     }
 }

@@ -4,6 +4,7 @@ namespace Partio.Core.Summarization
     using Partio.Core.Enums;
     using Partio.Core.Exceptions;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using Partio.Core.ThirdParty;
     using SyslogLogging;
 
@@ -46,6 +47,8 @@ namespace Partio.Core.Summarization
             if (config == null) throw new ArgumentNullException(nameof(config));
             if (completionClient == null) throw new ArgumentNullException(nameof(completionClient));
 
+            using ProcessStageScope stage = ProcessStageScope.Begin("summarize");
+
             // Normalize to hierarchical form
             List<SemanticCellRequest> rootCells = Deflatten(cells);
 
@@ -61,6 +64,7 @@ namespace Partio.Core.Summarization
                 await ProcessTopDownAsync(rootCells, config, completionClient, model, globalFailures, token).ConfigureAwait(false);
             }
 
+            stage.Complete();
             return rootCells;
         }
 

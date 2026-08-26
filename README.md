@@ -58,6 +58,7 @@ It ships as a server, a React admin dashboard, three SDKs (C#, Python, JavaScrip
 - **Isolates tenants** — tenants, users, credentials, and endpoints are fully partitioned behind scoped bearer tokens.
 - **Records everything** — full request history with upstream call capture, headers, bodies, timing, and status, with configurable retention.
 - **Monitors endpoints** — background health checks gate traffic away from unhealthy providers automatically.
+- **Observes itself** — Watson-native HTTP metrics and per-request traces plus application metrics and spans for every pipeline stage and provider call, collected by a bundled Prometheus + Tempo + Loki + Grafana stack. See [Observability](#observability) and [TELEMETRY.md](TELEMETRY.md).
 
 ## Who It's For
 
@@ -232,6 +233,29 @@ curl -X POST http://localhost:8400/v1.0/process \
 - **SDKs** for C#, Python, and JavaScript.
 - **Docker images** with multi-architecture support (amd64/arm64).
 - **Pagination and filtering** with cursor-based continuation tokens, sorting, and label/tag/name/active filters on all list endpoints.
+- **Built-in observability** — Watson 7.1 HTTP metrics and per-request traces plus `partio_*` application metrics and spans for the processing pipeline, provider integrations, and background workers, exposed on Prometheus scrape endpoints and OTLP, with a bundled Prometheus + Tempo + Loki + Grafana stack and provisioned per-domain dashboards.
+
+## Observability
+
+Partio ships observable. Watson 7.1's built-in telemetry emits the whole HTTP surface as metrics and one
+trace span per request; the application extends that with `partio_*` metrics and spans for everything
+behind the route — the chunk/embed/summarize pipeline and its stages, every outbound provider call, and
+the background health-check and cleanup workers.
+
+Two Prometheus scrape endpoints are exposed on the server's own port (anonymous — keep them internal):
+
+| Endpoint | Content |
+|---|---|
+| `GET /metrics` | Watson's HTTP + `watson.*` metrics (`http_server_request_duration_seconds`, `watson_server_up`, …) |
+| `GET /v1.0/metrics` | Application `partio_*` families (processing stages, integrations, endpoint health, model load, request history, authz) |
+
+Traces are pushed over OTLP to Tempo; logs are shipped to Loki. The bundled Docker stack wires it all
+together — `docker compose up -d --build` (from `docker/`) brings up Partio alongside **Prometheus**
+(`:9090`), **Tempo** (`:3200`), **Loki** (`:3100`), an **OTLP collector**, and **Grafana** (`:3000`,
+`admin` / `admin`) with five provisioned dashboards in a **Partio** folder: Overview, HTTP, Processing,
+Integrations, and Endpoint Health. The dashboard home page carries an **External Services** card linking
+to each tool. Configure telemetry via the `Telemetry` section of `partio.json`; see
+[TELEMETRY.md](TELEMETRY.md) for the full metric inventory, span model, and reading workflows.
 
 ## Architecture and Components
 
@@ -417,6 +441,13 @@ Partio is configured via `partio.json`, created automatically on first run.
     "Directory": "./request-history/",
     "RetentionDays": 7,
     "CleanupIntervalMinutes": 60
+  },
+  "Telemetry": {
+    "Enabled": true,
+    "ServiceName": "partio-server",
+    "OtlpEndpoint": "http://127.0.0.1:4317",
+    "OtlpProtocol": "grpc",
+    "PrometheusEnabled": true
   },
   "TokenizationDefaults": {
     "GlobalFallback": {

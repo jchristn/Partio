@@ -169,8 +169,12 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/",
-							"host": ["{{baseUrl}}"],
-							"path": [""]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
 						},
 						"auth": {
 							"type": "noauth"
@@ -185,8 +189,12 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/",
-							"host": ["{{baseUrl}}"],
-							"path": [""]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
 						},
 						"auth": {
 							"type": "noauth"
@@ -201,13 +209,64 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/health",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "health"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"health"
+							]
 						},
 						"auth": {
 							"type": "noauth"
 						},
 						"description": "Returns health status JSON with version information."
+					}
+				}
+			]
+		},
+		{
+			"name": "Observability",
+			"item": [
+				{
+					"name": "GET /metrics (Watson)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/metrics",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"metrics"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Prometheus scrape of Watson built-in HTTP + watson.* metrics (in-process endpoint). Anonymous; keep on an internal network."
+					}
+				},
+				{
+					"name": "GET /v1.0/metrics (Application)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/metrics",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"metrics"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Prometheus scrape of Partio application metrics (partio_* families: processing stages, integrations, endpoint health, authz). Anonymous."
 					}
 				}
 			]
@@ -252,8 +311,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a single semantic cell. Chunks the input text and computes embeddings using the specified endpoint."
 					}
@@ -274,8 +338,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/chunk",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "chunk"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"chunk"
+							]
 						},
 						"description": "Chunk a semantic cell into text chunks without embedding them. No embedding endpoint required."
 					}
@@ -296,8 +365,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/embed",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "embed"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"embed"
+							]
 						},
 						"description": "Generate embedding vectors for one or more input strings using the specified embedding endpoint. Does not chunk."
 					}
@@ -318,8 +392,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/summarize",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "summarize"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"summarize"
+							]
 						},
 						"description": "Summarize text through the specified completion endpoint. Does not chunk or embed."
 					}
@@ -340,8 +419,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process text using sentence-based chunking strategy."
 					}
@@ -362,8 +446,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process text using paragraph-based chunking strategy."
 					}
@@ -384,8 +473,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process an unordered list as a single chunk using WholeList strategy."
 					}
@@ -406,8 +500,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process an ordered list where each item becomes its own chunk."
 					}
@@ -428,8 +527,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a table using RowWithHeaders strategy. Each data row becomes its own chunk with markdown table headers prepended."
 					}
@@ -450,8 +554,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a table using Row strategy. Each data row becomes a chunk of space-separated values (no headers)."
 					}
@@ -472,8 +581,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a table using RowGroupWithHeaders strategy. Data rows are grouped into batches of RowGroupSize with headers prepended to each group."
 					}
@@ -494,8 +608,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a table using KeyValuePairs strategy. Each data row becomes 'key1: val1, key2: val2, ...'."
 					}
@@ -516,8 +635,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a table using WholeTable strategy. The entire table is serialized as a single markdown table chunk."
 					}
@@ -538,8 +662,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a code snippet. Uses the Text field with Type set to Code for code-aware chunking."
 					}
@@ -560,8 +689,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a hyperlink atom. Uses the Text field with Type set to Hyperlink."
 					}
@@ -582,8 +716,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a metadata atom. Uses the Text field with Type set to Meta for metadata content."
 					}
@@ -604,8 +743,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process text with L2 normalization enabled on embeddings."
 					}
@@ -626,8 +770,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process text using regex-based chunking. Splits at boundaries defined by the RegexPattern (default: Markdown headings)."
 					}
@@ -668,8 +817,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process/batch",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process", "batch"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process",
+								"batch"
+							]
 						},
 						"description": "Process multiple semantic cells in a single request."
 					}
@@ -690,8 +845,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process a single semantic cell with LLM-powered summarization. Summarization runs before chunking and embedding. Requires a valid completion endpoint."
 					}
@@ -735,8 +895,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants"
+							]
 						},
 						"description": "Create a new tenant. Also auto-creates a default user, credential, and embedding endpoints. The response tenant ID is automatically saved to the `tenantId` variable."
 					}
@@ -765,8 +930,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "{{tenantId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"{{tenantId}}"
+							]
 						},
 						"description": "Read a tenant by ID."
 					}
@@ -800,8 +971,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "{{tenantId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"{{tenantId}}"
+							]
 						},
 						"description": "Update an existing tenant."
 					}
@@ -826,8 +1003,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "{{tenantId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"{{tenantId}}"
+							]
 						},
 						"description": "Check if a tenant exists. Returns 200 if found, 404 if not."
 					}
@@ -869,8 +1052,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/enumerate",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "enumerate"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"enumerate"
+							]
 						},
 						"description": "List tenants with pagination and filtering. Use ContinuationToken from the response for the next page."
 					}
@@ -891,8 +1080,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/enumerate",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "enumerate"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"enumerate"
+							]
 						},
 						"description": "Fetch the next page of tenants using the continuation token."
 					}
@@ -917,8 +1112,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "{{tenantId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"{{tenantId}}"
+							]
 						},
 						"description": "Delete a tenant. Cascade deletes associated users, credentials, and endpoints."
 					}
@@ -962,8 +1163,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/users",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "users"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"users"
+							]
 						},
 						"description": "Create a new user. The response user ID is automatically saved to the `userId` variable."
 					}
@@ -992,8 +1198,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "users", "{{userId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"users",
+								"{{userId}}"
+							]
 						},
 						"description": "Read a user by ID. Password is always redacted in the response."
 					}
@@ -1027,8 +1239,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "users", "{{userId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"users",
+								"{{userId}}"
+							]
 						},
 						"description": "Update an existing user."
 					}
@@ -1053,8 +1271,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "users", "{{userId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"users",
+								"{{userId}}"
+							]
 						},
 						"description": "Check if a user exists. Returns 200 if found, 404 if not."
 					}
@@ -1092,8 +1316,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/users/enumerate",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "users", "enumerate"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"users",
+								"enumerate"
+							]
 						},
 						"description": "List users with pagination and filtering."
 					}
@@ -1118,8 +1348,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/users/{{userId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "users", "{{userId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"users",
+								"{{userId}}"
+							]
 						},
 						"description": "Delete a user."
 					}
@@ -1163,8 +1399,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/credentials",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "credentials"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"credentials"
+							]
 						},
 						"description": "Create a new credential. A bearer token is auto-generated. The response credential ID is automatically saved to the `credentialId` variable."
 					}
@@ -1193,8 +1434,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "credentials", "{{credentialId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"credentials",
+								"{{credentialId}}"
+							]
 						},
 						"description": "Read a credential by ID. Includes the bearer token."
 					}
@@ -1228,8 +1475,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "credentials", "{{credentialId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"credentials",
+								"{{credentialId}}"
+							]
 						},
 						"description": "Update an existing credential."
 					}
@@ -1254,8 +1507,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "credentials", "{{credentialId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"credentials",
+								"{{credentialId}}"
+							]
 						},
 						"description": "Check if a credential exists. Returns 200 if found, 404 if not."
 					}
@@ -1293,8 +1552,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/credentials/enumerate",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "credentials", "enumerate"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"credentials",
+								"enumerate"
+							]
 						},
 						"description": "List credentials with pagination and filtering."
 					}
@@ -1319,8 +1584,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "credentials", "{{credentialId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"credentials",
+								"{{credentialId}}"
+							]
 						},
 						"description": "Delete a credential."
 					}
@@ -1364,8 +1635,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
 						},
 						"description": "Create a new embedding endpoint with an explicit tokenization override. The response endpoint ID is automatically saved to the `endpointId` variable."
 					}
@@ -1390,8 +1667,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"{{endpointId}}"
+							]
 						},
 						"description": "Read an embedding endpoint by ID."
 					}
@@ -1425,8 +1709,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"{{endpointId}}"
+							]
 						},
 						"description": "Update an existing embedding endpoint and change the tokenization override to a fallback-disabled profile."
 					}
@@ -1451,8 +1742,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"{{endpointId}}"
+							]
 						},
 						"description": "Check if an embedding endpoint exists. Returns 200 if found, 404 if not."
 					}
@@ -1490,8 +1788,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/enumerate",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "enumerate"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"enumerate"
+							]
 						},
 						"description": "List embedding endpoints with pagination and filtering."
 					}
@@ -1516,8 +1821,16 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}/health",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}", "health"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"{{endpointId}}",
+								"health"
+							]
 						},
 						"description": "Get the health status for a specific monitored endpoint. Returns 404 if health checking is not enabled for this endpoint."
 					}
@@ -1546,8 +1859,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/health",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "health"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"health"
+							]
 						},
 						"description": "Get health status for all monitored endpoints. Non-admin callers see only their tenant's endpoints."
 					}
@@ -1588,8 +1908,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/explorer/embedding",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "explorer", "embedding"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"explorer",
+								"embedding"
+							]
 						},
 						"description": "Run the configured embedding endpoint through Partio and capture the resolved tokenization profile plus upstream call detail."
 					}
@@ -1614,8 +1940,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"{{endpointId}}"
+							]
 						},
 						"description": "Delete an embedding endpoint."
 					}
@@ -1661,8 +1994,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
 						},
 						"description": "Create a new completion/inference endpoint."
 					}
@@ -1674,8 +2013,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}"
+							]
 						},
 						"description": "Read a completion endpoint by ID."
 					}
@@ -1696,8 +2042,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}"
+							]
 						},
 						"description": "Update an existing completion endpoint."
 					}
@@ -1709,8 +2062,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}"
+							]
 						},
 						"description": "Check if a completion endpoint exists."
 					}
@@ -1731,8 +2091,15 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/enumerate",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "enumerate"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"enumerate"
+							]
 						},
 						"description": "List completion endpoints with pagination and filtering."
 					}
@@ -1744,8 +2111,16 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/health",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "health"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}",
+								"health"
+							]
 						},
 						"description": "Get the health status for a specific completion endpoint."
 					}
@@ -1757,8 +2132,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/health",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "health"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"health"
+							]
 						},
 						"description": "Get health status for all monitored completion endpoints."
 					}
@@ -1770,8 +2152,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}"
+							]
 						},
 						"description": "Delete a completion endpoint."
 					}
@@ -1815,8 +2204,16 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}/load",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "embedding", "{{endpointId}}", "load"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"{{endpointId}}",
+								"load"
+							]
 						},
 						"description": "Load or warm the configured embedding endpoint model."
 					}
@@ -1850,8 +2247,16 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}",
+								"load"
+							]
 						},
 						"description": "Load or warm the configured completion endpoint model."
 					}
@@ -1872,8 +2277,16 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}",
+								"load"
+							]
 						},
 						"description": "Use this with an Ollama completion endpoint configured for `gemma3:4b`."
 					}
@@ -1894,8 +2307,16 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}",
+								"load"
+							]
 						},
 						"description": "Warm an OpenAI-compatible completion endpoint, including vLLM."
 					}
@@ -1929,8 +2350,16 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/load",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "endpoints", "completion", "{{completionEndpointId}}", "load"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}",
+								"load"
+							]
 						},
 						"description": "Expected 409 for OpenAI, Gemini, or vLLM endpoints because they do not expose Partio-supported native model loading."
 					}
@@ -1961,8 +2390,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/requests/{{requestId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "requests", "{{requestId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"requests",
+								"{{requestId}}"
+							]
 						},
 						"description": "Read a request history entry by ID."
 					}
@@ -1987,8 +2422,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/requests/{{requestId}}/detail",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "requests", "{{requestId}}", "detail"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"requests",
+								"{{requestId}}",
+								"detail"
+							]
 						},
 						"description": "Read the full request/response body detail from filesystem storage, including upstream call traces and resolved `TokenizationProfile` when available."
 					}
@@ -2030,8 +2472,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/requests/enumerate",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "requests", "enumerate"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"requests",
+								"enumerate"
+							]
 						},
 						"description": "List request history entries with pagination. The first result's ID is automatically saved to the `requestId` variable."
 					}
@@ -2056,8 +2504,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/requests/{{requestId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "requests", "{{requestId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"requests",
+								"{{requestId}}"
+							]
 						},
 						"description": "Delete a request history entry."
 					}
@@ -2100,8 +2554,14 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/requests/statistics",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "requests", "statistics"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"requests",
+								"statistics"
+							]
 						},
 						"description": "Get aggregated request statistics grouped by time bucket, broken out by success/failure. Supports filtering by request type (Embedding/Inference), timeframe (Hour/Day/Week/Month), and endpoint URL substring."
 					}
@@ -2132,8 +2592,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "{{tenantId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"{{tenantId}}"
+							]
 						},
 						"auth": {
 							"type": "noauth"
@@ -2166,8 +2632,14 @@
 						],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "{{tenantId}}"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"{{tenantId}}"
+							]
 						},
 						"auth": {
 							"type": "noauth"
@@ -2195,8 +2667,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/tenants/ten_nonexistent_id_that_will_never_exist_12345",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "tenants", "ten_nonexistent_id_that_will_never_exist_12345"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"tenants",
+								"ten_nonexistent_id_that_will_never_exist_12345"
+							]
 						},
 						"description": "Request for a resource that does not exist. Expected: 404 Not Found."
 					}
@@ -2234,8 +2712,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Demonstrates 400 error when using a table-only strategy (Row) on a Text atom type. Set {{endpointId}} to a valid endpoint ID first."
 					}
@@ -2269,8 +2752,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Demonstrates 400 error when using a table-only strategy (RowWithHeaders) on a List atom type. Set {{endpointId}} to a valid endpoint ID first."
 					}
@@ -2304,8 +2792,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Demonstrates 400 error when using a list-only strategy (WholeList) on a Table atom type. Set {{endpointId}} to a valid endpoint ID first."
 					}
@@ -2343,8 +2836,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Demonstrates 400 error when using RegexBased strategy without providing a RegexPattern. Set {{endpointId}} to a valid endpoint ID first."
 					}
@@ -2378,8 +2876,13 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/v1.0/process",
-							"host": ["{{baseUrl}}"],
-							"path": ["v1.0", "process"]
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"process"
+							]
 						},
 						"description": "Process request with empty body. Expected: 400 Bad Request. Set {{endpointId}} to a valid endpoint ID first."
 					}

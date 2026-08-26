@@ -36,6 +36,12 @@ namespace Partio.Core.ThirdParty
         protected string _Header = "[CompletionClient] ";
 
         /// <summary>
+        /// Provider service name used as a low-cardinality telemetry label (ollama, openai, gemini, vllm).
+        /// Set by the client factory from the endpoint's API format so vLLM is distinguished from OpenAI.
+        /// </summary>
+        public string ServiceName { get; set; } = "(unknown)";
+
+        /// <summary>
         /// Maximum upstream provider request timeout in milliseconds.
         /// </summary>
         protected readonly int _MaximumTimeoutMs;

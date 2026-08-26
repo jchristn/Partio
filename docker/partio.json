@@ -41,6 +41,13 @@
         "MaxRequestBodyBytes": 65536,
         "MaxResponseBodyBytes": 65536
     },
+    "Telemetry": {
+        "Enabled": true,
+        "ServiceName": "partio-server",
+        "OtlpEndpoint": "http://tempo:4317",
+        "OtlpProtocol": "grpc",
+        "PrometheusEnabled": true
+    },
     "TokenizationDefaults": {
         "GlobalFallback": {
             "TokenizerKind": "Cl100kBase",
@@ -82,8 +89,8 @@
     ],
     "DefaultEmbeddingEndpoints": [
         {
-            "Name": "nomic-embed-text",
-            "Model": "nomic-embed-text",
+            "Name": "all-minilm",
+            "Model": "all-minilm",
             "Endpoint": "http://localhost:11434",
             "ApiFormat": "Ollama",
             "ApiKey": null,

@@ -3,6 +3,7 @@ namespace Partio.Server.Services
     using Partio.Core;
     using Partio.Core.Database;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using Partio.Core.Settings;
     using SyslogLogging;
 
@@ -159,7 +160,16 @@ namespace Partio.Server.Services
                 _Logging.Warn(_Header + "failed to write request history detail: " + ex.Message);
             }
 
-            await _Database.RequestHistory.UpdateAsync(entry).ConfigureAwait(false);
+            try
+            {
+                await _Database.RequestHistory.UpdateAsync(entry).ConfigureAwait(false);
+                PartioMetrics.RecordRequestHistoryWrite("ok");
+            }
+            catch
+            {
+                PartioMetrics.RecordRequestHistoryWrite("error");
+                throw;
+            }
         }
 
         /// <summary>

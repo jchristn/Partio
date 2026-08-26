@@ -2,6 +2,7 @@ namespace Partio.Core.ThirdParty
 {
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using PolyPromptEmbeddingOptions = PolyPrompt.Models.EmbeddingOptions;
     using PolyPromptOpenAiClient = PolyPrompt.Clients.OpenAiClient;
     using SyslogLogging;
@@ -45,6 +46,7 @@ namespace Partio.Core.ThirdParty
         public override async Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
         {
             PolyPromptEmbeddingOptions options = new PolyPromptEmbeddingOptions { Model = model };
+            using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "embedding", _ConcurrencyKey);
             PolyPrompt.Models.EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
             using (PolyPromptOpenAiClient client = CreateConfiguredClient(_MaximumTimeoutMs))
@@ -56,6 +58,7 @@ namespace Partio.Core.ThirdParty
                 }
                 catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
                 {
+                    integ.Outcome = "rejected";
                     AppendRejectedCall("EmbeddingRequest", _Endpoint.TrimEnd('/'), "POST", ex.Message);
                     AppendCallDetails(client.CallDetails);
                     throw;
@@ -95,6 +98,7 @@ namespace Partio.Core.ThirdParty
                     throw new Exception(response.Error ?? "OpenAI embedding request failed.");
                 }
 
+                integ.Outcome = "ok";
                 return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
             }
         }

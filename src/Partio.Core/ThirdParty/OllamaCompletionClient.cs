@@ -5,6 +5,7 @@ namespace Partio.Core.ThirdParty
     using System.Text.Json;
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using PolyPrompt.Clients;
     using PolyPrompt.Models;
     using SyslogLogging;
@@ -56,6 +57,7 @@ namespace Partio.Core.ThirdParty
                 SystemPrompt = systemPrompt
             };
 
+            using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "completion", _ConcurrencyKey);
             ChatResponse response;
             IDisposable? concurrencyLease = null;
             using (OllamaClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
@@ -67,6 +69,7 @@ namespace Partio.Core.ThirdParty
                 }
                 catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
                 {
+                    integ.Outcome = "rejected";
                     AppendRejectedCall(_Endpoint.TrimEnd('/'), "POST", ex.Message);
                     AppendCallDetails(client.CallDetails);
                     throw;
@@ -100,6 +103,7 @@ namespace Partio.Core.ThirdParty
                         effectiveTimeoutMs);
                 }
 
+                integ.Outcome = response.Success ? "ok" : "error";
                 return response.Success ? response.Text?.Trim() : null;
             }
         }

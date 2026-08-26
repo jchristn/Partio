@@ -6,6 +6,7 @@ namespace Partio.Core.ThirdParty
     using System.Text.RegularExpressions;
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using PolyPrompt.Clients;
     using PolyPrompt.Models;
     using SyslogLogging;
@@ -51,6 +52,7 @@ namespace Partio.Core.ThirdParty
         public override async Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
         {
             EmbeddingOptions options = new EmbeddingOptions { Model = model };
+            using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "embedding", _ConcurrencyKey);
             EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
             using (OllamaClient client = CreateConfiguredClient(_MaximumTimeoutMs))
@@ -62,6 +64,7 @@ namespace Partio.Core.ThirdParty
                 }
                 catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
                 {
+                    integ.Outcome = "rejected";
                     AppendRejectedCall("EmbeddingRequest", _Endpoint.TrimEnd('/'), "POST", ex.Message);
                     AppendCallDetails(client.CallDetails);
                     throw;
@@ -101,6 +104,7 @@ namespace Partio.Core.ThirdParty
                     throw new Exception(response.Error ?? "Ollama embedding request failed.");
                 }
 
+                integ.Outcome = "ok";
                 return response.Embeddings.Select(e => e.Embedding?.ToList() ?? new List<float>()).ToList();
             }
         }

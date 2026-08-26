@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.5.0 - Unreleased
+
+### Added
+- **Observability, built in.** Metrics and traces are emitted from the whole product, collected into a
+  local stack that comes up with `docker compose up`, and rendered in per-domain Grafana dashboards.
+  - **Watson 7.1 built-in telemetry** enabled (`Settings.Telemetry`): the entire HTTP surface
+    (`http_server_*`, `watson_*`) and one server span per request, served on the in-process Prometheus
+    endpoint at `GET /metrics`.
+  - **Application metrics** (`PartioMetrics`, dependency-free Prometheus registry) served at
+    `GET /v1.0/metrics`, covering the processing pipeline and its stages, outbound provider integrations,
+    endpoint health checks and gauges, model loading, request-history persistence/cleanup, and
+    authorization decisions. Every family is prefixed `partio_`.
+  - **Application traces** on a `Partio` activity source, exported to Tempo over OTLP via a Radiant host
+    that also subscribes to Watson's server spans — a `process` root span with per-stage children, and a
+    client span per provider call, all nested in one trace. Best-effort: telemetry failures never affect
+    request handling.
+  - **New `Telemetry` settings section** (`Enabled`, `ServiceName`, `OtlpEndpoint`, `OtlpProtocol`,
+    `PrometheusEnabled`) with a `127.0.0.1` loopback default.
+- **Observability stack in `docker/compose.yaml`**: Prometheus, Tempo (pinned `2.6.1`), Loki, an OTLP
+  collector (tails Partio's logs into Loki), and Grafana — healthchecked, wired together, and provisioned
+  as code with five per-domain dashboards (Overview, HTTP, Processing, Integrations, Endpoint Health) in a
+  `Partio` folder.
+- **Dashboard "External Services" card** on the home page linking operators to Grafana, Prometheus,
+  Tempo, Loki, and Ollama with their URLs and default credentials.
+- **`TELEMETRY.md`** documenting the metric families, endpoints, Grafana access, and reading workflows.
+- **Test coverage**: positive and negative unit tests for the metrics registry, instrumentation scopes,
+  telemetry settings, and the trace-host lifecycle, plus an integration check that the `/metrics` and
+  `/v1.0/metrics` endpoints expose the expected families.
+- **`docker/update.bat`** — one-shot stack refresh: `docker compose pull` → `down` → `up -d` → `ps -a`.
+
+### Changed
+- `docker/compose.yaml` now pins the Partio images to **`v0.5.0`** (`jchristn77/partio-server:v0.5.0`,
+  `jchristn77/partio-dashboard:v0.5.0`) instead of `latest`.
+- The `Telemetry` settings section is present in both `docker/partio.json` and `docker/factory/partio.json`.
+- Moved `LOAD_MODELS.md` into `archive/` — the model-loading API is documented in `README.md`, `REST_API.md`,
+  and the Postman collection.
+
 ## v0.4.0 - 2026-08-19
 
 ### Added

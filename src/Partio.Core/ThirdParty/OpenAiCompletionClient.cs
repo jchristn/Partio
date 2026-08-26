@@ -3,6 +3,7 @@ namespace Partio.Core.ThirdParty
     using PolyPromptChatCompletionOptions = PolyPrompt.Models.ChatCompletionOptions;
     using PolyPromptChatResponse = PolyPrompt.Models.ChatResponse;
     using PolyPromptOpenAiClient = PolyPrompt.Clients.OpenAiClient;
+    using Partio.Core.Observability;
     using SyslogLogging;
 
     /// <summary>
@@ -50,6 +51,7 @@ namespace Partio.Core.ThirdParty
                 SystemPrompt = systemPrompt
             };
 
+            using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "completion", _ConcurrencyKey);
             PolyPromptChatResponse response;
             IDisposable? concurrencyLease = null;
             using (PolyPromptOpenAiClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
@@ -61,6 +63,7 @@ namespace Partio.Core.ThirdParty
                 }
                 catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)
                 {
+                    integ.Outcome = "rejected";
                     AppendRejectedCall(_Endpoint.TrimEnd('/'), "POST", ex.Message);
                     AppendCallDetails(client.CallDetails);
                     throw;
@@ -93,6 +96,7 @@ namespace Partio.Core.ThirdParty
                         "Upstream inference provider request timed out after " + effectiveTimeoutMs + "ms.",
                         effectiveTimeoutMs);
                 }
+                integ.Outcome = response.Success ? "ok" : "error";
                 return response.Success ? response.Text?.Trim() : null;
             }
         }

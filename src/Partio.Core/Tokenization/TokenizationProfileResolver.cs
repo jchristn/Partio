@@ -4,6 +4,7 @@ namespace Partio.Core.Tokenization
     using System.Text;
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using Partio.Core.Settings;
     using Partio.Core.ThirdParty;
     using SyslogLogging;
@@ -49,6 +50,8 @@ namespace Partio.Core.Tokenization
             if (endpoint == null) throw new ArgumentNullException(nameof(endpoint));
             if (string.IsNullOrWhiteSpace(model)) throw new ArgumentNullException(nameof(model));
             if (client == null) throw new ArgumentNullException(nameof(client));
+
+            using ProcessStageScope stage = ProcessStageScope.Begin("tokenize");
 
             EndpointTokenizationSettings? overrideSettings = NormalizeOverrideSettings(endpoint.Tokenization);
             bool allowDynamicResolution = overrideSettings?.AutoDetect != false;
@@ -225,6 +228,7 @@ namespace Partio.Core.Tokenization
                     + " budget " + profile.EffectiveInputBudget);
             }
 
+            stage.Complete();
             return profile;
         }
 

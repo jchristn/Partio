@@ -4,6 +4,7 @@ namespace Partio.Server.Services
     using Partio.Core.Database;
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Observability;
     using Partio.Core.Tokenization;
     using SyslogLogging;
 
@@ -191,6 +192,7 @@ namespace Partio.Server.Services
                 ApiFormat = endpoint.ApiFormat,
                 ApiKey = endpoint.ApiKey,
                 Description = "embedding endpoint " + endpoint.Id + " (" + endpoint.Model + ")",
+                Kind = "embedding",
                 UpdateState = (success, errorMessage) =>
                 {
                     if (_States.TryGetValue(endpoint.Id, out EndpointHealthState? currentState))
@@ -296,6 +298,23 @@ namespace Partio.Server.Services
                     }
                 }
             }
+
+            UpdateHealthGauges();
+        }
+
+        /// <summary>Publish the current healthy/unhealthy embedding-endpoint counts as gauges.</summary>
+        private void UpdateHealthGauges()
+        {
+            int healthy = 0;
+            int unhealthy = 0;
+            foreach (EndpointHealthState s in _States.Values)
+            {
+                bool isHealthy;
+                lock (s.Lock) { isHealthy = s.IsHealthy; }
+                if (isHealthy) healthy++;
+                else unhealthy++;
+            }
+            PartioMetrics.SetEndpointHealthGauges("embedding", healthy, unhealthy);
         }
     }
 }

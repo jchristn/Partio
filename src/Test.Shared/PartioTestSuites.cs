@@ -29,6 +29,7 @@ namespace Test.Shared
                     RequestHistoryDiagnostics.Suite(),
                     EmbeddingBatchLimitDiagnostics.Suite(),
                     SqliteMigrationTests.Suite(),
+                    TelemetryUnitTests.Suite(),
                 };
             }
         }
