@@ -8,9 +8,9 @@ if "%TAG%"=="latest" (
 ) else (
     set TAGARGS=-t %IMAGE%:%TAG% -t %IMAGE%:latest
 )
-echo === Building %IMAGE%:%TAG% for the local platform and loading into the local Docker daemon ===
-docker buildx build --builder cloud-jchristn77-jchristn77 --platform linux/amd64 %TAGARGS% -f src/Partio.McpServer/Dockerfile --load .
-if errorlevel 1 exit /b %errorlevel%
 echo === Building %IMAGE%:%TAG% multi-arch and pushing to Docker Hub ===
 docker buildx build --builder cloud-jchristn77-jchristn77 --platform linux/amd64,linux/arm64/v8 %TAGARGS% -f src/Partio.McpServer/Dockerfile --push .
+if errorlevel 1 exit /b %errorlevel%
+echo === Pulling %IMAGE%:%TAG% into the local Docker daemon ===
+docker pull %IMAGE%:%TAG%
 if errorlevel 1 exit /b %errorlevel%
