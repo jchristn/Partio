@@ -180,6 +180,32 @@
   color: var(--text-primary);
 }
 
+/* Wraps the chart so the loading overlay can be positioned over the graph area. */
+.chart-area {
+  position: relative;
+  min-height: 360px;
+}
+
+/* Shown over the graph while new filtered data is being fetched. */
+.chart-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: var(--radius);
+  z-index: 2;
+  background: var(--card-bg); /* fallback for browsers without color-mix */
+  background: color-mix(in srgb, var(--card-bg) 72%, transparent);
+}
+
+.chart-loading-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .chart-empty {
   display: flex;
   align-items: center;

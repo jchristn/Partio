@@ -78,7 +78,7 @@ namespace Partio.Server
 
             // 4. First run initialization
             await InitializeFirstRunAsync().ConfigureAwait(false);
-            await ReconcileDefaultEmbeddingEndpointAsync().ConfigureAwait(false);
+            await EnsureDefaultEmbeddingEndpointAsync().ConfigureAwait(false);
 
             // 5. Initialize services
             _AuthService = new AuthenticationService(_Settings, _Database, _Logging);
@@ -896,7 +896,7 @@ namespace Partio.Server
             Console.WriteLine();
         }
 
-        private static async Task ReconcileDefaultEmbeddingEndpointAsync()
+        private static async Task EnsureDefaultEmbeddingEndpointAsync()
         {
             if (_Settings.DefaultEmbeddingEndpoints == null || _Settings.DefaultEmbeddingEndpoints.Count < 1)
                 return;
@@ -906,44 +906,15 @@ namespace Partio.Server
             if (existing == null)
                 existing = await _Database.EmbeddingEndpoint.ReadByModelAsync("default", configuredDefault.Model).ConfigureAwait(false);
 
+            // Seed-only: create the default embedding endpoint from settings when it is missing, but never
+            // overwrite an existing one. This lets API/dashboard edits to the default endpoint persist across
+            // restarts, matching how the default inference endpoint behaves.
             if (existing == null)
             {
                 EmbeddingEndpoint created = BuildConfiguredDefaultEmbeddingEndpoint(configuredDefault);
                 await _Database.EmbeddingEndpoint.CreateAsync(created).ConfigureAwait(false);
                 _Logging.Info(_Header + "created default embedding endpoint from settings for tenant default");
-                return;
             }
-
-            if (!string.Equals(existing.TenantId, "default", StringComparison.OrdinalIgnoreCase))
-                return;
-
-            EndpointTokenizationSettings? configuredTokenization = CloneTokenizationSettings(configuredDefault.Tokenization);
-            bool changed =
-                !string.Equals(existing.Name, configuredDefault.Name, StringComparison.Ordinal)
-                || !string.Equals(existing.Model, configuredDefault.Model, StringComparison.Ordinal)
-                || !string.Equals(existing.Endpoint, configuredDefault.Endpoint, StringComparison.Ordinal)
-                || existing.ApiFormat != configuredDefault.ApiFormat
-                || !string.Equals(existing.ApiKey, configuredDefault.ApiKey, StringComparison.Ordinal)
-                || existing.MaximumTimeoutMs != configuredDefault.MaximumTimeoutMs
-                || existing.MaxConcurrentRequests != configuredDefault.MaxConcurrentRequests
-                || existing.MaxQueueDepth != configuredDefault.MaxQueueDepth
-                || !TokenizationSettingsEqual(existing.Tokenization, configuredTokenization);
-
-            if (!changed) return;
-
-            existing.Name = configuredDefault.Name;
-            existing.Model = configuredDefault.Model;
-            existing.Endpoint = configuredDefault.Endpoint;
-            existing.ApiFormat = configuredDefault.ApiFormat;
-            existing.ApiKey = configuredDefault.ApiKey;
-            existing.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
-            existing.MaxConcurrentRequests = configuredDefault.MaxConcurrentRequests;
-            existing.MaxQueueDepth = configuredDefault.MaxQueueDepth;
-            existing.Tokenization = configuredTokenization;
-            EmbeddingEndpoint.ApplyHealthCheckDefaults(existing);
-
-            await _Database.EmbeddingEndpoint.UpdateAsync(existing).ConfigureAwait(false);
-            _Logging.Info(_Header + "reconciled default embedding endpoint from settings for tenant default");
         }
 
         private static EmbeddingEndpoint BuildConfiguredDefaultEmbeddingEndpoint(DefaultEmbeddingEndpoint configuredDefault)
@@ -979,20 +950,6 @@ namespace Partio.Server
                 BatchLimitMode = settings.BatchLimitMode,
                 AutoDetect = settings.AutoDetect
             };
-        }
-
-        private static bool TokenizationSettingsEqual(EndpointTokenizationSettings? left, EndpointTokenizationSettings? right)
-        {
-            if (ReferenceEquals(left, right)) return true;
-            if (left == null || right == null) return false;
-
-            return left.TokenizerKind == right.TokenizerKind
-                && string.Equals(left.TokenizerModel, right.TokenizerModel, StringComparison.Ordinal)
-                && left.MaxInputTokens == right.MaxInputTokens
-                && left.ReservedInputTokens == right.ReservedInputTokens
-                && left.EffectiveInputBudget == right.EffectiveInputBudget
-                && left.BatchLimitMode == right.BatchLimitMode
-                && left.AutoDetect == right.AutoDetect;
         }
 
         #endregion

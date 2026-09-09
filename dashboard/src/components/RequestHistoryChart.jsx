@@ -153,35 +153,43 @@ export default function RequestHistoryChart({ title = 'Request History' }) {
 
       <div className="dashboard-chart-card">
         <h3>{title}</h3>
-        {chartData.length === 0 && !loading ? (
-          <div className="chart-empty">No request data for the selected timeframe.</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={360}>
-            <BarChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis
-                dataKey="name"
-                tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
-                interval={tickInterval}
-                angle={chartData.length > 30 ? -45 : 0}
-                textAnchor={chartData.length > 30 ? 'end' : 'middle'}
-                height={chartData.length > 30 ? 60 : 30}
-              />
-              <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-              <Legend />
-              <Bar dataKey="Success" stackId="a" fill="var(--success-color)" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="Failure" stackId="a" fill="var(--danger-color)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+        <div className="chart-area">
+          {loading && (
+            <div className="chart-loading-overlay" role="status" aria-live="polite" aria-busy="true">
+              <div className="spinner"></div>
+              <span className="chart-loading-text">Loading…</span>
+            </div>
+          )}
+          {chartData.length === 0 && !loading ? (
+            <div className="chart-empty">No request data for the selected timeframe.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={360}>
+              <BarChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                  interval={tickInterval}
+                  angle={chartData.length > 30 ? -45 : 0}
+                  textAnchor={chartData.length > 30 ? 'end' : 'middle'}
+                  height={chartData.length > 30 ? 60 : 30}
+                />
+                <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="Success" stackId="a" fill="var(--success-color)" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Failure" stackId="a" fill="var(--danger-color)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
     </div>
   );
