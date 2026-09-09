@@ -13,7 +13,6 @@ namespace Partio.McpServer.Settings
         private string _McpPath = "/mcp";
         private string _PartioEndpoint = "http://127.0.0.1:8400";
         private string _PartioApiKey = "partioadmin";
-        private List<string> _AdminApiKeys = new List<string>();
         private bool _RequireAuthentication = true;
         private int _LogLevel = 1;
         private int _MaxResults = 100;
@@ -90,17 +89,9 @@ namespace Partio.McpServer.Settings
         }
 
         /// <summary>
-        /// Bearer tokens accepted on inbound MCP requests. When empty, the outbound
-        /// <see cref="PartioApiKey"/> is accepted (single-key gateway).
-        /// </summary>
-        public List<string> AdminApiKeys
-        {
-            get => _AdminApiKeys;
-            set => _AdminApiKeys = value ?? new List<string>();
-        }
-
-        /// <summary>
-        /// Whether inbound MCP requests must present a valid bearer token.
+        /// Whether inbound MCP requests must present a valid bearer token. The token is validated against
+        /// Partio itself, so any credential Partio's REST API accepts (an admin key or a tenant credential)
+        /// is accepted here, and each tool call runs as that caller's identity.
         /// </summary>
         /// <remarks>Default: true. Partio endpoints are tenant-scoped and carry provider keys, so a bearer is required by default.</remarks>
         public bool RequireAuthentication
@@ -136,22 +127,6 @@ namespace Partio.McpServer.Settings
         {
             get => _Cors;
             set => _Cors = value ?? new McpCorsSettings();
-        }
-
-        /// <summary>
-        /// Return the set of bearer tokens accepted on inbound requests, falling back to the
-        /// outbound Partio API key when no explicit admin keys are configured.
-        /// </summary>
-        /// <returns>The list of accepted bearer tokens.</returns>
-        public List<string> ResolveAcceptedTokens()
-        {
-            if (_AdminApiKeys.Count > 0)
-                return _AdminApiKeys;
-
-            List<string> fallback = new List<string>();
-            if (!string.IsNullOrEmpty(_PartioApiKey))
-                fallback.Add(_PartioApiKey);
-            return fallback;
         }
     }
 }

@@ -6,9 +6,6 @@
     "McpSsePath": "/events",
     "PartioEndpoint": "http://partio-server:8400",
     "PartioApiKey": "partioadmin",
-    "AdminApiKeys": [
-        "partioadmin"
-    ],
     "RequireAuthentication": true,
     "LogLevel": 1,
     "MaxResults": 100,

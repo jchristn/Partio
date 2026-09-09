@@ -1,12 +1,12 @@
 # Partio MCP Server
 
-`partio-mcp` is a standalone Model Context Protocol server that puts Partio's endpoint management and inference operations in front of an AI agent as callable tools. It is a separate executable from the Partio REST server — you point it at a running Partio instance, and it calls that server through the Partio C# SDK on your behalf. It is built on **Voltaic 0.6.1** and speaks **JSON-RPC 2.0** over MCP Streamable HTTP at `/mcp` (with a plain JSON-RPC endpoint at `/rpc` and an SSE stream at `/events`).
+`partio-mcp` is a standalone Model Context Protocol server that puts Partio's endpoint management and inference operations in front of an AI agent as callable tools. It is a separate executable from the Partio REST server — you point it at a running Partio instance, and it calls that server through the Partio C# SDK on your behalf, using your own bearer token. It is built on **Voltaic 0.7.1** and speaks **JSON-RPC 2.0** over MCP Streamable HTTP at `/mcp` (with a plain JSON-RPC endpoint at `/rpc` and an SSE stream at `/events`).
 
-The MCP server does not invent its own authorization model. It carries the same credentials and enforces the same permissions as the REST API — every tool call is really a Partio SDK call made with the API key the server was configured with, so an agent can only do through MCP what that key can do directly.
+The MCP server does not invent its own authorization model. It carries the same credentials and enforces the same permissions as the REST API — every tool call is a Partio SDK call made with the caller's own token, so an agent can do through MCP exactly what that token can do directly against REST, and no more.
 
 ## Authentication
 
-Inbound MCP requests authenticate with a bearer token. Each request must present an `Authorization: Bearer <token>` header whose value matches a configured admin key. If it does not, the server rejects the request with **HTTP 401 before any tool runs** — the tool body never executes, so a bad token can never reach Partio.
+Inbound MCP requests authenticate with a bearer token, and MCP accepts **exactly what the REST API accepts** — because it validates the token against Partio itself rather than keeping its own key list. Present an `Authorization: Bearer <token>` header carrying either a Partio **admin API key** or a **tenant credential bearer token** (the same tokens REST honors). The server validates it against Partio (`GET /v1.0/whoami`) **before any tool runs**; if Partio rejects it, MCP returns **HTTP 401** and the tool body never executes. On success the very same token is forwarded on every SDK call the tool makes, so each operation runs as **your identity and tenant**, with the same authorization you would get calling REST directly.
 
 A few things bypass this check by design:
 

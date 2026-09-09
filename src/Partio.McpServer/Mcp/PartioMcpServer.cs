@@ -2,7 +2,6 @@ namespace Partio.McpServer.Mcp
 {
     using Partio.McpServer.Auth;
     using Partio.McpServer.Settings;
-    using Partio.Sdk;
     using SyslogLogging;
     using Voltaic.Mcp;
 
@@ -14,7 +13,6 @@ namespace Partio.McpServer.Mcp
     {
         private readonly McpServerSettings _Settings;
         private readonly LoggingModule _Logging;
-        private readonly PartioClient _Client;
         private readonly string _Header = "[McpServer] ";
         private McpHttpServer? _Server;
         private bool _Disposed;
@@ -24,12 +22,10 @@ namespace Partio.McpServer.Mcp
         /// </summary>
         /// <param name="settings">MCP server settings.</param>
         /// <param name="logging">Logging module.</param>
-        /// <param name="client">Partio REST SDK client.</param>
-        public PartioMcpServer(McpServerSettings settings, LoggingModule logging, PartioClient client)
+        public PartioMcpServer(McpServerSettings settings, LoggingModule logging)
         {
             _Settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
-            _Client = client ?? throw new ArgumentNullException(nameof(client));
         }
 
         /// <summary>
@@ -59,7 +55,7 @@ namespace Partio.McpServer.Mcp
             McpAuthenticationHandler auth = new McpAuthenticationHandler(_Settings, _Logging);
             _Server.AuthenticationHandler = auth.AuthenticateAsync;
 
-            PartioMcpToolCatalog catalog = new PartioMcpToolCatalog(_Client, _Settings, _Logging);
+            PartioMcpToolCatalog catalog = new PartioMcpToolCatalog(_Settings, _Logging);
             catalog.RegisterAll(_Server);
 
             await _Server.StartAsync(token).ConfigureAwait(false);

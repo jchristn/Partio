@@ -61,8 +61,9 @@ namespace Partio.McpServer.Commands
 
         private static string ResolveBearer(McpServerSettings settings)
         {
-            List<string> accepted = settings.ResolveAcceptedTokens();
-            return accepted.Count > 0 ? accepted[0] : settings.PartioApiKey;
+            // The stdio bridge injects a bearer on behalf of harnesses that cannot send an Authorization
+            // header; it uses the configured Partio API key, which Partio validates like any other token.
+            return settings.PartioApiKey;
         }
     }
 }

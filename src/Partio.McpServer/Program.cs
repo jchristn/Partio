@@ -2,7 +2,6 @@ namespace Partio.McpServer
 {
     using Partio.McpServer.Commands;
     using Partio.McpServer.Settings;
-    using Partio.Sdk;
     using SerializationHelper;
     using SyslogLogging;
 
@@ -49,8 +48,7 @@ namespace Partio.McpServer
             LoggingModule logging = new LoggingModule();
             logging.Settings.MinimumSeverity = (Severity)settings.LogLevel;
 
-            using PartioClient client = new PartioClient(settings.PartioEndpoint, settings.PartioApiKey);
-            using Mcp.PartioMcpServer server = new Mcp.PartioMcpServer(settings, logging, client);
+            using Mcp.PartioMcpServer server = new Mcp.PartioMcpServer(settings, logging);
 
             using CancellationTokenSource cts = new CancellationTokenSource();
             Console.CancelKeyPress += (sender, eventArgs) =>

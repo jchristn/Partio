@@ -1,5 +1,6 @@
 namespace Partio.McpServer.Mcp
 {
+    using System.Collections.Concurrent;
     using Partio.McpServer.Settings;
     using Partio.Sdk;
     using Partio.Sdk.Models;
@@ -9,24 +10,24 @@ namespace Partio.McpServer.Mcp
 
     /// <summary>
     /// Defines and registers the Partio MCP tool surface. Each tool parses its arguments from
-    /// <see cref="RpcParameters"/>, calls Partio over the REST SDK, and returns a bounded structured result.
+    /// <see cref="RpcParameters"/> and calls Partio over the REST SDK using the caller's own bearer token
+    /// (resolved from <see cref="RpcCallContext.Current"/>), so every operation runs as the caller's identity
+    /// and tenant — the same authorization the caller would get against the REST API directly.
     /// </summary>
     public class PartioMcpToolCatalog
     {
-        private readonly PartioClient _Client;
         private readonly McpServerSettings _Settings;
         private readonly LoggingModule _Logging;
+        private readonly ConcurrentDictionary<string, PartioClient> _Clients = new ConcurrentDictionary<string, PartioClient>(StringComparer.Ordinal);
         private readonly string _Header = "[McpTools] ";
 
         /// <summary>
         /// Initialize a new PartioMcpToolCatalog.
         /// </summary>
-        /// <param name="client">Partio REST SDK client used for outbound calls.</param>
         /// <param name="settings">MCP server settings.</param>
         /// <param name="logging">Logging module.</param>
-        public PartioMcpToolCatalog(PartioClient client, McpServerSettings settings, LoggingModule logging)
+        public PartioMcpToolCatalog(McpServerSettings settings, LoggingModule logging)
         {
-            _Client = client ?? throw new ArgumentNullException(nameof(client));
             _Settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
         }
@@ -45,29 +46,14 @@ namespace Partio.McpServer.Mcp
                 SchemaNoArgs(),
                 (parameters, token) => CapabilitiesAsync(token));
 
-            RegisterEndpointTools(
-                server,
-                "completion",
-                id => _Client.GetCompletionEndpointAsync(id),
-                req => _Client.EnumerateCompletionEndpointsAsync(req),
-                ep => _Client.CreateCompletionEndpointAsync(ep),
-                (id, ep) => _Client.UpdateCompletionEndpointAsync(id, ep),
-                id => _Client.DeleteCompletionEndpointAsync(id));
-
+            RegisterCompletionTools(server);
             RegisterEmbeddingTools(server);
             RegisterInferenceTools(server);
         }
 
         // ---------------- Completion endpoint tools ----------------
 
-        private void RegisterEndpointTools(
-            McpHttpServer server,
-            string kind,
-            Func<string, Task<CompletionEndpoint?>> get,
-            Func<EnumerationRequest, Task<EnumerationResult<CompletionEndpoint>?>> enumerate,
-            Func<CompletionEndpoint, Task<CompletionEndpoint?>> create,
-            Func<string, CompletionEndpoint, Task<CompletionEndpoint?>> update,
-            Func<string, Task> delete)
+        private void RegisterCompletionTools(McpHttpServer server)
         {
             server.RegisterTool(
                 "partio_enumerate_completion_endpoints",
@@ -76,7 +62,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     EnumerationRequest req = BuildEnumerationRequest(parameters);
-                    EnumerationResult<CompletionEndpoint>? result = await enumerate(req).ConfigureAwait(false);
+                    EnumerationResult<CompletionEndpoint>? result = await ResolveClient().EnumerateCompletionEndpointsAsync(req).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(new
                     {
                         Data = (result?.Data ?? new List<CompletionEndpoint>()).Select(SummarizeCompletion).ToList(),
@@ -93,7 +79,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     string id = RequireString(parameters, "id");
-                    CompletionEndpoint? ep = await get(id).ConfigureAwait(false);
+                    CompletionEndpoint? ep = await ResolveClient().GetCompletionEndpointAsync(id).ConfigureAwait(false);
                     if (ep == null) return Error("Completion endpoint '" + id + "' was not found.");
                     return McpToolCallResult.FromStructured(ep);
                 });
@@ -101,23 +87,23 @@ namespace Partio.McpServer.Mcp
             server.RegisterTool(
                 "partio_create_completion_endpoint",
                 "Create a completion endpoint. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth (integer, default 0, clamped >= 0).",
-                SchemaCompletionEndpoint(false),
+                SchemaEndpoint(false),
                 async (parameters, token) =>
                 {
                     CompletionEndpoint ep = NonNull(parameters).Deserialize<CompletionEndpoint>() ?? new CompletionEndpoint();
-                    CompletionEndpoint? created = await create(ep).ConfigureAwait(false);
+                    CompletionEndpoint? created = await ResolveClient().CreateCompletionEndpointAsync(ep).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(created);
                 });
 
             server.RegisterTool(
                 "partio_update_completion_endpoint",
                 "Update an existing completion endpoint by id. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth.",
-                SchemaCompletionEndpoint(true),
+                SchemaEndpoint(true),
                 async (parameters, token) =>
                 {
                     string id = RequireString(parameters, "id");
                     CompletionEndpoint ep = NonNull(parameters).Deserialize<CompletionEndpoint>() ?? new CompletionEndpoint();
-                    CompletionEndpoint? updated = await update(id, ep).ConfigureAwait(false);
+                    CompletionEndpoint? updated = await ResolveClient().UpdateCompletionEndpointAsync(id, ep).ConfigureAwait(false);
                     if (updated == null) return Error("Completion endpoint '" + id + "' was not found.");
                     return McpToolCallResult.FromStructured(updated);
                 });
@@ -129,7 +115,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     string id = RequireString(parameters, "id");
-                    await delete(id).ConfigureAwait(false);
+                    await ResolveClient().DeleteCompletionEndpointAsync(id).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(new { Deleted = true, Id = id });
                 });
         }
@@ -145,7 +131,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     EnumerationRequest req = BuildEnumerationRequest(parameters);
-                    EnumerationResult<EmbeddingEndpoint>? result = await _Client.EnumerateEndpointsAsync(req).ConfigureAwait(false);
+                    EnumerationResult<EmbeddingEndpoint>? result = await ResolveClient().EnumerateEndpointsAsync(req).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(new
                     {
                         Data = (result?.Data ?? new List<EmbeddingEndpoint>()).Select(SummarizeEmbedding).ToList(),
@@ -162,7 +148,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     string id = RequireString(parameters, "id");
-                    EmbeddingEndpoint? ep = await _Client.GetEndpointAsync(id).ConfigureAwait(false);
+                    EmbeddingEndpoint? ep = await ResolveClient().GetEndpointAsync(id).ConfigureAwait(false);
                     if (ep == null) return Error("Embedding endpoint '" + id + "' was not found.");
                     return McpToolCallResult.FromStructured(ep);
                 });
@@ -170,23 +156,23 @@ namespace Partio.McpServer.Mcp
             server.RegisterTool(
                 "partio_create_embedding_endpoint",
                 "Create an embedding endpoint. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth (integer, default 0, clamped >= 0).",
-                SchemaEmbeddingEndpoint(false),
+                SchemaEndpoint(false),
                 async (parameters, token) =>
                 {
                     EmbeddingEndpoint ep = NonNull(parameters).Deserialize<EmbeddingEndpoint>() ?? new EmbeddingEndpoint();
-                    EmbeddingEndpoint? created = await _Client.CreateEndpointAsync(ep).ConfigureAwait(false);
+                    EmbeddingEndpoint? created = await ResolveClient().CreateEndpointAsync(ep).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(created);
                 });
 
             server.RegisterTool(
                 "partio_update_embedding_endpoint",
                 "Update an existing embedding endpoint by id. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth.",
-                SchemaEmbeddingEndpoint(true),
+                SchemaEndpoint(true),
                 async (parameters, token) =>
                 {
                     string id = RequireString(parameters, "id");
                     EmbeddingEndpoint ep = NonNull(parameters).Deserialize<EmbeddingEndpoint>() ?? new EmbeddingEndpoint();
-                    EmbeddingEndpoint? updated = await _Client.UpdateEndpointAsync(id, ep).ConfigureAwait(false);
+                    EmbeddingEndpoint? updated = await ResolveClient().UpdateEndpointAsync(id, ep).ConfigureAwait(false);
                     if (updated == null) return Error("Embedding endpoint '" + id + "' was not found.");
                     return McpToolCallResult.FromStructured(updated);
                 });
@@ -198,7 +184,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     string id = RequireString(parameters, "id");
-                    await _Client.DeleteEndpointAsync(id).ConfigureAwait(false);
+                    await ResolveClient().DeleteEndpointAsync(id).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(new { Deleted = true, Id = id });
                 });
         }
@@ -214,7 +200,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     SummarizeRequest req = NonNull(parameters).Deserialize<SummarizeRequest>() ?? new SummarizeRequest();
-                    SummarizeResponse? resp = await _Client.SummarizeAsync(req).ConfigureAwait(false);
+                    SummarizeResponse? resp = await ResolveClient().SummarizeAsync(req).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(resp);
                 });
 
@@ -225,7 +211,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     ChunkRequest req = NonNull(parameters).Deserialize<ChunkRequest>() ?? new ChunkRequest();
-                    ChunkResponse? resp = await _Client.ChunkAsync(req).ConfigureAwait(false);
+                    ChunkResponse? resp = await ResolveClient().ChunkAsync(req).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(resp);
                 });
 
@@ -236,7 +222,7 @@ namespace Partio.McpServer.Mcp
                 async (parameters, token) =>
                 {
                     EmbedRequest req = NonNull(parameters).Deserialize<EmbedRequest>() ?? new EmbedRequest();
-                    EmbedResponse? resp = await _Client.EmbedAsync(req).ConfigureAwait(false);
+                    EmbedResponse? resp = await ResolveClient().EmbedAsync(req).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(resp);
                 });
         }
@@ -248,7 +234,7 @@ namespace Partio.McpServer.Mcp
             Dictionary<string, string>? health = null;
             try
             {
-                health = await _Client.HealthAsync().ConfigureAwait(false);
+                health = await ResolveClient().HealthAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -273,6 +259,27 @@ namespace Partio.McpServer.Mcp
                     "partio_summarize", "partio_chunk", "partio_embed"
                 }
             });
+        }
+
+        /// <summary>
+        /// Resolve a Partio SDK client bound to the current caller's bearer token so the outbound call runs
+        /// as the caller's identity/tenant. The token is carried from the authentication handler via
+        /// <see cref="RpcCallContext.Current"/>; when authentication is disabled it falls back to the
+        /// configured <see cref="McpServerSettings.PartioApiKey"/>. Clients are cached per token.
+        /// </summary>
+        private PartioClient ResolveClient()
+        {
+            string token = _Settings.PartioApiKey ?? string.Empty;
+
+            RpcCallContext? ctx = RpcCallContext.Current;
+            if (ctx?.Claims != null
+                && ctx.Claims.TryGetValue("token", out string? callerToken)
+                && !string.IsNullOrEmpty(callerToken))
+            {
+                token = callerToken;
+            }
+
+            return _Clients.GetOrAdd(token, key => new PartioClient(_Settings.PartioEndpoint, key));
         }
 
         private EnumerationRequest BuildEnumerationRequest(RpcParameters? parameters)
@@ -386,17 +393,7 @@ namespace Partio.McpServer.Mcp
             return new { type = "object", additionalProperties = true };
         }
 
-        private static object SchemaCompletionEndpoint(bool includeId)
-        {
-            return EndpointSchema(includeId);
-        }
-
-        private static object SchemaEmbeddingEndpoint(bool includeId)
-        {
-            return EndpointSchema(includeId);
-        }
-
-        private static object EndpointSchema(bool includeId)
+        private static object SchemaEndpoint(bool includeId)
         {
             Dictionary<string, object> properties = new Dictionary<string, object>
             {
