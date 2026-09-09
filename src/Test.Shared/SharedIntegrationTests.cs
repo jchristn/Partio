@@ -289,12 +289,14 @@ namespace Test.Shared
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 61000,
                     MaxConcurrentRequests = 3,
+                    MaxQueueDepth = 3,
                     Labels = new List<string> { "endpoint-metadata", "embedding-create" },
                     Tags = new Dictionary<string, string> { { "purpose", "metadata-test" }, { "kind", "embedding" } }
                 });
                 if (ep == null || string.IsNullOrEmpty(ep.Id)) throw new Exception("No endpoint returned");
                 if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
                 if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch on create");
+                if (ep.MaxQueueDepth != 3) throw new Exception("MaxQueueDepth mismatch on create");
                 if (ep.Labels == null || !ep.Labels.Contains("embedding-create")) throw new Exception("Embedding endpoint labels not returned on create");
                 if (ep.Tags == null || !ep.Tags.ContainsKey("purpose") || ep.Tags["purpose"] != "metadata-test") throw new Exception("Embedding endpoint tags not returned on create");
                 _TestEpId = ep.Id;
@@ -310,6 +312,7 @@ namespace Test.Shared
                 if (ep.Model != "test-model") throw new Exception("Model mismatch");
                 if (ep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
                 if (ep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
+                if (ep.MaxQueueDepth != 3) throw new Exception("MaxQueueDepth mismatch");
                 if (ep.Labels == null || !ep.Labels.Contains("embedding-create")) throw new Exception("Embedding endpoint labels did not round-trip");
                 if (ep.Tags == null || !ep.Tags.ContainsKey("kind") || ep.Tags["kind"] != "embedding") throw new Exception("Embedding endpoint tags did not round-trip");
             }
@@ -328,12 +331,14 @@ namespace Test.Shared
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 91000,
                     MaxConcurrentRequests = 5,
+                    MaxQueueDepth = 4,
                     Labels = new List<string> { "endpoint-metadata", "embedding-updated" },
                     Tags = new Dictionary<string, string> { { "purpose", "updated" }, { "kind", "embedding" } }
                 });
                 if (updated == null) throw new Exception("Update failed");
                 if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
                 if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch on update");
+                if (updated.MaxQueueDepth != 4) throw new Exception("MaxQueueDepth mismatch on update");
                 if (updated.Labels == null || !updated.Labels.Contains("embedding-updated")) throw new Exception("Embedding endpoint labels not returned on update");
                 if (updated.Tags == null || !updated.Tags.ContainsKey("purpose") || updated.Tags["purpose"] != "updated") throw new Exception("Embedding endpoint tags not returned on update");
             }
@@ -422,12 +427,14 @@ namespace Test.Shared
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 61000,
                     MaxConcurrentRequests = 3,
+                    MaxQueueDepth = 5,
                     Labels = new List<string> { "endpoint-metadata", "completion-create" },
                     Tags = new Dictionary<string, string> { { "purpose", "metadata-test" }, { "kind", "completion" } }
                 });
                 if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No endpoint returned");
                 if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch on create");
                 if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch on create");
+                if (cep.MaxQueueDepth != 5) throw new Exception("MaxQueueDepth mismatch on create");
                 if (cep.Labels == null || !cep.Labels.Contains("completion-create")) throw new Exception("Completion endpoint labels not returned on create");
                 if (cep.Tags == null || !cep.Tags.ContainsKey("purpose") || cep.Tags["purpose"] != "metadata-test") throw new Exception("Completion endpoint tags not returned on create");
                 _TestCepId = cep.Id;
@@ -443,6 +450,7 @@ namespace Test.Shared
                 if (cep.Model != "test-model") throw new Exception("Model mismatch");
                 if (cep.MaximumTimeoutMs != 61000) throw new Exception("MaximumTimeoutMs mismatch");
                 if (cep.MaxConcurrentRequests != 3) throw new Exception("MaxConcurrentRequests mismatch");
+                if (cep.MaxQueueDepth != 5) throw new Exception("MaxQueueDepth mismatch");
                 if (cep.Labels == null || !cep.Labels.Contains("completion-create")) throw new Exception("Completion endpoint labels did not round-trip");
                 if (cep.Tags == null || !cep.Tags.ContainsKey("kind") || cep.Tags["kind"] != "completion") throw new Exception("Completion endpoint tags did not round-trip");
             }
@@ -462,12 +470,14 @@ namespace Test.Shared
                     HealthCheckEnabled = false,
                     MaximumTimeoutMs = 91000,
                     MaxConcurrentRequests = 5,
+                    MaxQueueDepth = 6,
                     Labels = new List<string> { "endpoint-metadata", "completion-updated" },
                     Tags = new Dictionary<string, string> { { "purpose", "updated" }, { "kind", "completion" } }
                 });
                 if (updated == null) throw new Exception("Update failed");
                 if (updated.MaximumTimeoutMs != 91000) throw new Exception("MaximumTimeoutMs mismatch on update");
                 if (updated.MaxConcurrentRequests != 5) throw new Exception("MaxConcurrentRequests mismatch on update");
+                if (updated.MaxQueueDepth != 6) throw new Exception("MaxQueueDepth mismatch on update");
                 if (updated.Labels == null || !updated.Labels.Contains("completion-updated")) throw new Exception("Completion endpoint labels not returned on update");
                 if (updated.Tags == null || !updated.Tags.ContainsKey("purpose") || updated.Tags["purpose"] != "updated") throw new Exception("Completion endpoint tags not returned on update");
             }
@@ -1843,14 +1853,17 @@ namespace Test.Shared
         /// before/after hooks so descriptor enumeration never starts a server.
         /// </summary>
         /// <returns>A self-hosted integration suite descriptor.</returns>
-        public static TestSuiteDescriptor SelfHostedSuite()
+        public static TestSuiteDescriptor SelfHostedSuite(TestEnvironmentOptions? options = null)
         {
+            TestEnvironmentOptions effectiveOptions = options ?? new TestEnvironmentOptions();
             SelfHostedPartioTestEnvironment? environment = null;
             List<TestCaseDescriptor> cases = BuildCases();
 
             cases.Add(TestCaseFactory.Async("Integration", "Health Checks Share Same URL Probe (self-hosted)", async () =>
             {
                 if (environment == null) throw new InvalidOperationException("Self-hosted environment was not started.");
+                // The probe asserts on the in-process stub's request counts, which do not exist against real endpoints.
+                if (environment.UsesRealEndpoints) return;
                 await HealthCheckUrlProbeAsync(environment).ConfigureAwait(false);
             }));
 
@@ -1860,7 +1873,7 @@ namespace Test.Shared
                 cases,
                 beforeSuiteAsync: async ct =>
                 {
-                    environment = await SelfHostedPartioTestEnvironment.StartAsync(ct).ConfigureAwait(false);
+                    environment = await SelfHostedPartioTestEnvironment.StartAsync(effectiveOptions, ct).ConfigureAwait(false);
                     Configure(environment.Endpoint, environment.AdminKey, environment.TestToken, environment.UpstreamEndpoint);
                 },
                 afterSuiteAsync: async ct =>

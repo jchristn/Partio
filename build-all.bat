@@ -20,4 +20,7 @@ if errorlevel 1 exit /b %errorlevel%
 call "%~dp0build-server.bat" "%TAG%"
 if errorlevel 1 exit /b %errorlevel%
 
+call "%~dp0build-mcp.bat" "%TAG%"
+if errorlevel 1 exit /b %errorlevel%
+
 endlocal

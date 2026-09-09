@@ -834,6 +834,7 @@ namespace Partio.Server
                 ep.ApiKey = defaultEp.ApiKey;
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
+                ep.MaxQueueDepth = defaultEp.MaxQueueDepth;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.Labels = defaultEp.Labels;
                 ep.Tags = defaultEp.Tags;
@@ -857,6 +858,7 @@ namespace Partio.Server
                 cep.ApiKey = defaultIep.ApiKey;
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
+                cep.MaxQueueDepth = defaultIep.MaxQueueDepth;
                 cep.Labels = defaultIep.Labels;
                 cep.Tags = defaultIep.Tags;
                 cep.HealthCheckEnabled = true;
@@ -924,6 +926,7 @@ namespace Partio.Server
                 || !string.Equals(existing.ApiKey, configuredDefault.ApiKey, StringComparison.Ordinal)
                 || existing.MaximumTimeoutMs != configuredDefault.MaximumTimeoutMs
                 || existing.MaxConcurrentRequests != configuredDefault.MaxConcurrentRequests
+                || existing.MaxQueueDepth != configuredDefault.MaxQueueDepth
                 || !TokenizationSettingsEqual(existing.Tokenization, configuredTokenization);
 
             if (!changed) return;
@@ -935,6 +938,7 @@ namespace Partio.Server
             existing.ApiKey = configuredDefault.ApiKey;
             existing.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
             existing.MaxConcurrentRequests = configuredDefault.MaxConcurrentRequests;
+            existing.MaxQueueDepth = configuredDefault.MaxQueueDepth;
             existing.Tokenization = configuredTokenization;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(existing);
 
@@ -954,6 +958,7 @@ namespace Partio.Server
             endpoint.ApiKey = configuredDefault.ApiKey;
             endpoint.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
             endpoint.MaxConcurrentRequests = configuredDefault.MaxConcurrentRequests;
+            endpoint.MaxQueueDepth = configuredDefault.MaxQueueDepth;
             endpoint.Tokenization = CloneTokenizationSettings(configuredDefault.Tokenization);
             endpoint.HealthCheckEnabled = true;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(endpoint);
@@ -2892,14 +2897,14 @@ namespace Partio.Server
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    client = new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    client = new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
                 case ApiFormatEnum.Gemini:
-                    client = new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
@@ -2914,14 +2919,14 @@ namespace Partio.Server
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    client = new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    client = new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
                 case ApiFormatEnum.Gemini:
-                    client = new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests);
+                    client = new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
@@ -2980,6 +2985,7 @@ namespace Partio.Server
                 ep.ApiKey = defaultEp.ApiKey;
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
+                ep.MaxQueueDepth = defaultEp.MaxQueueDepth;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.Labels = defaultEp.Labels;
                 ep.Tags = defaultEp.Tags;
@@ -3000,6 +3006,7 @@ namespace Partio.Server
                 cep.ApiKey = defaultIep.ApiKey;
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
+                cep.MaxQueueDepth = defaultIep.MaxQueueDepth;
                 cep.Labels = defaultIep.Labels;
                 cep.Tags = defaultIep.Tags;
                 cep.HealthCheckEnabled = true;

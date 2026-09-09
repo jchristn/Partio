@@ -14,6 +14,7 @@ namespace Partio.Core.Settings
         private string? _ApiKey = null;
         private int _MaximumTimeoutMs = 60000;
         private int _MaxConcurrentRequests = 2;
+        private int _MaxQueueDepth = 0;
         private List<string> _Labels = new List<string>();
         private Dictionary<string, string> _Tags = new Dictionary<string, string>();
 
@@ -78,6 +79,16 @@ namespace Partio.Core.Settings
         {
             get => _MaxConcurrentRequests;
             set => _MaxConcurrentRequests = value < 1 ? 1 : value;
+        }
+
+        /// <summary>
+        /// Maximum number of requests that may wait for a concurrency slot on the seeded endpoint once the concurrency limit is reached.
+        /// Default is <c>0</c> (no queue; reject immediately with HTTP 429). Clamped server-side to <c>&gt;= 0</c>.
+        /// </summary>
+        public int MaxQueueDepth
+        {
+            get => _MaxQueueDepth;
+            set => _MaxQueueDepth = value < 0 ? 0 : value;
         }
 
         /// <summary>

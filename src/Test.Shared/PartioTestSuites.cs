@@ -67,5 +67,19 @@ namespace Test.Shared
             suites.Add(SharedIntegrationTests.ExternalSuite(endpoint, adminKey, testToken, upstreamEndpoint));
             return suites;
         }
+
+        /// <summary>
+        /// Every unit suite plus a self-hosted integration suite configured by <paramref name="options"/> —
+        /// an arbitrary database backend and, optionally, real upstream embedding/inference endpoints. The
+        /// suite's before/after hooks start and stop the configured Partio server.
+        /// </summary>
+        /// <param name="options">Database and upstream-endpoint configuration.</param>
+        /// <returns>The full suite list bound to the configured environment.</returns>
+        public static IReadOnlyList<TestSuiteDescriptor> AllForOptions(TestEnvironmentOptions options)
+        {
+            List<TestSuiteDescriptor> suites = UnitSuites.ToList();
+            suites.Add(SharedIntegrationTests.SelfHostedSuite(options));
+            return suites;
+        }
     }
 }

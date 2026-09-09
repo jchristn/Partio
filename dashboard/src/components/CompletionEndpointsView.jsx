@@ -248,10 +248,17 @@ const defaultHealthFields = {
 
 const defaultMaximumTimeoutMs = 60000;
 const defaultMaxConcurrentRequests = 2;
+const defaultMaxQueueDepth = 0;
 
 function parsePositiveInteger(value, fallback) {
   const parsed = parseInt(value, 10);
   if (Number.isNaN(parsed) || parsed < 1) return fallback;
+  return parsed;
+}
+
+function parseNonNegativeInteger(value, fallback) {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return fallback;
   return parsed;
 }
 
@@ -263,6 +270,10 @@ function formatMaxConcurrentRequests(value) {
   return parsePositiveInteger(value, defaultMaxConcurrentRequests).toString();
 }
 
+function formatMaxQueueDepth(value) {
+  return parseNonNegativeInteger(value, defaultMaxQueueDepth).toString();
+}
+
 export default function CompletionEndpointsView() {
   const { serverUrl, bearerToken } = useApp();
   const api = new PartioApi(serverUrl, bearerToken);
@@ -270,7 +281,7 @@ export default function CompletionEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Labels: createLabelRows(), Tags: createTagRows(), ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), Labels: createLabelRows(), Tags: createTagRows(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -323,7 +334,7 @@ export default function CompletionEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: true, ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: true, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: true, ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -343,6 +354,7 @@ export default function CompletionEndpointsView() {
       EnableRequestHistory: item.EnableRequestHistory || false,
       MaximumTimeoutMs: (item.MaximumTimeoutMs || defaultMaximumTimeoutMs).toString(),
       MaxConcurrentRequests: (item.MaxConcurrentRequests || defaultMaxConcurrentRequests).toString(),
+      MaxQueueDepth: (item.MaxQueueDepth ?? defaultMaxQueueDepth).toString(),
       Labels: createLabelRows(item.Labels),
       Tags: createTagRows(item.Tags),
       HealthCheckEnabled: item.HealthCheckEnabled || false,
@@ -385,6 +397,7 @@ export default function CompletionEndpointsView() {
         EnableRequestHistory: form.EnableRequestHistory,
         MaximumTimeoutMs: parsePositiveInteger(form.MaximumTimeoutMs, defaultMaximumTimeoutMs),
         MaxConcurrentRequests: parsePositiveInteger(form.MaxConcurrentRequests, defaultMaxConcurrentRequests),
+        MaxQueueDepth: parseNonNegativeInteger(form.MaxQueueDepth, defaultMaxQueueDepth),
         Labels: normalizeLabelRows(form.Labels),
         Tags: normalizeTagRows(form.Tags),
         HealthCheckEnabled: form.HealthCheckEnabled,
@@ -657,6 +670,14 @@ export default function CompletionEndpointsView() {
                 <FormFieldLabel text="Max Concurrent Requests" tooltip="Maximum concurrent upstream inference-provider requests allowed for this endpoint. When the limit is reached, Partio returns HTTP 429." />
                 <Tooltip content="Maximum concurrent upstream inference-provider requests allowed for this endpoint. When the limit is reached, Partio returns HTTP 429." block>
                   <input type="number" min="1" step="1" value={form.MaxConcurrentRequests} onChange={e => setForm({ ...form, MaxConcurrentRequests: e.target.value })} />
+                </Tooltip>
+              </div>
+            </div>
+            <div className="endpoint-form-row">
+              <div className="form-group">
+                <FormFieldLabel text="Max Queue Depth" tooltip="How many requests may wait for a concurrency slot before Partio returns HTTP 429. 0 rejects immediately." />
+                <Tooltip content="How many requests may wait for a concurrency slot before Partio returns HTTP 429. 0 rejects immediately." block>
+                  <input type="number" min="0" step="1" value={form.MaxQueueDepth} onChange={e => setForm({ ...form, MaxQueueDepth: e.target.value })} />
                 </Tooltip>
               </div>
             </div>

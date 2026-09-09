@@ -234,6 +234,7 @@ curl -X POST http://localhost:8400/v1.0/process \
 - **Docker images** with multi-architecture support (amd64/arm64).
 - **Pagination and filtering** with cursor-based continuation tokens, sorting, and label/tag/name/active filters on all list endpoints.
 - **Built-in observability** — Watson 7.1 HTTP metrics and per-request traces plus `partio_*` application metrics and spans for the processing pipeline, provider integrations, and background workers, exposed on Prometheus scrape endpoints and OTLP, with a bundled Prometheus + Tempo + Loki + Grafana stack and provisioned per-domain dashboards.
+- **MCP server** — a standalone `partio-mcp` executable (Voltaic 0.6.1) that exposes endpoint management and inference as 14 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
 
 ## Observability
 
@@ -309,7 +310,7 @@ Chunk *text* is deterministic for a given input, strategy, and configuration. Th
 
 ## API Overview
 
-All endpoints use JSON and require an `Authorization: Bearer {token}` header unless otherwise noted. See [REST_API.md](REST_API.md) for the full reference; a [Postman collection](Partio.postman_collection.json) is also included.
+All endpoints use JSON and require an `Authorization: Bearer {token}` header unless otherwise noted. See [REST_API.md](REST_API.md) for the full reference; a [Postman collection](Partio.postman_collection.json) is also included. For agent access over the Model Context Protocol, see [MCP_API.md](MCP_API.md) and the per-harness setup guides in [`docs/`](docs/): [Claude Code](docs/INSTRUCTIONS_FOR_CLAUDE_CODE.md), [Codex](docs/INSTRUCTIONS_FOR_CODEX.md), [Gemini](docs/INSTRUCTIONS_FOR_GEMINI.md), [Cursor](docs/INSTRUCTIONS_FOR_CURSOR.md), and [Mux](docs/INSTRUCTIONS_FOR_MUX.md).
 
 ### Health and identity
 
@@ -493,6 +494,7 @@ Partio is configured via `partio.json`, created automatically on first run.
       "ApiFormat": "Ollama",
       "MaximumTimeoutMs": 60000,
       "MaxConcurrentRequests": 2,
+      "MaxQueueDepth": 0,
       "Labels": ["default", "embedding"],
       "Tags": { "provider": "ollama" }
     }
@@ -504,6 +506,7 @@ Partio is configured via `partio.json`, created automatically on first run.
       "ApiFormat": "Ollama",
       "MaximumTimeoutMs": 60000,
       "MaxConcurrentRequests": 2,
+      "MaxQueueDepth": 0,
       "Labels": ["default", "inference"],
       "Tags": { "provider": "ollama" }
     }
@@ -511,7 +514,7 @@ Partio is configured via `partio.json`, created automatically on first run.
 }
 ```
 
-Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `Labels` and string key/value `Tags`, plus `MaximumTimeoutMs` (milliseconds, clamped server-side to a positive non-zero integer) and `MaxConcurrentRequests` (clamped to `>= 1`, default `2`).
+Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `Labels` and string key/value `Tags`, plus `MaximumTimeoutMs` (milliseconds, clamped server-side to a positive non-zero integer) and `MaxConcurrentRequests` (clamped to `>= 1`, default `2`). They also accept `MaxQueueDepth` (clamped to `>= 0`, default `0`): once `MaxConcurrentRequests` upstream calls are in flight, up to `MaxQueueDepth` further requests wait for a slot (bounded by `MaximumTimeoutMs`, which returns `504` on expiry); when the queue is full the endpoint returns `429`, and the default `0` rejects over-limit requests immediately with `429`.
 
 ### Database options
 
@@ -581,6 +584,7 @@ with PartioClient("http://localhost:8400", "partioadmin") as client:
         "ApiFormat": "Ollama",
         "MaximumTimeoutMs": 60000,
         "MaxConcurrentRequests": 2,
+        "MaxQueueDepth": 0,
         "Tokenization": {
             "TokenizerKind": "BertWordPiece",
             "TokenizerModel": "bert-base-uncased",
@@ -621,6 +625,7 @@ const endpoint = await client.createEndpoint({
   ApiFormat: 'Ollama',
   MaximumTimeoutMs: 60000,
   MaxConcurrentRequests: 2,
+  MaxQueueDepth: 0,
   Tokenization: {
     TokenizerKind: 'BertWordPiece',
     TokenizerModel: 'bert-base-uncased',

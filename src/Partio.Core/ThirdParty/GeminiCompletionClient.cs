@@ -21,14 +21,16 @@ namespace Partio.Core.ThirdParty
         /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
         /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
         /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
+        /// <param name="maxQueueDepth">Maximum number of requests allowed to wait for a concurrency slot.</param>
         public GeminiCompletionClient(
             string endpoint,
             string? apiKey,
             LoggingModule logging,
             int maximumTimeoutMs,
             string? concurrencyKey = null,
-            int maxConcurrentRequests = 2)
-            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests)
+            int maxConcurrentRequests = 2,
+            int maxQueueDepth = 0)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth)
         {
             _Header = "[GeminiCompletion] ";
         }
@@ -57,7 +59,11 @@ namespace Partio.Core.ThirdParty
             {
                 try
                 {
-                    concurrencyLease = AcquireRequestSlot();
+                    using (CancellationTokenSource acquireTimeoutCts = new CancellationTokenSource(effectiveTimeoutMs))
+                    using (CancellationTokenSource acquireLinkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, acquireTimeoutCts.Token))
+                    {
+                        concurrencyLease = await AcquireRequestSlotAsync(acquireLinkedCts.Token).ConfigureAwait(false);
+                    }
                     response = await client.ChatAsync(prompt, options, token).ConfigureAwait(false);
                 }
                 catch (Partio.Core.Exceptions.ProviderConcurrencyLimitException ex)

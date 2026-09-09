@@ -1,0 +1,24 @@
+{
+    "McpHost": "*",
+    "McpPort": 8500,
+    "McpPath": "/mcp",
+    "McpRpcPath": "/rpc",
+    "McpSsePath": "/events",
+    "PartioEndpoint": "http://partio-server:8400",
+    "PartioApiKey": "partioadmin",
+    "AdminApiKeys": [
+        "partioadmin"
+    ],
+    "RequireAuthentication": true,
+    "LogLevel": 1,
+    "MaxResults": 100,
+    "Cors": {
+        "Enabled": true,
+        "AllowedOrigins": "*",
+        "AllowedMethods": "GET, POST, PUT, DELETE, HEAD, OPTIONS",
+        "AllowedHeaders": "Content-Type, Authorization, X-Requested-With, Mcp-Session-Id",
+        "ExposedHeaders": "Mcp-Session-Id",
+        "MaxAgeSeconds": 86400,
+        "AllowCredentials": false
+    }
+}

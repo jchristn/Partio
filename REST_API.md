@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.4.0" }
+{ "Status": "Healthy", "Version": "0.5.0" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.4.0" }
+{ "Status": "Healthy", "Version": "0.5.0" }
 ```
 
 ---
@@ -856,6 +856,7 @@ Create an embedding endpoint.
     "EnableRequestHistory": true,
     "MaximumTimeoutMs": 60000,
     "MaxConcurrentRequests": 2,
+    "MaxQueueDepth": 0,
     "HealthCheckEnabled": false,
     "HealthCheckUrl": null,
     "HealthCheckMethod": "GET",
@@ -894,6 +895,7 @@ Create an embedding endpoint.
 |----------|------|---------|-------------|
 | `MaximumTimeoutMs` | int | `60000` | Maximum upstream provider timeout in milliseconds for embedding calls. Stored in milliseconds and clamped to a positive non-zero integer. |
 | `MaxConcurrentRequests` | int | `2` | Maximum concurrent upstream provider requests allowed for this embedding endpoint. Clamped server-side to `>= 1`. |
+| `MaxQueueDepth` | int | `0` | Requests allowed to wait for a concurrency slot once `MaxConcurrentRequests` is reached. `0` rejects immediately with 429. Clamped server-side to `>= 0`. Waiting is bounded by `MaximumTimeoutMs`. |
 | `HealthCheckEnabled` | bool | `false` | Enable background health checking for this endpoint |
 | `HealthCheckUrl` | string? | `null` | Custom URL to check (defaults to the endpoint URL if null) |
 | `HealthCheckMethod` | string | `"GET"` | HTTP method for health checks (`GET` or `HEAD`) |
@@ -919,7 +921,7 @@ Create an embedding endpoint.
 
 When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs a background loop that periodically checks the endpoint. If the endpoint becomes unhealthy, process requests to it return `502 Bad Gateway`.
 If the embedding provider call itself exceeds `MaximumTimeoutMs`, process routes return `504 Gateway Timeout`.
-If the endpoint already has `MaxConcurrentRequests` upstream calls in flight, Partio returns `429 Too Many Requests`.
+If the endpoint already has `MaxConcurrentRequests` upstream calls in flight, Partio queues up to `MaxQueueDepth` further requests to wait for a slot. A queued request that waits past `MaximumTimeoutMs` returns `504 Gateway Timeout`, and when the queue is full Partio returns `429 Too Many Requests`. With the default `MaxQueueDepth` of `0`, requests over the concurrency limit are rejected immediately with `429 Too Many Requests`.
 
 Health check defaults are applied automatically based on `ApiFormat` when creating or updating an endpoint:
 - **Ollama**: URL defaults to `{Endpoint}/api/tags`, 5s interval, 2s timeout, no auth
@@ -1016,6 +1018,7 @@ Create a completion endpoint.
     "EnableRequestHistory": true,
     "MaximumTimeoutMs": 60000,
     "MaxConcurrentRequests": 2,
+    "MaxQueueDepth": 0,
     "HealthCheckEnabled": false,
     "Labels": ["production", "inference"],
     "Tags": {
@@ -1040,6 +1043,7 @@ Create a completion endpoint.
 |----------|------|---------|-------------|
 | `MaximumTimeoutMs` | int | `60000` | Maximum upstream provider timeout in milliseconds for inference calls. Stored in milliseconds and clamped to a positive non-zero integer. |
 | `MaxConcurrentRequests` | int | `2` | Maximum concurrent upstream provider requests allowed for this inference endpoint. Clamped server-side to `>= 1`. |
+| `MaxQueueDepth` | int | `0` | Requests allowed to wait for a concurrency slot once `MaxConcurrentRequests` is reached. `0` rejects immediately with 429. Clamped server-side to `>= 0`. Waiting is bounded by `MaximumTimeoutMs`. |
 | `HealthCheckEnabled` | bool | `true` | Enable background health checking for this endpoint |
 | `HealthCheckUrl` | string? | `null` | Custom URL to check (defaults from `ApiFormat` when omitted) |
 | `HealthCheckMethod` | string | `"GET"` | HTTP method for health checks (`GET` or `HEAD`) |
@@ -1050,7 +1054,7 @@ Create a completion endpoint.
 | `UnhealthyThreshold` | int | `2` | Consecutive failures required to transition to unhealthy |
 | `HealthCheckUseAuth` | bool | `false` or `true` | Include the endpoint API key when the health probe requires authentication |
 
-Completion explorer and summarization calls never exceed `MaximumTimeoutMs`, even if the caller requests a larger `TimeoutMs`. When the inference provider exceeds this ceiling, process routes return `504 Gateway Timeout`. If the endpoint is already servicing `MaxConcurrentRequests` upstream calls, Partio returns `429 Too Many Requests`.
+Completion explorer and summarization calls never exceed `MaximumTimeoutMs`, even if the caller requests a larger `TimeoutMs`. When the inference provider exceeds this ceiling, process routes return `504 Gateway Timeout`. If the endpoint is already servicing `MaxConcurrentRequests` upstream calls, Partio queues up to `MaxQueueDepth` further requests to wait for a slot. A queued request that waits past `MaximumTimeoutMs` returns `504 Gateway Timeout`, and when the queue is full Partio returns `429 Too Many Requests`. With the default `MaxQueueDepth` of `0`, requests over the concurrency limit are rejected immediately with `429 Too Many Requests`.
 
 ### GET /v1.0/endpoints/completion/{id}
 Read a completion endpoint.

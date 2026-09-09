@@ -26,6 +26,7 @@ namespace Partio.Core.Models
         private int _HealthCheckTimeoutMs = 2000;
         private int _MaximumTimeoutMs = 60000;
         private int _MaxConcurrentRequests = 2;
+        private int _MaxQueueDepth = 0;
         private int _HealthCheckExpectedStatusCode = 200;
         private int _HealthyThreshold = 2;
         private int _UnhealthyThreshold = 2;
@@ -205,6 +206,18 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
+        /// Maximum number of requests that may wait for a concurrency slot once <see cref="MaxConcurrentRequests"/> upstream embedding calls are in flight.
+        /// Default is <c>0</c>, meaning requests are rejected immediately (HTTP 429) when the concurrency limit is reached.
+        /// Values greater than <c>0</c> allow up to that many requests to queue and wait for a slot; when the queue is full the endpoint returns HTTP 429.
+        /// Queued requests wait no longer than <see cref="MaximumTimeoutMs"/>. Clamped server-side to <c>&gt;= 0</c>.
+        /// </summary>
+        public int MaxQueueDepth
+        {
+            get => _MaxQueueDepth;
+            set => _MaxQueueDepth = value < 0 ? 0 : value;
+        }
+
+        /// <summary>
         /// HTTP status code that indicates a successful health check.
         /// </summary>
         public int HealthCheckExpectedStatusCode
@@ -299,6 +312,8 @@ namespace Partio.Core.Models
                 ep.MaximumTimeoutMs = Convert.ToInt32(row["maximum_timeout_ms"]);
             if (row.Table.Columns.Contains("max_concurrent_requests") && row["max_concurrent_requests"] != DBNull.Value)
                 ep.MaxConcurrentRequests = Convert.ToInt32(row["max_concurrent_requests"]);
+            if (row.Table.Columns.Contains("max_queue_depth") && row["max_queue_depth"] != DBNull.Value)
+                ep.MaxQueueDepth = Convert.ToInt32(row["max_queue_depth"]);
             ep.HealthCheckExpectedStatusCode = Convert.ToInt32(row["health_check_expected_status"]);
             ep.HealthyThreshold = Convert.ToInt32(row["healthy_threshold"]);
             ep.UnhealthyThreshold = Convert.ToInt32(row["unhealthy_threshold"]);

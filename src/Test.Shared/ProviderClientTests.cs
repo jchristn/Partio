@@ -54,6 +54,12 @@ namespace Test.Shared
                 Check.Equal(2, defaultEmbeddingEndpoint.MaxConcurrentRequests);
                 Check.Equal(2, defaultInferenceEndpoint.MaxConcurrentRequests);
 
+                // MaxQueueDepth defaults to 0 (no waiting; reject at concurrency limit) on all four types.
+                Check.Equal(0, embeddingEndpoint.MaxQueueDepth);
+                Check.Equal(0, completionEndpoint.MaxQueueDepth);
+                Check.Equal(0, defaultEmbeddingEndpoint.MaxQueueDepth);
+                Check.Equal(0, defaultInferenceEndpoint.MaxQueueDepth);
+
                 embeddingEndpoint.MaximumTimeoutMs = 0;
                 completionEndpoint.MaximumTimeoutMs = -42;
                 defaultEmbeddingEndpoint.MaximumTimeoutMs = 0;
@@ -71,6 +77,25 @@ namespace Test.Shared
                 Check.Equal(1, completionEndpoint.MaxConcurrentRequests);
                 Check.Equal(1, defaultEmbeddingEndpoint.MaxConcurrentRequests);
                 Check.Equal(1, defaultInferenceEndpoint.MaxConcurrentRequests);
+
+                // MaxQueueDepth clamps negatives to 0 and preserves valid positive values.
+                embeddingEndpoint.MaxQueueDepth = -5;
+                completionEndpoint.MaxQueueDepth = -1;
+                defaultEmbeddingEndpoint.MaxQueueDepth = -42;
+                defaultInferenceEndpoint.MaxQueueDepth = -1;
+                Check.Equal(0, embeddingEndpoint.MaxQueueDepth);
+                Check.Equal(0, completionEndpoint.MaxQueueDepth);
+                Check.Equal(0, defaultEmbeddingEndpoint.MaxQueueDepth);
+                Check.Equal(0, defaultInferenceEndpoint.MaxQueueDepth);
+
+                embeddingEndpoint.MaxQueueDepth = 3;
+                completionEndpoint.MaxQueueDepth = 3;
+                defaultEmbeddingEndpoint.MaxQueueDepth = 3;
+                defaultInferenceEndpoint.MaxQueueDepth = 3;
+                Check.Equal(3, embeddingEndpoint.MaxQueueDepth);
+                Check.Equal(3, completionEndpoint.MaxQueueDepth);
+                Check.Equal(3, defaultEmbeddingEndpoint.MaxQueueDepth);
+                Check.Equal(3, defaultInferenceEndpoint.MaxQueueDepth);
             }));
 
             tests.Add(TestCaseFactory.Async("ProviderClients", "OpenAI embedding client throws ProviderOperationTimeoutException when timed out", async () =>
@@ -229,11 +254,164 @@ namespace Test.Shared
                     () => second.TryAcquireAndReleaseAsync());
 
                 Check.Equal(1, ex.MaxConcurrentRequests);
+                Check.Equal(0, ex.MaxQueueDepth);
                 Check.NotEmpty(second.CallDetails);
                 Check.True(second.CallDetails[0].Error?.IndexOf("max concurrent request", StringComparison.OrdinalIgnoreCase) >= 0);
 
                 release.TrySetResult(true);
                 await firstTask;
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Queue admits a waiter and grants the slot when the holder releases", async () =>
+            {
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using ConcurrencyProbeEmbeddingClient client = new ConcurrencyProbeEmbeddingClient("http://localhost", logging, "eep_queue_grant", 1, 1);
+
+                TaskCompletionSource<bool> entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                Task holder = client.HoldSlotAsync(entered, release.Task);
+                await entered.Task;
+
+                // With queue depth 1, a second acquire parks (waits) rather than throwing.
+                Task<IDisposable> waiter = client.AcquireAsync();
+                await Task.Delay(150);
+                Check.True(!waiter.IsCompleted);
+
+                // Releasing the held slot transfers it to the parked waiter.
+                release.TrySetResult(true);
+                await holder;
+
+                using IDisposable granted = await waiter;
+                Check.NotNull(granted);
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Queue rejects when both the concurrency slot and the queue are full", async () =>
+            {
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using ConcurrencyProbeEmbeddingClient client = new ConcurrencyProbeEmbeddingClient("http://localhost", logging, "eep_queue_full", 1, 1);
+
+                TaskCompletionSource<bool> entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                Task holder = client.HoldSlotAsync(entered, release.Task);
+                await entered.Task;
+
+                // Fill the single queue slot with one parked waiter.
+                Task<IDisposable> waiter = client.AcquireAsync();
+                await Task.Delay(150);
+                Check.True(!waiter.IsCompleted);
+
+                // A third acquire finds the slot busy and the queue full; it is rejected.
+                ProviderConcurrencyLimitException ex = await Check.ThrowsAsync<ProviderConcurrencyLimitException>(
+                    () => client.TryAcquireAndReleaseAsync());
+                Check.Equal(1, ex.MaxConcurrentRequests);
+                Check.Equal(1, ex.MaxQueueDepth);
+
+                // Drain: release the holder so the parked waiter is granted, then dispose it.
+                release.TrySetResult(true);
+                await holder;
+                using IDisposable granted = await waiter;
+                Check.NotNull(granted);
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Queued acquire honors cancellation without corrupting in-flight accounting", async () =>
+            {
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using ConcurrencyProbeEmbeddingClient client = new ConcurrencyProbeEmbeddingClient("http://localhost", logging, "eep_queue_timeout", 1, 5);
+
+                TaskCompletionSource<bool> entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                Task holder = client.HoldSlotAsync(entered, release.Task);
+                await entered.Task;
+
+                // A queued acquire whose token is cancelled (simulating MaximumTimeoutMs) completes as cancelled.
+                using CancellationTokenSource cts = new CancellationTokenSource();
+                Task<IDisposable> queued = client.AcquireAsync(cts.Token);
+                await Task.Delay(100);
+                Check.True(!queued.IsCompleted);
+                cts.Cancel();
+
+                await Check.ThrowsAsync<OperationCanceledException>(() => queued);
+
+                // Release the original holder; a fresh acquire must still succeed (InFlight not corrupted).
+                release.TrySetResult(true);
+                await holder;
+
+                using IDisposable fresh = await client.AcquireAsync();
+                Check.NotNull(fresh);
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Queued waiters are granted in FIFO arrival order", async () =>
+            {
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using ConcurrencyProbeEmbeddingClient client = new ConcurrencyProbeEmbeddingClient("http://localhost", logging, "eep_queue_fifo", 1, 5);
+
+                TaskCompletionSource<bool> entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                Task holder = client.HoldSlotAsync(entered, release.Task);
+                await entered.Task;
+
+                // Enqueue A, then B, in order.
+                Task<IDisposable> waiterA = client.AcquireAsync();
+                await Task.Delay(75);
+                Task<IDisposable> waiterB = client.AcquireAsync();
+                await Task.Delay(75);
+                Check.True(!waiterA.IsCompleted);
+                Check.True(!waiterB.IsCompleted);
+
+                // Releasing the holder grants A first; B remains parked until A's lease is disposed.
+                release.TrySetResult(true);
+                await holder;
+
+                IDisposable leaseA = await waiterA;
+                Check.True(!waiterB.IsCompleted);
+
+                leaseA.Dispose();
+                using IDisposable leaseB = await waiterB;
+                Check.NotNull(leaseB);
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "A cancelled queued waiter is pruned and does not block a new waiter", async () =>
+            {
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using ConcurrencyProbeEmbeddingClient client = new ConcurrencyProbeEmbeddingClient("http://localhost", logging, "eep_queue_prune", 1, 1);
+
+                TaskCompletionSource<bool> entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                Task holder = client.HoldSlotAsync(entered, release.Task);
+                await entered.Task;
+
+                // Park a waiter, then cancel it. Its task completes but it lingers in the FIFO queue.
+                using CancellationTokenSource ctsA = new CancellationTokenSource();
+                Task<IDisposable> cancelled = client.AcquireAsync(ctsA.Token);
+                await Task.Delay(100);
+                ctsA.Cancel();
+                await Check.ThrowsAsync<OperationCanceledException>(() => cancelled);
+
+                // Even though the queue depth is 1, the dead waiter must be pruned so a new acquire is admitted (parks), not rejected.
+                Task<IDisposable> fresh = client.AcquireAsync();
+                await Task.Delay(100);
+                Check.True(!fresh.IsCompleted);
+                Check.True(!fresh.IsFaulted);
+
+                release.TrySetResult(true);
+                await holder;
+                using IDisposable granted = await fresh;
+                Check.NotNull(granted);
             }));
 
             tests.Add(TestCaseFactory.Async("ProviderClients", "Ollama embedding client can be reused across multiple calls", async () =>
@@ -426,30 +604,34 @@ namespace Test.Shared
 
         private sealed class ConcurrencyProbeEmbeddingClient : EmbeddingClientBase
         {
-            public ConcurrencyProbeEmbeddingClient(string endpoint, LoggingModule logging, string concurrencyKey, int maxConcurrentRequests)
-                : base(endpoint, null, logging, 60000, concurrencyKey, maxConcurrentRequests)
+            public ConcurrencyProbeEmbeddingClient(string endpoint, LoggingModule logging, string concurrencyKey, int maxConcurrentRequests, int maxQueueDepth = 0)
+                : base(endpoint, null, logging, 60000, concurrencyKey, maxConcurrentRequests, maxQueueDepth)
             {
             }
 
             public async Task HoldSlotAsync(TaskCompletionSource<bool> entered, Task releaseTask)
             {
-                using IDisposable lease = AcquireRequestSlot();
+                using IDisposable lease = await AcquireRequestSlotAsync(CancellationToken.None).ConfigureAwait(false);
                 entered.TrySetResult(true);
                 await releaseTask.ConfigureAwait(false);
             }
 
-            public Task TryAcquireAndReleaseAsync()
+            public async Task TryAcquireAndReleaseAsync(CancellationToken token = default)
             {
                 try
                 {
-                    using IDisposable lease = AcquireRequestSlot();
-                    return Task.CompletedTask;
+                    using IDisposable lease = await AcquireRequestSlotAsync(token).ConfigureAwait(false);
                 }
                 catch (ProviderConcurrencyLimitException ex)
                 {
                     RecordRejectedCall("EmbeddingRequest", _Endpoint, "POST", ex.Message);
-                    return Task.FromException(ex);
+                    throw;
                 }
+            }
+
+            public Task<IDisposable> AcquireAsync(CancellationToken token = default)
+            {
+                return AcquireRequestSlotAsync(token);
             }
 
             public override Task<List<float>> EmbedAsync(string text, string model, CancellationToken token = default)

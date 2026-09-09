@@ -12,6 +12,18 @@ services:
       - ./request-history:/app/request-history
     restart: unless-stopped
 
+  partio-mcp:
+    image: jchristn77/partio-mcp:v0.5.0
+    container_name: partio-mcp
+    ports:
+      - "8500:8500"
+    volumes:
+      - ./partio.mcp.json:/app/partio.mcp.json:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      - partio-server
+
   partio-dashboard:
     image: jchristn77/partio-dashboard:v0.5.0
     container_name: partio-dashboard

@@ -79,6 +79,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 health_check_timeout_ms INT NOT NULL DEFAULT 2000,
                 maximum_timeout_ms INT NOT NULL DEFAULT 60000,
                 max_concurrent_requests INT NOT NULL DEFAULT 2,
+                max_queue_depth INT NOT NULL DEFAULT 0,
                 health_check_expected_status INT NOT NULL DEFAULT 200,
                 healthy_threshold INT NOT NULL DEFAULT 2,
                 unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -112,6 +113,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 health_check_timeout_ms INT NOT NULL DEFAULT 2000,
                 maximum_timeout_ms INT NOT NULL DEFAULT 60000,
                 max_concurrent_requests INT NOT NULL DEFAULT 2,
+                max_queue_depth INT NOT NULL DEFAULT 0,
                 health_check_expected_status INT NOT NULL DEFAULT 200,
                 healthy_threshold INT NOT NULL DEFAULT 2,
                 unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -181,6 +183,12 @@ namespace Partio.Core.Database.Mysql.Queries
             @"ALTER TABLE embedding_endpoints ADD COLUMN max_concurrent_requests INT NOT NULL DEFAULT 2 AFTER maximum_timeout_ms;";
 
         /// <summary>
+        /// Migration: add max_queue_depth column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddMaxQueueDepth =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN max_queue_depth INT NOT NULL DEFAULT 0 AFTER max_concurrent_requests;";
+
+        /// <summary>
         /// Migration: add maximum_timeout_ms column to completion_endpoints for existing databases.
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaximumTimeoutMs =
@@ -191,6 +199,12 @@ namespace Partio.Core.Database.Mysql.Queries
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaxConcurrentRequests =
             @"ALTER TABLE completion_endpoints ADD COLUMN max_concurrent_requests INT NOT NULL DEFAULT 2 AFTER maximum_timeout_ms;";
+
+        /// <summary>
+        /// Migration: add max_queue_depth column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddMaxQueueDepth =
+            @"ALTER TABLE completion_endpoints ADD COLUMN max_queue_depth INT NOT NULL DEFAULT 0 AFTER max_concurrent_requests;";
 
         /// <summary>
         /// Migration: add labels_json column to completion_endpoints for existing databases.

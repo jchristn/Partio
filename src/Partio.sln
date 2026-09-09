@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Partio.Sdk.TestHarness", ".
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Nunit", "Test.Nunit\Test.Nunit.csproj", "{2C48C30E-B970-42A1-A210-408D3522199A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Partio.McpServer", "Partio.McpServer\Partio.McpServer.csproj", "{73809424-2E36-4B80-8262-A0C69B104C24}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -125,6 +127,18 @@ Global
 		{2C48C30E-B970-42A1-A210-408D3522199A}.Release|x64.Build.0 = Release|Any CPU
 		{2C48C30E-B970-42A1-A210-408D3522199A}.Release|x86.ActiveCfg = Release|Any CPU
 		{2C48C30E-B970-42A1-A210-408D3522199A}.Release|x86.Build.0 = Release|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Debug|x64.Build.0 = Debug|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Debug|x86.Build.0 = Debug|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Release|Any CPU.Build.0 = Release|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Release|x64.ActiveCfg = Release|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Release|x64.Build.0 = Release|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Release|x86.ActiveCfg = Release|Any CPU
+		{73809424-2E36-4B80-8262-A0C69B104C24}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

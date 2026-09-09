@@ -90,6 +90,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     health_check_timeout_ms INT NOT NULL DEFAULT 2000,
                     maximum_timeout_ms INT NOT NULL DEFAULT 60000,
                     max_concurrent_requests INT NOT NULL DEFAULT 2,
+                    max_queue_depth INT NOT NULL DEFAULT 0,
                     health_check_expected_status INT NOT NULL DEFAULT 200,
                     healthy_threshold INT NOT NULL DEFAULT 2,
                     unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -126,6 +127,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     health_check_timeout_ms INT NOT NULL DEFAULT 2000,
                     maximum_timeout_ms INT NOT NULL DEFAULT 60000,
                     max_concurrent_requests INT NOT NULL DEFAULT 2,
+                    max_queue_depth INT NOT NULL DEFAULT 0,
                     health_check_expected_status INT NOT NULL DEFAULT 200,
                     healthy_threshold INT NOT NULL DEFAULT 2,
                     unhealthy_threshold INT NOT NULL DEFAULT 2,
@@ -217,6 +219,15 @@ namespace Partio.Core.Database.Sqlserver.Queries
             END;";
 
         /// <summary>
+        /// Migration: add max_queue_depth column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddMaxQueueDepth =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'max_queue_depth')
+            BEGIN
+                ALTER TABLE embedding_endpoints ADD max_queue_depth INT NOT NULL DEFAULT 0;
+            END;";
+
+        /// <summary>
         /// Migration: add maximum_timeout_ms column to completion_endpoints for existing databases.
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaximumTimeoutMs =
@@ -232,6 +243,15 @@ namespace Partio.Core.Database.Sqlserver.Queries
             @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'max_concurrent_requests')
             BEGIN
                 ALTER TABLE completion_endpoints ADD max_concurrent_requests INT NOT NULL DEFAULT 2;
+            END;";
+
+        /// <summary>
+        /// Migration: add max_queue_depth column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddMaxQueueDepth =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'max_queue_depth')
+            BEGIN
+                ALTER TABLE completion_endpoints ADD max_queue_depth INT NOT NULL DEFAULT 0;
             END;";
 
         /// <summary>

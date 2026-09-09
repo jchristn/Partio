@@ -11,3 +11,4 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 "$SCRIPT_DIR/build-dashboard.bat" "$TAG"
 "$SCRIPT_DIR/build-server.bat" "$TAG"
+"$SCRIPT_DIR/build-mcp.bat" "$TAG"

@@ -3,6 +3,20 @@
 ## v0.5.0 - 2026-08-26
 
 ### Added
+- **Per-endpoint request queueing** via a new `MaxQueueDepth` setting on embedding and completion
+  endpoints (default `0`, clamped server-side to `>= 0`). Once `MaxConcurrentRequests` upstream calls
+  are in flight, up to `MaxQueueDepth` further requests wait for a slot instead of being rejected. A
+  queued request that waits past `MaximumTimeoutMs` returns `504 Gateway Timeout`; when the queue is
+  full the endpoint returns `429 Too Many Requests`. The default of `0` preserves today's behavior:
+  requests over the concurrency limit are rejected immediately with `429`.
+- **MCP server** (`src/Partio.McpServer`, executable `partio-mcp`), a standalone Model Context Protocol
+  server built on Voltaic. It exposes tools to manage embedding and completion endpoints — including
+  `MaxConcurrentRequests` and `MaxQueueDepth` — and to run summarize/chunk/embed, calling Partio over the
+  REST SDK. JSON-RPC 2.0 over Streamable HTTP at `/mcp` (and `/rpc`), bearer authentication (rejected with
+  `401` before any tool runs), and permissive CORS with an OPTIONS preflight handler enabled by default.
+  A `partio-mcp mcp install` / `mcp remove` command wires it into Claude Code, Codex, Gemini, Cursor, and
+  Mux, and a `partio-mcp mcp stdio` bridge serves stdio-only harnesses. See `MCP_API.md` and
+  `docs/INSTRUCTIONS_FOR_*.md`.
 - **Observability, built in.** Metrics and traces are emitted from the whole product, collected into a
   local stack that comes up with `docker compose up`, and rendered in per-domain Grafana dashboards.
   - **Watson 7.1 built-in telemetry** enabled (`Settings.Telemetry`): the entire HTTP surface

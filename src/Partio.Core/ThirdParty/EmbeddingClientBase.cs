@@ -56,6 +56,11 @@ namespace Partio.Core.ThirdParty
         /// </summary>
         protected readonly int _MaxConcurrentRequests;
 
+        /// <summary>
+        /// Maximum number of requests allowed to wait for a concurrency slot for the endpoint.
+        /// </summary>
+        protected readonly int _MaxQueueDepth;
+
         private const int MaxRecordedCallDetails = 1000;
         private readonly List<EmbeddingCallDetail> _CallDetails = new List<EmbeddingCallDetail>();
         private readonly object _CallDetailsLock = new object();
@@ -83,13 +88,15 @@ namespace Partio.Core.ThirdParty
         /// <param name="maximumTimeoutMs">Maximum upstream provider request timeout in milliseconds.</param>
         /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
         /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
+        /// <param name="maxQueueDepth">Maximum number of requests allowed to wait for a concurrency slot.</param>
         protected EmbeddingClientBase(
             string endpoint,
             string? apiKey,
             LoggingModule logging,
             int maximumTimeoutMs,
             string? concurrencyKey = null,
-            int maxConcurrentRequests = 2)
+            int maxConcurrentRequests = 2,
+            int maxQueueDepth = 0)
         {
             _Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
             _ApiKey = apiKey;
@@ -97,6 +104,7 @@ namespace Partio.Core.ThirdParty
             _MaximumTimeoutMs = maximumTimeoutMs <= 0 ? 1 : maximumTimeoutMs;
             _ConcurrencyKey = !string.IsNullOrWhiteSpace(concurrencyKey) ? concurrencyKey : endpoint;
             _MaxConcurrentRequests = maxConcurrentRequests < 1 ? 1 : maxConcurrentRequests;
+            _MaxQueueDepth = maxQueueDepth < 0 ? 0 : maxQueueDepth;
             _HttpClient = new HttpClient();
             _HttpClient.Timeout = Timeout.InfiniteTimeSpan;
         }
@@ -107,6 +115,14 @@ namespace Partio.Core.ThirdParty
         public int MaxConcurrentRequests
         {
             get { return _MaxConcurrentRequests; }
+        }
+
+        /// <summary>
+        /// Maximum number of requests allowed to wait for a concurrency slot for this endpoint.
+        /// </summary>
+        public int MaxQueueDepth
+        {
+            get { return _MaxQueueDepth; }
         }
 
         /// <summary>
@@ -259,10 +275,11 @@ namespace Partio.Core.ThirdParty
 
             try
             {
-                concurrencyLease = AcquireRequestSlot();
                 using CancellationTokenSource timeoutCts = new CancellationTokenSource(_MaximumTimeoutMs);
                 using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
 
+                // Acquire inside the timeout-linked scope so time spent waiting for a concurrency slot is bounded by the request timeout.
+                concurrencyLease = await AcquireRequestSlotAsync(linkedCts.Token).ConfigureAwait(false);
                 using HttpResponseMessage response = await _HttpClient.PostAsync(url, content, linkedCts.Token).ConfigureAwait(false);
                 string responseBody = await response.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
 
@@ -337,11 +354,14 @@ namespace Partio.Core.ThirdParty
         }
 
         /// <summary>
-        /// Acquire a slot from the endpoint concurrency limiter.
+        /// Acquire a slot from the endpoint concurrency limiter, waiting in the bounded queue if necessary.
         /// </summary>
-        protected IDisposable AcquireRequestSlot()
+        /// <param name="token">Cancellation/timeout token bounding the wait for a slot.</param>
+        /// <returns>A disposable lease that releases the slot when disposed.</returns>
+        /// <exception cref="ProviderConcurrencyLimitException">Thrown when the concurrency limit is reached and the wait queue is full.</exception>
+        protected Task<IDisposable> AcquireRequestSlotAsync(CancellationToken token)
         {
-            return ProviderConcurrencyLimiter.Acquire(_ConcurrencyKey, _MaxConcurrentRequests);
+            return ProviderConcurrencyLimiter.AcquireAsync(_ConcurrencyKey, _MaxConcurrentRequests, _MaxQueueDepth, token);
         }
 
         /// <summary>

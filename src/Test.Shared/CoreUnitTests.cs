@@ -244,7 +244,8 @@ namespace Test.Shared
                     Endpoint = "https://api.openai.com",
                     ApiFormat = ApiFormatEnum.OpenAI,
                     MaximumTimeoutMs = 45000,
-                    MaxConcurrentRequests = 4
+                    MaxConcurrentRequests = 4,
+                    MaxQueueDepth = 4
                 };
 
                 string json = serializer.SerializeJson(original, false);
@@ -256,6 +257,7 @@ namespace Test.Shared
                 Check.Equal(original.Model, restored.Model);
                 Check.Equal(original.MaximumTimeoutMs, restored.MaximumTimeoutMs);
                 Check.Equal(original.MaxConcurrentRequests, restored.MaxConcurrentRequests);
+                Check.Equal(original.MaxQueueDepth, restored.MaxQueueDepth);
                 Check.Equal(ApiFormatEnum.OpenAI, restored.ApiFormat);
             }));
 
@@ -272,6 +274,7 @@ namespace Test.Shared
                     ApiFormat = ApiFormatEnum.OpenAI,
                     MaximumTimeoutMs = 90000,
                     MaxConcurrentRequests = 5,
+                    MaxQueueDepth = 7,
                     Labels = new List<string> { "prod" },
                     Tags = new Dictionary<string, string> { { "region", "us-east" } }
                 };
@@ -286,6 +289,7 @@ namespace Test.Shared
                 Check.Equal(original.Model, restored.Model);
                 Check.Equal(original.MaximumTimeoutMs, restored.MaximumTimeoutMs);
                 Check.Equal(original.MaxConcurrentRequests, restored.MaxConcurrentRequests);
+                Check.Equal(original.MaxQueueDepth, restored.MaxQueueDepth);
                 Check.Equal(ApiFormatEnum.OpenAI, restored.ApiFormat);
                 Check.Contains("prod", restored.Labels);
                 Check.Equal("us-east", restored.Tags["region"]);
