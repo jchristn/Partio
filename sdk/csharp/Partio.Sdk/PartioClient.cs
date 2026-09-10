@@ -95,6 +95,9 @@ namespace Partio.Sdk
         public Task<SummarizeResponse?> SummarizeAsync(SummarizeRequest request) =>
             MakeRequestAsync<SummarizeResponse>(HttpMethod.Post, "/v1.0/summarize", request);
 
+        public Task<CompletionResponse?> CompleteAsync(CompletionRequest request) =>
+            MakeRequestAsync<CompletionResponse>(HttpMethod.Post, "/v1.0/completion", request);
+
         // Explorer
         public Task<EndpointExplorerEmbeddingResponse?> ExploreEmbeddingEndpointAsync(EndpointExplorerEmbeddingRequest request) =>
             MakeRequestAsync<EndpointExplorerEmbeddingResponse>(HttpMethod.Post, "/v1.0/explorer/embedding", request);

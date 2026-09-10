@@ -436,6 +436,17 @@ namespace Partio.Server
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                     .WithResponse(404, OpenApiResponseMetadata.NotFound());
             }, auth: true);
+            server.Post<CompletionRequest>("/v1.0/completion", CompleteText, api => {
+                api.Summary = "Generate a completion";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Process")
+                    .WithDescription("Generates a completion for a prompt using the specified completion endpoint. This is the production inference path (a single upstream call); use it to validate an endpoint or run a one-off completion. On an upstream failure such as a timeout, the route returns 200 with Success=false and StatusCode set to the upstream failure code.")
+                    .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Completion request", true))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Generated completion", null))
+                    .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
             server.Post<SummarizeRequest>("/v1.0/summarize", SummarizeText, api => {
                 api.Summary = "Summarize text";
                 api.Security = new List<string> { "Bearer" };
@@ -1230,6 +1241,145 @@ namespace Partio.Server
                     Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
                     await RecordDetailedHistoryAsync(inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds,
                         requestBody, ex.Message, reqHeaders, respHeaders, null, null, null).ConfigureAwait(false);
+                    inflight.DetailRecorded = true;
+                }
+                throw;
+            }
+        }
+
+        private static async Task<object> CompleteText(ApiRequest req)
+        {
+            string connId = req.Http.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            CancellationToken token = GetRequestCancellationToken(req);
+
+            CompletionResponse response = new CompletionResponse();
+            CompletionRequest? completeReq = null;
+            Stopwatch sw = Stopwatch.StartNew();
+            using ProcessOperationScope op = ProcessOperationScope.Begin("completion");
+
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                AuthContext auth = (AuthContext)req.Metadata;
+                completeReq = req.GetData<CompletionRequest>();
+                if (completeReq == null) throw new ArgumentException("Request body is required.");
+                if (string.IsNullOrWhiteSpace(completeReq.EndpointId)) throw new ArgumentException("EndpointId is required.");
+                if (string.IsNullOrWhiteSpace(completeReq.Prompt)) throw new ArgumentException("Prompt is required.");
+
+                CompletionEndpoint endpoint = await ResolveCompletionEndpointFromBody(completeReq.EndpointId, auth, token).ConfigureAwait(false);
+                response.EndpointId = endpoint.Id;
+                response.Model = endpoint.Model;
+                response.Prompt = completeReq.Prompt;
+                response.SystemPrompt = completeReq.SystemPrompt;
+                if (inflight != null) response.RequestHistoryId = inflight.Entry.Id;
+
+                req.Http.Response.Headers.Add(Constants.EndpointIdHeader, endpoint.Id);
+                req.Http.Response.Headers.Add(Constants.ModelHeader, endpoint.Model);
+
+                using CompletionClientBase client = CreateCompletionClient(endpoint);
+
+                try
+                {
+                    int maxTokens = completeReq.MaxTokens > 0 ? completeReq.MaxTokens : 512;
+                    int timeoutMs = completeReq.TimeoutMs > 0 ? completeReq.TimeoutMs : 60000;
+                    string? output = await client.GenerateCompletionAsync(
+                        completeReq.Prompt,
+                        endpoint.Model,
+                        maxTokens,
+                        timeoutMs,
+                        token,
+                        completeReq.SystemPrompt).ConfigureAwait(false);
+
+                    sw.Stop();
+
+                    response.Success = true;
+                    response.StatusCode = 200;
+                    response.Output = output;
+                    response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                    response.CompletionCalls = client.CallDetails.ToList();
+
+                    if (inflight != null)
+                    {
+                        inflight.Stopwatch.Stop();
+                        string requestJson = _Serializer.SerializeJson(completeReq, false);
+                        string responseJson = _Serializer.SerializeJson(response, false);
+                        Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                        Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                        await RecordDetailedHistoryAsync(
+                            inflight.Entry, 200, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                        inflight.DetailRecorded = true;
+                    }
+
+                    op.Complete();
+                    return response;
+                }
+                catch (Exception ex)
+                {
+                    if (ex is ProviderConcurrencyLimitException)
+                    {
+                        sw.Stop();
+
+                        response.Success = false;
+                        response.StatusCode = 429;
+                        response.Error = ex.Message;
+                        response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                        response.CompletionCalls = client.CallDetails.ToList();
+
+                        if (inflight != null)
+                        {
+                            inflight.Stopwatch.Stop();
+                            string requestJson = _Serializer.SerializeJson(completeReq, false);
+                            string responseJson = _Serializer.SerializeJson(response, false);
+                            Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                            Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                            await RecordDetailedHistoryAsync(
+                                inflight.Entry, response.StatusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                            inflight.DetailRecorded = true;
+                        }
+
+                        throw;
+                    }
+
+                    sw.Stop();
+
+                    response.Success = false;
+                    response.StatusCode = MapExceptionToStatusCode(ex);
+                    response.Error = ex.Message;
+                    response.ResponseTimeMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2);
+                    response.CompletionCalls = client.CallDetails.ToList();
+
+                    if (inflight != null)
+                    {
+                        inflight.Stopwatch.Stop();
+                        string requestJson = _Serializer.SerializeJson(completeReq, false);
+                        string responseJson = _Serializer.SerializeJson(response, false);
+                        Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                        Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                        await RecordDetailedHistoryAsync(
+                            inflight.Entry, response.StatusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds, requestJson, responseJson, reqHeaders, respHeaders, null, response.CompletionCalls).ConfigureAwait(false);
+                        inflight.DetailRecorded = true;
+                    }
+
+                    op.Complete();
+                    return response;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Validation/resolve failures (missing or inactive endpoint, bad request, unhealthy, cancellation)
+                // propagate as real HTTP status codes, mirroring /v1.0/embed. Upstream execution failures are
+                // handled by the inner catch above and return 200 with Success=false.
+                if (ex is OperationCanceledException) op.Outcome = "cancelled";
+                if (inflight != null && !inflight.DetailRecorded)
+                {
+                    inflight.Stopwatch.Stop();
+                    int statusCode = MapExceptionToStatusCode(ex);
+                    string? requestBody = completeReq != null ? _Serializer.SerializeJson(completeReq, false) : null;
+                    Dictionary<string, string> reqHeaders = ExtractHeaders(req.Http.Request.Headers);
+                    Dictionary<string, string> respHeaders = ExtractHeaders(req.Http.Response.Headers);
+                    await RecordDetailedHistoryAsync(inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                        requestBody, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
                     inflight.DetailRecorded = true;
                 }
                 throw;

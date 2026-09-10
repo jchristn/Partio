@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.5.0" }
+{ "Status": "Healthy", "Version": "0.6.0" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.5.0" }
+{ "Status": "Healthy", "Version": "0.6.0" }
 ```
 
 ---
@@ -478,6 +478,48 @@ chunking**. Each input is embedded as-is and returned in order.
 ```
 
 **Errors**: `400` (missing `EndpointId` or empty `Input`), `401`, `404` (unknown endpoint).
+
+---
+
+### POST /v1.0/completion
+Generate a completion for a prompt using a configured completion endpoint. This is the production inference
+path — a **single upstream call** — suitable for validating that an endpoint is reachable and working. Unlike
+`/v1.0/explorer/completion`, it performs no additional diagnostics.
+
+**Request Body**: `CompletionRequest`
+
+```json
+{
+  "EndpointId": "cep_...",
+  "Prompt": "Say hello in one word.",
+  "SystemPrompt": null,
+  "MaxTokens": 512,
+  "TimeoutMs": 60000
+}
+```
+
+**Response**: `200 OK` — `CompletionResponse`
+
+```json
+{
+  "Success": true,
+  "StatusCode": 200,
+  "EndpointId": "cep_...",
+  "Model": "gpt-4.1-mini",
+  "Prompt": "Say hello in one word.",
+  "SystemPrompt": null,
+  "Output": "Hello",
+  "ResponseTimeMs": 128.0,
+  "CompletionCalls": [ ]
+}
+```
+
+On an upstream failure such as a timeout, the route still returns `200 OK` with `Success=false` and
+`StatusCode` set to the upstream failure code (for example `504`); `TimeoutMs` is clamped to a positive
+value and to the endpoint's `MaximumTimeoutMs`.
+
+**Errors**: `400` (missing `EndpointId` or `Prompt`), `401`, `404` (unknown endpoint), `429` (endpoint
+concurrency limit reached).
 
 ---
 

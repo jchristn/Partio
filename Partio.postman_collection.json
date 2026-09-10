@@ -404,6 +404,33 @@
 					}
 				},
 				{
+					"name": "Complete Text",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"EndpointId\": \"{{completionEndpointId}}\",\n    \"Prompt\": \"Say hello in one word.\",\n    \"SystemPrompt\": null,\n    \"MaxTokens\": 512,\n    \"TimeoutMs\": 60000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"completion"
+							]
+						},
+						"description": "Generate a completion for a prompt using the specified completion endpoint. Production inference path (single upstream call); on an upstream failure such as a timeout it returns 200 with Success=false and StatusCode set to the upstream failure code."
+					}
+				},
+				{
 					"name": "Process Single Cell (Sentence-Based)",
 					"request": {
 						"method": "POST",

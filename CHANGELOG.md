@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.6.0 - 2026-09-09
+
+### Added
+- **`POST /v1.0/completion`**: a production completion endpoint that generates a completion for a prompt
+  through a configured completion endpoint using a **single upstream call**. It mirrors `POST /v1.0/embed`
+  for completions and is the recommended way to validate that a completion endpoint is reachable and
+  working, without the extra diagnostics (and probing) of `POST /v1.0/explorer/completion`. Request body
+  `CompletionRequest` (`EndpointId`, `Prompt`, optional `SystemPrompt`, `MaxTokens`, `TimeoutMs`); response
+  `CompletionResponse` (`Success`, `StatusCode`, `Error`, `EndpointId`, `Model`, `Prompt`, `SystemPrompt`,
+  `Output`, `ResponseTimeMs`, `RequestHistoryId`, `CompletionCalls`). Validation and resolve failures return
+  real HTTP status codes (`400`/`404`); an upstream failure such as a timeout returns `200` with
+  `Success=false` and `StatusCode` set to the upstream failure code (for example `504`); an endpoint
+  concurrency limit returns `429`. Added to the C# SDK as `PartioClient.CompleteAsync`, with integration
+  tests, REST API docs, and a Postman entry.
+
 ## v0.5.0 - 2026-08-26
 
 ### Added

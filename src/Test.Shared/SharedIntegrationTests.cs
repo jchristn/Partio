@@ -1847,6 +1847,83 @@ namespace Test.Shared
             }
         }
 
+        public static async Task TestCompleteAsync()
+        {
+            using (PartioClient admin = new PartioClient(_Endpoint, _AdminKey))
+            {
+                CompletionResponse? result = await admin.CompleteAsync(new CompletionRequest
+                {
+                    EndpointId = _TestCepId,
+                    Prompt = "Completion endpoint test payload"
+                });
+                if (result == null) throw new Exception("No response");
+                if (result.EndpointId != _TestCepId) throw new Exception("Endpoint mismatch");
+                if (result.CompletionCalls == null || result.CompletionCalls.Count == 0) throw new Exception("Expected upstream call details");
+            }
+        }
+
+        public static async Task TestCompleteMissingEndpointAsync()
+        {
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+            try
+            {
+                await admin.CompleteAsync(new CompletionRequest
+                {
+                    EndpointId = "",
+                    Prompt = "text"
+                }).ConfigureAwait(false);
+                throw new Exception("Expected PartioException with 400");
+            }
+            catch (PartioException ex) when (ex.StatusCode == 400)
+            {
+            }
+        }
+
+        public static async Task TestCompleteTimeoutStatusAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer(completionDelayMs: 1200);
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Timeout Completion",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 250
+                });
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No timeout test completion endpoint returned");
+
+                CompletionResponse? result = await admin.CompleteAsync(new CompletionRequest
+                {
+                    EndpointId = endpoint.Id,
+                    Prompt = "Timeout test prompt",
+                    TimeoutMs = 5000
+                });
+
+                if (result == null) throw new Exception("No completion response");
+                if (result.Success) throw new Exception("Expected timeout completion response");
+                if (result.StatusCode != 504) throw new Exception("Expected StatusCode=504, got " + result.StatusCode);
+                if (string.IsNullOrWhiteSpace(result.Error) || result.Error.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) < 0)
+                    throw new Exception("Expected timeout error text");
+                if (result.CompletionCalls == null || result.CompletionCalls.Count == 0)
+                    throw new Exception("Expected recorded upstream completion call details");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
         /// <summary>
         /// Build the integration suite against a self-hosted, in-process Partio server and
         /// Ollama-compatible upstream. The environment lifecycle is managed by the suite's
@@ -2086,6 +2163,9 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Embed Missing Endpoint (400)", async () => await TestEmbedMissingEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Summarize Text", async () => await TestSummarizeTextAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Summarize Missing Endpoint (400)", async () => await TestSummarizeMissingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Complete Text", async () => await TestCompleteAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Complete Missing Endpoint (400)", async () => await TestCompleteMissingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Complete Timeout Status (504)", async () => await TestCompleteTimeoutStatusAsync()));
 
             // Error Cases
             tests.Add(TestCaseFactory.Async("Integration","Unauthenticated Request (401)", async () => await TestUnauthenticatedRequestAsync()));

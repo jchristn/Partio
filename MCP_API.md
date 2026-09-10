@@ -54,7 +54,7 @@ A `tools/call` result carries **structured content** — the tool's return value
       { "type": "text", "text": "{ ...structured result rendered as text... }" }
     ],
     "structuredContent": {
-      "McpServerVersion": "0.5.0",
+      "McpServerVersion": "0.6.0",
       "PartioServerHealthy": true,
       "ProtocolVersion": "2025-06-18",
       "Tools": ["partio_capabilities", "partio_enumerate_completion_endpoints", "..."]
