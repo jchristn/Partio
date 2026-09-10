@@ -96,7 +96,8 @@
             "ApiKey": null,
             "MaximumTimeoutMs": 60000,
             "MaxConcurrentRequests": 2,
-            "MaxQueueDepth": 0
+            "MaxQueueDepth": 0,
+            "ContextSize": 0
         }
     ],
     "DefaultInferenceEndpoints": [
@@ -107,7 +108,8 @@
             "ApiFormat": "Ollama",
             "MaximumTimeoutMs": 60000,
             "MaxConcurrentRequests": 2,
-            "MaxQueueDepth": 0
+            "MaxQueueDepth": 0,
+            "ContextSize": 0
         }
     ]
 }

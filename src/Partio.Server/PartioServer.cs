@@ -846,6 +846,7 @@ namespace Partio.Server
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
                 ep.MaxQueueDepth = defaultEp.MaxQueueDepth;
+                ep.ContextSize = defaultEp.ContextSize;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.Labels = defaultEp.Labels;
                 ep.Tags = defaultEp.Tags;
@@ -870,6 +871,7 @@ namespace Partio.Server
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
                 cep.MaxQueueDepth = defaultIep.MaxQueueDepth;
+                cep.ContextSize = defaultIep.ContextSize;
                 cep.Labels = defaultIep.Labels;
                 cep.Tags = defaultIep.Tags;
                 cep.HealthCheckEnabled = true;
@@ -941,6 +943,7 @@ namespace Partio.Server
             endpoint.MaximumTimeoutMs = configuredDefault.MaximumTimeoutMs;
             endpoint.MaxConcurrentRequests = configuredDefault.MaxConcurrentRequests;
             endpoint.MaxQueueDepth = configuredDefault.MaxQueueDepth;
+            endpoint.ContextSize = configuredDefault.ContextSize;
             endpoint.Tokenization = CloneTokenizationSettings(configuredDefault.Tokenization);
             endpoint.HealthCheckEnabled = true;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(endpoint);
@@ -3093,6 +3096,7 @@ namespace Partio.Server
                 ep.MaximumTimeoutMs = defaultEp.MaximumTimeoutMs;
                 ep.MaxConcurrentRequests = defaultEp.MaxConcurrentRequests;
                 ep.MaxQueueDepth = defaultEp.MaxQueueDepth;
+                ep.ContextSize = defaultEp.ContextSize;
                 ep.Tokenization = defaultEp.Tokenization;
                 ep.Labels = defaultEp.Labels;
                 ep.Tags = defaultEp.Tags;
@@ -3114,6 +3118,7 @@ namespace Partio.Server
                 cep.MaximumTimeoutMs = defaultIep.MaximumTimeoutMs;
                 cep.MaxConcurrentRequests = defaultIep.MaxConcurrentRequests;
                 cep.MaxQueueDepth = defaultIep.MaxQueueDepth;
+                cep.ContextSize = defaultIep.ContextSize;
                 cep.Labels = defaultIep.Labels;
                 cep.Tags = defaultIep.Tags;
                 cep.HealthCheckEnabled = true;

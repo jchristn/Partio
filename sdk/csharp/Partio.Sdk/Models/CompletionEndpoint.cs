@@ -55,6 +55,9 @@ namespace Partio.Sdk.Models
         [JsonPropertyName("MaxQueueDepth")]
         public int MaxQueueDepth { get; set; } = 0;
 
+        [JsonPropertyName("ContextSize")]
+        public int ContextSize { get; set; } = 0;
+
         [JsonPropertyName("HealthCheckExpectedStatusCode")]
         public int HealthCheckExpectedStatusCode { get; set; } = 200;
 

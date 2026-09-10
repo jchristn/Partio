@@ -80,11 +80,15 @@ namespace Partio.Core.Database.Sqlserver
             catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddMaxQueueDepth, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddContextSize, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddMaximumTimeoutMs, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddMaxConcurrentRequests, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddMaxQueueDepth, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddContextSize, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddLabelsJson, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }

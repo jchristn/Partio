@@ -80,6 +80,7 @@ namespace Partio.Core.Database.Postgresql.Queries
                 maximum_timeout_ms INTEGER NOT NULL DEFAULT 60000,
                 max_concurrent_requests INTEGER NOT NULL DEFAULT 2,
                 max_queue_depth INTEGER NOT NULL DEFAULT 0,
+                context_size INTEGER NOT NULL DEFAULT 0,
                 health_check_expected_status INTEGER NOT NULL DEFAULT 200,
                 healthy_threshold INTEGER NOT NULL DEFAULT 2,
                 unhealthy_threshold INTEGER NOT NULL DEFAULT 2,
@@ -114,6 +115,7 @@ namespace Partio.Core.Database.Postgresql.Queries
                 maximum_timeout_ms INTEGER NOT NULL DEFAULT 60000,
                 max_concurrent_requests INTEGER NOT NULL DEFAULT 2,
                 max_queue_depth INTEGER NOT NULL DEFAULT 0,
+                context_size INTEGER NOT NULL DEFAULT 0,
                 health_check_expected_status INTEGER NOT NULL DEFAULT 200,
                 healthy_threshold INTEGER NOT NULL DEFAULT 2,
                 unhealthy_threshold INTEGER NOT NULL DEFAULT 2,
@@ -189,6 +191,12 @@ namespace Partio.Core.Database.Postgresql.Queries
             @"ALTER TABLE embedding_endpoints ADD COLUMN IF NOT EXISTS max_queue_depth INTEGER NOT NULL DEFAULT 0;";
 
         /// <summary>
+        /// Migration: add context_size column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddContextSize =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN IF NOT EXISTS context_size INTEGER NOT NULL DEFAULT 0;";
+
+        /// <summary>
         /// Migration: add maximum_timeout_ms column to completion_endpoints for existing databases.
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaximumTimeoutMs =
@@ -205,6 +213,12 @@ namespace Partio.Core.Database.Postgresql.Queries
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddMaxQueueDepth =
             @"ALTER TABLE completion_endpoints ADD COLUMN IF NOT EXISTS max_queue_depth INTEGER NOT NULL DEFAULT 0;";
+
+        /// <summary>
+        /// Migration: add context_size column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddContextSize =
+            @"ALTER TABLE completion_endpoints ADD COLUMN IF NOT EXISTS context_size INTEGER NOT NULL DEFAULT 0;";
 
         /// <summary>
         /// Migration: add labels_json column to completion_endpoints for existing databases.

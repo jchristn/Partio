@@ -15,6 +15,7 @@ namespace Partio.Core.Settings
         private int _MaximumTimeoutMs = 60000;
         private int _MaxConcurrentRequests = 2;
         private int _MaxQueueDepth = 0;
+        private int _ContextSize = 0;
         private List<string> _Labels = new List<string>();
         private Dictionary<string, string> _Tags = new Dictionary<string, string>();
 
@@ -89,6 +90,15 @@ namespace Partio.Core.Settings
         {
             get => _MaxQueueDepth;
             set => _MaxQueueDepth = value < 0 ? 0 : value;
+        }
+
+        /// <summary>
+        /// Context window size (maximum tokens) to seed onto the endpoint. Default <c>0</c> (unspecified). Clamped server-side to <c>&gt;= 0</c>.
+        /// </summary>
+        public int ContextSize
+        {
+            get => _ContextSize;
+            set => _ContextSize = value < 0 ? 0 : value;
         }
 
         /// <summary>

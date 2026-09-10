@@ -250,6 +250,7 @@ const defaultHealthFields = {
 const defaultMaximumTimeoutMs = 60000;
 const defaultMaxConcurrentRequests = 2;
 const defaultMaxQueueDepth = 0;
+const defaultContextSize = 0;
 
 function parsePositiveInteger(value, fallback) {
   const parsed = parseInt(value, 10);
@@ -273,6 +274,10 @@ function formatMaxConcurrentRequests(value) {
 
 function formatMaxQueueDepth(value) {
   return parseNonNegativeInteger(value, defaultMaxQueueDepth).toString();
+}
+
+function formatContextSize(value) {
+  return parseNonNegativeInteger(value, defaultContextSize).toString();
 }
 
 function createTokenizationForm(tokenization = null) {
@@ -323,7 +328,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -378,7 +383,7 @@ export default function EmbeddingEndpointsView() {
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const providerDefaults = getApiFormatDefaults('Ollama');
     const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
     setHealthFieldsEdited(false);
     setShowApiKey(false);
     setShowModal(true);
@@ -399,6 +404,7 @@ export default function EmbeddingEndpointsView() {
       MaximumTimeoutMs: (item.MaximumTimeoutMs || defaultMaximumTimeoutMs).toString(),
       MaxConcurrentRequests: (item.MaxConcurrentRequests || defaultMaxConcurrentRequests).toString(),
       MaxQueueDepth: (item.MaxQueueDepth ?? defaultMaxQueueDepth).toString(),
+      ContextSize: (item.ContextSize ?? defaultContextSize).toString(),
       Labels: createLabelRows(item.Labels),
       Tags: createTagRows(item.Tags),
       Tokenization: createTokenizationForm(item.Tokenization),
@@ -443,6 +449,7 @@ export default function EmbeddingEndpointsView() {
         MaximumTimeoutMs: parsePositiveInteger(form.MaximumTimeoutMs, defaultMaximumTimeoutMs),
         MaxConcurrentRequests: parsePositiveInteger(form.MaxConcurrentRequests, defaultMaxConcurrentRequests),
         MaxQueueDepth: parseNonNegativeInteger(form.MaxQueueDepth, defaultMaxQueueDepth),
+        ContextSize: parseNonNegativeInteger(form.ContextSize, defaultContextSize),
         Labels: normalizeLabelRows(form.Labels),
         Tags: normalizeTagRows(form.Tags),
         HealthCheckEnabled: form.HealthCheckEnabled,
@@ -725,6 +732,12 @@ export default function EmbeddingEndpointsView() {
                 <FormFieldLabel text="Max Queue Depth" tooltip="How many requests may wait for a concurrency slot before Partio returns HTTP 429. 0 rejects immediately." />
                 <Tooltip content="How many requests may wait for a concurrency slot before Partio returns HTTP 429. 0 rejects immediately." block>
                   <input type="number" min="0" step="1" value={form.MaxQueueDepth} onChange={e => setForm({ ...form, MaxQueueDepth: e.target.value })} />
+                </Tooltip>
+              </div>
+              <div className="form-group">
+                <FormFieldLabel text="Context Size" tooltip="Context window size (maximum tokens) for the model served by this endpoint. 0 means unspecified." />
+                <Tooltip content="Context window size (maximum tokens) for the model served by this endpoint. 0 means unspecified." block>
+                  <input type="number" min="0" step="1" value={form.ContextSize} onChange={e => setForm({ ...form, ContextSize: e.target.value })} />
                 </Tooltip>
               </div>
             </div>

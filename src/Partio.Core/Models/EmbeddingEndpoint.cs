@@ -27,6 +27,7 @@ namespace Partio.Core.Models
         private int _MaximumTimeoutMs = 60000;
         private int _MaxConcurrentRequests = 2;
         private int _MaxQueueDepth = 0;
+        private int _ContextSize = 0;
         private int _HealthCheckExpectedStatusCode = 200;
         private int _HealthyThreshold = 2;
         private int _UnhealthyThreshold = 2;
@@ -218,6 +219,16 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
+        /// Context window size (maximum tokens) for the model served by this endpoint.
+        /// Default is <c>0</c>, meaning unspecified. Clamped server-side to <c>&gt;= 0</c>.
+        /// </summary>
+        public int ContextSize
+        {
+            get => _ContextSize;
+            set => _ContextSize = value < 0 ? 0 : value;
+        }
+
+        /// <summary>
         /// HTTP status code that indicates a successful health check.
         /// </summary>
         public int HealthCheckExpectedStatusCode
@@ -314,6 +325,8 @@ namespace Partio.Core.Models
                 ep.MaxConcurrentRequests = Convert.ToInt32(row["max_concurrent_requests"]);
             if (row.Table.Columns.Contains("max_queue_depth") && row["max_queue_depth"] != DBNull.Value)
                 ep.MaxQueueDepth = Convert.ToInt32(row["max_queue_depth"]);
+            if (row.Table.Columns.Contains("context_size") && row["context_size"] != DBNull.Value)
+                ep.ContextSize = Convert.ToInt32(row["context_size"]);
             ep.HealthCheckExpectedStatusCode = Convert.ToInt32(row["health_check_expected_status"]);
             ep.HealthyThreshold = Convert.ToInt32(row["healthy_threshold"]);
             ep.UnhealthyThreshold = Convert.ToInt32(row["unhealthy_threshold"]);

@@ -315,7 +315,8 @@ namespace Partio.McpServer.Mcp
                 ep.ApiFormat,
                 ep.Active,
                 ep.MaxConcurrentRequests,
-                ep.MaxQueueDepth
+                ep.MaxQueueDepth,
+                ep.ContextSize
             };
         }
 
@@ -330,7 +331,8 @@ namespace Partio.McpServer.Mcp
                 ep.ApiFormat,
                 ep.Active,
                 ep.MaxConcurrentRequests,
-                ep.MaxQueueDepth
+                ep.MaxQueueDepth,
+                ep.ContextSize
             };
         }
 
@@ -405,7 +407,8 @@ namespace Partio.McpServer.Mcp
                 ["Active"] = new { type = "boolean" },
                 ["MaximumTimeoutMs"] = new { type = "integer" },
                 ["MaxConcurrentRequests"] = new { type = "integer", description = "Maximum concurrent upstream requests (>= 1)." },
-                ["MaxQueueDepth"] = new { type = "integer", description = "Requests allowed to wait for a slot once MaxConcurrentRequests is reached; 0 rejects immediately with 429. Clamped >= 0." }
+                ["MaxQueueDepth"] = new { type = "integer", description = "Requests allowed to wait for a slot once MaxConcurrentRequests is reached; 0 rejects immediately with 429. Clamped >= 0." },
+                ["ContextSize"] = new { type = "integer", description = "Context window size (maximum tokens) for the model. Default 0 (unspecified). Clamped >= 0." }
             };
 
             List<string> required = new List<string> { "Endpoint", "Model" };
