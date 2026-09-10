@@ -160,6 +160,16 @@
   margin: 0;
 }
 
+.validate-note {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: rgba(241, 196, 15, 0.1);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .validate-error {
   margin-top: 12px;
   padding: 8px 10px;

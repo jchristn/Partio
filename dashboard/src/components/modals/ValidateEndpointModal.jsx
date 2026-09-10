@@ -37,7 +37,9 @@ export default function ValidateEndpointModal({ isOpen, endpoint, endpointType, 
           EndpointId: endpoint.Id,
           Prompt: text,
           SystemPrompt: '',
-          MaxTokens: 16,
+          // Reasoning models (e.g. gpt-oss) spend tokens on an internal thinking
+          // channel before emitting visible content, so give the probe real headroom.
+          MaxTokens: 512,
           TimeoutMs: timeoutMs
         };
 
@@ -145,10 +147,18 @@ export default function ValidateEndpointModal({ isOpen, endpoint, endpointType, 
             )}
 
             {success && !isEmbedding && (
-              <div className="validate-output">
-                <div className="validate-output-label">Model Output</div>
-                <pre>{result.Output || '(empty)'}</pre>
-              </div>
+              result.Output && result.Output.trim() ? (
+                <div className="validate-output">
+                  <div className="validate-output-label">Model Output</div>
+                  <pre>{result.Output}</pre>
+                </div>
+              ) : (
+                <div className="validate-note">
+                  The endpoint responded successfully but returned no visible text. Reasoning
+                  models may consume the token budget on internal thinking — try a larger
+                  Max Tokens or a different prompt via the API Explorer.
+                </div>
+              )
             )}
 
             {!success && result.Error && (
