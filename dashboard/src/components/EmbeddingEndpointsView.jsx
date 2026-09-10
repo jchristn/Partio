@@ -9,6 +9,7 @@ import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import LoadModelModal from './modals/LoadModelModal';
+import ValidateEndpointModal from './modals/ValidateEndpointModal';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
 import EndpointMetadataEditor, { createLabelRows, createTagRows, normalizeLabelRows, normalizeTagRows } from './EndpointMetadataEditor';
@@ -333,6 +334,7 @@ export default function EmbeddingEndpointsView() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [loadModal, setLoadModal] = useState({ isOpen: false, endpoint: null });
   const [loadingModelId, setLoadingModelId] = useState(null);
+  const [validateModal, setValidateModal] = useState({ isOpen: false, endpoint: null });
 
   const loadTenants = useCallback(async () => {
     try {
@@ -575,6 +577,7 @@ export default function EmbeddingEndpointsView() {
       sortable: false,
       render: (item) => (
         <ActionMenu actions={[
+          { label: 'Validate', onClick: () => setValidateModal({ isOpen: true, endpoint: item }) },
           { label: t('loadModel.action'), onClick: () => openLoadModel(item), disabled: loadingModelId === item.Id },
           { label: 'Edit', onClick: () => openEdit(item) },
           { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
@@ -920,6 +923,13 @@ export default function EmbeddingEndpointsView() {
         isOpen={healthDetailModal.isOpen}
         onClose={() => setHealthDetailModal({ isOpen: false, data: null })}
         healthData={healthDetailModal.data}
+      />
+      <ValidateEndpointModal
+        isOpen={validateModal.isOpen}
+        endpoint={validateModal.endpoint}
+        endpointType="Embedding"
+        onClose={() => setValidateModal({ isOpen: false, endpoint: null })}
+        onValidate={(request) => api.exploreEmbeddingEndpoint(request)}
       />
     </div>
   );
