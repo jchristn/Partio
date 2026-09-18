@@ -132,6 +132,65 @@ function CallGroups({ title, calls }) {
   );
 }
 
+function defaultProxySubpath(apiFormat, model) {
+  const m = model || 'MODEL';
+  switch ((apiFormat || '').toLowerCase()) {
+    case 'ollama': return 'api/chat';
+    case 'gemini': return `v1beta/models/${m}:generateContent`;
+    default: return 'v1/chat/completions'; // openai, vllm
+  }
+}
+
+function defaultProxyBody(apiFormat, model) {
+  const m = model || 'MODEL';
+  switch ((apiFormat || '').toLowerCase()) {
+    case 'ollama':
+      return JSON.stringify({ model: m, messages: [{ role: 'user', content: 'Hello from the Partio proxy' }], stream: false }, null, 2);
+    case 'gemini':
+      return JSON.stringify({ contents: [{ parts: [{ text: 'Hello from the Partio proxy' }] }] }, null, 2);
+    default:
+      return JSON.stringify({ model: m, messages: [{ role: 'user', content: 'Hello from the Partio proxy' }] }, null, 2);
+  }
+}
+
+function ProxyResults({ result, endpoint }) {
+  const isSuccess = result.statusCode >= 200 && result.statusCode < 300;
+  return (
+    <div className="card explorer-response-card">
+      <div className="detail-section">
+        <h3>Overview</h3>
+        <div className="detail-grid">
+          <div className="detail-item">
+            <Tooltip content="Whether the upstream provider returned a 2xx status. The proxy passes the upstream status through verbatim."><label>Result</label></Tooltip>
+            <span className={isSuccess ? 'explorer-success' : 'explorer-failure'}>{isSuccess ? 'Success' : 'Failed'}</span>
+          </div>
+          <div className="detail-item">
+            <Tooltip content="Upstream HTTP status code, passed through verbatim by the proxy (not wrapped as 200)."><label>Status</label></Tooltip>
+            <span className={`http-status ${statusClass(result.statusCode)}`}>{result.statusCode}</span>
+          </div>
+          {endpoint && (
+            <div className="detail-item">
+              <Tooltip content="Completion endpoint the proxy targeted."><label>Endpoint ID</label></Tooltip>
+              <span><CopyableId value={endpoint.Id} /></span>
+            </div>
+          )}
+          {endpoint && (
+            <div className="detail-item">
+              <Tooltip content="Provider dialect the endpoint speaks; only this dialect's native sub-paths are relayed."><label>Provider</label></Tooltip>
+              <span>{endpoint.ApiFormat}</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="detail-section">
+        <h3>Proxied Response</h3>
+        <CollapsibleSection title="Response Headers" content={formatHeaders(result.headers)} />
+        <CollapsibleSection title="Response Body" content={typeof result.body === 'string' ? result.body : JSON.stringify(result.body)} defaultExpanded />
+      </div>
+    </div>
+  );
+}
+
 export default function EndpointExplorerView() {
   const { serverUrl, bearerToken } = useApp();
   const api = new PartioApi(serverUrl, bearerToken);
@@ -154,6 +213,12 @@ export default function EndpointExplorerView() {
     MaxTokens: 512,
     TimeoutMs: 60000
   });
+  const [proxyForm, setProxyForm] = useState({
+    EndpointId: '',
+    Subpath: '',
+    Method: 'POST',
+    Body: ''
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +240,12 @@ export default function EndpointExplorerView() {
         setCompletionForm(prev => ({
           ...prev,
           EndpointId: prev.EndpointId || comp[0]?.Id || ''
+        }));
+        setProxyForm(prev => ({
+          ...prev,
+          EndpointId: prev.EndpointId || comp[0]?.Id || '',
+          Subpath: prev.Subpath || defaultProxySubpath(comp[0]?.ApiFormat, comp[0]?.Model),
+          Body: prev.Body || defaultProxyBody(comp[0]?.ApiFormat, comp[0]?.Model)
         }));
       } catch (err) {
         if (!cancelled) {
@@ -199,6 +270,11 @@ export default function EndpointExplorerView() {
     [completionEndpoints, completionForm.EndpointId]
   );
 
+  const activeProxy = useMemo(
+    () => completionEndpoints.find(endpoint => endpoint.Id === proxyForm.EndpointId) || null,
+    [completionEndpoints, proxyForm.EndpointId]
+  );
+
   const handleRun = async () => {
     setSubmitting(true);
     setError(null);
@@ -206,6 +282,12 @@ export default function EndpointExplorerView() {
     try {
       if (mode === 'embedding') {
         const result = await api.exploreEmbeddingEndpoint(embeddingForm);
+        setResponse(result);
+      } else if (mode === 'proxy') {
+        const result = await api.proxy(proxyForm.EndpointId, proxyForm.Subpath, {
+          method: proxyForm.Method,
+          body: proxyForm.Method === 'GET' ? null : proxyForm.Body
+        });
         setResponse(result);
       } else {
         const result = await api.exploreCompletionEndpoint({
@@ -242,9 +324,10 @@ export default function EndpointExplorerView() {
           <div className="explorer-mode-toggle">
             <button className={mode === 'embedding' ? 'active' : ''} onClick={() => { setMode('embedding'); setResponse(null); setError(null); }}>Embedding</button>
             <button className={mode === 'completion' ? 'active' : ''} onClick={() => { setMode('completion'); setResponse(null); setError(null); }}>Inference</button>
+            <button className={mode === 'proxy' ? 'active' : ''} onClick={() => { setMode('proxy'); setResponse(null); setError(null); }}>Proxy</button>
           </div>
 
-          {mode === 'embedding' ? (
+          {mode === 'embedding' && (
             <>
               <div className="form-group">
                 <FormFieldLabel text="Embedding Endpoint" tooltip="Choose the embedding endpoint to exercise through the Partio backend path." />
@@ -293,7 +376,9 @@ export default function EndpointExplorerView() {
                 </Tooltip>
               </div>
             </>
-              ) : (
+          )}
+
+          {mode === 'completion' && (
             <>
               <div className="form-group">
                 <FormFieldLabel text="Inference Endpoint" tooltip="Choose the inference endpoint to exercise through the Partio backend path." />
@@ -369,12 +454,92 @@ export default function EndpointExplorerView() {
             </>
           )}
 
+          {mode === 'proxy' && (
+            <>
+              <div className="form-group">
+                <FormFieldLabel text="Endpoint" tooltip="Choose the completion endpoint to proxy through. Only that endpoint's provider dialect (its ApiFormat) is relayed." />
+                <Tooltip content="Choose the completion endpoint to proxy through. Only that endpoint's provider dialect is relayed." block>
+                  <select
+                    value={proxyForm.EndpointId}
+                    onChange={e => {
+                      const id = e.target.value;
+                      const ep = completionEndpoints.find(x => x.Id === id);
+                      setProxyForm(prev => ({
+                        ...prev,
+                        EndpointId: id,
+                        Subpath: defaultProxySubpath(ep?.ApiFormat, ep?.Model),
+                        Body: defaultProxyBody(ep?.ApiFormat, ep?.Model)
+                      }));
+                    }}
+                    disabled={loadingEndpoints}
+                  >
+                    <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
+                    {completionEndpoints.map(endpoint => (
+                      <option key={endpoint.Id} value={endpoint.Id}>
+                        {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
+                      </option>
+                    ))}
+                  </select>
+                </Tooltip>
+              </div>
+              {activeProxy && (
+                <div className="explorer-endpoint-meta">
+                  <div><span>Model</span><strong>{activeProxy.Model}</strong></div>
+                  <div><span>Provider</span><strong>{activeProxy.ApiFormat}</strong></div>
+                  <div><span>Base URL</span><code>{activeProxy.Endpoint}</code></div>
+                </div>
+              )}
+              <div className="form-row">
+                <div className="form-group" style={{ flex: '0 0 120px' }}>
+                  <FormFieldLabel text="Method" tooltip="HTTP method to send to the upstream provider." />
+                  <Tooltip content="HTTP method to send to the upstream provider." block>
+                    <select
+                      value={proxyForm.Method}
+                      onChange={e => setProxyForm(prev => ({ ...prev, Method: e.target.value }))}
+                    >
+                      <option value="POST">POST</option>
+                      <option value="GET">GET</option>
+                    </select>
+                  </Tooltip>
+                </div>
+                <div className="form-group">
+                  <FormFieldLabel text="Native Sub-path" tooltip="The provider's native path, appended after /v1.0/proxy/{endpointId}/. For example v1/chat/completions (OpenAI) or api/chat (Ollama)." />
+                  <Tooltip content="The provider's native path, appended after /v1.0/proxy/{endpointId}/." block>
+                    <input
+                      type="text"
+                      value={proxyForm.Subpath}
+                      onChange={e => setProxyForm(prev => ({ ...prev, Subpath: e.target.value }))}
+                      placeholder="v1/chat/completions"
+                    />
+                  </Tooltip>
+                </div>
+              </div>
+              {proxyForm.Method !== 'GET' && (
+                <div className="form-group">
+                  <FormFieldLabel text="Request Body" tooltip="Raw native provider request body, sent verbatim. Partio performs no translation, so this must match the endpoint's dialect." />
+                  <Tooltip content="Raw native provider request body, sent verbatim. Partio performs no translation." block>
+                    <textarea
+                      rows={12}
+                      value={proxyForm.Body}
+                      onChange={e => setProxyForm(prev => ({ ...prev, Body: e.target.value }))}
+                      placeholder="Native provider request JSON..."
+                    />
+                  </Tooltip>
+                </div>
+              )}
+            </>
+          )}
+
           <button
             className="primary explorer-run-btn"
             onClick={handleRun}
-            disabled={submitting || loadingEndpoints || (mode === 'embedding' ? !embeddingForm.EndpointId || !embeddingForm.Input.trim() : !completionForm.EndpointId || !completionForm.Prompt.trim())}
+            disabled={submitting || loadingEndpoints || (
+              mode === 'embedding' ? (!embeddingForm.EndpointId || !embeddingForm.Input.trim())
+              : mode === 'proxy' ? (!proxyForm.EndpointId || !proxyForm.Subpath.trim())
+              : (!completionForm.EndpointId || !completionForm.Prompt.trim())
+            )}
           >
-            {submitting ? 'Running...' : 'Run Through Partio'}
+            {submitting ? 'Running...' : (mode === 'proxy' ? 'Send Through Proxy' : 'Run Through Partio')}
           </button>
         </div>
 
@@ -385,7 +550,10 @@ export default function EndpointExplorerView() {
               Pick an endpoint, provide sample input, and run the request through Partio to inspect the end-to-end behavior.
             </div>
           )}
-          {response && (
+          {response && mode === 'proxy' && (
+            <ProxyResults result={response} endpoint={activeProxy} />
+          )}
+          {response && mode !== 'proxy' && (
             <div className="card explorer-response-card">
               <div className="detail-section">
                 <h3>Overview</h3>

@@ -12,6 +12,7 @@ namespace Partio.Sdk.TestHarness
         private static string _ProviderEndpoint = "http://localhost:11434";
         private static string _EmbeddingModel = "nomic-embed-text";
         private static string _CompletionModel = "gemma3:4b";
+        private static string? _ProviderBearer = null;
         private static bool _ProviderAvailable = false;
         private static int _Passed = 0;
         private static int _Failed = 0;
@@ -27,10 +28,13 @@ namespace Partio.Sdk.TestHarness
             if (args.Length >= 4) _ProviderEndpoint = args[3];
             if (args.Length >= 5) _EmbeddingModel = args[4];
             if (args.Length >= 6) _CompletionModel = args[5];
+            if (args.Length >= 7) _ProviderBearer = args[6];
 
             _ProviderEndpoint = Environment.GetEnvironmentVariable("PARTIO_TEST_PROVIDER_ENDPOINT") ?? _ProviderEndpoint;
             _EmbeddingModel = Environment.GetEnvironmentVariable("PARTIO_TEST_EMBEDDING_MODEL") ?? _EmbeddingModel;
             _CompletionModel = Environment.GetEnvironmentVariable("PARTIO_TEST_COMPLETION_MODEL") ?? _CompletionModel;
+            _ProviderBearer = Environment.GetEnvironmentVariable("PARTIO_TEST_PROVIDER_BEARER") ?? _ProviderBearer;
+            if (string.IsNullOrEmpty(_ProviderBearer)) _ProviderBearer = null;
             _ProviderAvailable = await IsProviderAvailableAsync(_ProviderEndpoint).ConfigureAwait(false);
 
             Console.WriteLine("Partio C# SDK Test Harness");
@@ -397,6 +401,53 @@ namespace Partio.Sdk.TestHarness
                     if (result.CompletionCalls == null || result.CompletionCalls.Count == 0) throw new Exception("Expected upstream call details");
                 });
 
+                // Proxy (transparent passthrough) — relay native Ollama requests through a dedicated
+                // Ollama endpoint pointing at the provider (the upstream bearer, if any, is injected).
+                string proxyCepId = "";
+                await RunTest("Proxy Create Endpoint", async () =>
+                {
+                    CompletionEndpoint? cep = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                    {
+                        TenantId = testTenantId,
+                        Name = "Proxy Passthrough",
+                        Model = _CompletionModel,
+                        Endpoint = _ProviderEndpoint,
+                        ApiFormat = "Ollama",
+                        ApiKey = _ProviderBearer,
+                        HealthCheckEnabled = false,
+                        MaximumTimeoutMs = 120000
+                    });
+                    if (cep == null || string.IsNullOrEmpty(cep.Id)) throw new Exception("No proxy endpoint returned");
+                    proxyCepId = cep.Id;
+                });
+
+                await RunTest("Proxy GET api/tags", async () =>
+                {
+                    SkipIfProviderUnavailable();
+                    ProxyResponse r = await admin.ProxyGetAsync(proxyCepId, "api/tags");
+                    if (r.StatusCode != 200) throw new Exception("Expected 200, got " + r.StatusCode + ": " + r.Body);
+                });
+
+                await RunTest("Proxy POST api/chat", async () =>
+                {
+                    SkipIfProviderUnavailable();
+                    string body = "{\"model\":\"" + _CompletionModel + "\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}],\"stream\":false}";
+                    ProxyResponse r = await admin.ProxyPostAsync(proxyCepId, "api/chat", body);
+                    if (r.StatusCode != 200) throw new Exception("Expected 200, got " + r.StatusCode + ": " + r.Body);
+                });
+
+                await RunTest("Proxy Disallowed Sub-path (404)", async () =>
+                {
+                    // An OpenAI path is not permitted for an Ollama endpoint — rejected by policy, not forwarded.
+                    ProxyResponse r = await admin.ProxyPostAsync(proxyCepId, "v1/chat/completions", "{}");
+                    if (r.StatusCode != 404) throw new Exception("Expected 404 for a disallowed sub-path, got " + r.StatusCode);
+                });
+
+                await RunTest("Proxy Delete Endpoint", async () =>
+                {
+                    if (!string.IsNullOrEmpty(proxyCepId)) await admin.DeleteCompletionEndpointAsync(proxyCepId);
+                });
+
                 // Process Single Cell (requires an active embedding endpoint)
                 await RunTest("Process Single Cell", async () =>
                 {
@@ -742,7 +793,10 @@ namespace Partio.Sdk.TestHarness
             {
                 using HttpClient http = new HttpClient();
                 http.Timeout = TimeSpan.FromSeconds(2);
-                using HttpResponseMessage response = await http.GetAsync(endpoint.TrimEnd('/') + "/api/tags").ConfigureAwait(false);
+                using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, endpoint.TrimEnd('/') + "/api/tags");
+                if (!string.IsNullOrEmpty(_ProviderBearer))
+                    request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + _ProviderBearer);
+                using HttpResponseMessage response = await http.SendAsync(request).ConfigureAwait(false);
                 return response.IsSuccessStatusCode;
             }
             catch

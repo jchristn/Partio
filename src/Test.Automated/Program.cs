@@ -37,7 +37,7 @@ namespace Test.Automated
                     await using SelfHostedPartioTestEnvironment harnessEnvironment = await SelfHostedPartioTestEnvironment.StartAsync(options).ConfigureAwait(false);
                     if (HasFlag(args, "--sdk-harnesses"))
                     {
-                        SdkHarnessRunSummary configuredSummary = await SdkHarnessRunner.RunAsync(harnessEnvironment).ConfigureAwait(false);
+                        SdkHarnessRunSummary configuredSummary = await SdkHarnessRunner.RunAsync(harnessEnvironment, options).ConfigureAwait(false);
                         return configuredSummary.FailedCount > 0 ? 1 : 0;
                     }
                 }

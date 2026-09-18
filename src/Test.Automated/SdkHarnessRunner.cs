@@ -10,9 +10,18 @@ namespace Test.Automated
 
     public static class SdkHarnessRunner
     {
-        public static async Task<SdkHarnessRunSummary> RunAsync(SelfHostedPartioTestEnvironment environment, CancellationToken token = default)
+        public static async Task<SdkHarnessRunSummary> RunAsync(SelfHostedPartioTestEnvironment environment, TestEnvironmentOptions? options = null, CancellationToken token = default)
         {
             if (environment == null) throw new ArgumentNullException(nameof(environment));
+
+            string embeddingModel = string.IsNullOrWhiteSpace(options?.EmbeddingModel) ? "nomic-embed-text" : options!.EmbeddingModel;
+            string completionModel = string.IsNullOrWhiteSpace(options?.InferenceModel) ? "gemma3:4b" : options!.InferenceModel;
+            string? providerBearer = options?.UpstreamApiKey;
+
+            // The proxy exercise in each harness forwards through the provider; the bearer (when set) is
+            // injected on the upstream call so the harnesses can be pointed at an authenticated provider.
+            string[] WithBearer(params string[] baseArgs) =>
+                string.IsNullOrEmpty(providerBearer) ? baseArgs : baseArgs.Append(providerBearer!).ToArray();
 
             string repositoryRoot = FindRepositoryRoot();
             List<HarnessCommand> commands = new List<HarnessCommand>
@@ -20,8 +29,7 @@ namespace Test.Automated
                 new HarnessCommand(
                     "C# SDK harness",
                     "dotnet",
-                    new[]
-                    {
+                    WithBearer(
                         "run",
                         "--project",
                         Path.Combine(repositoryRoot, "sdk", "csharp", "Partio.Sdk.TestHarness", "Partio.Sdk.TestHarness.csproj"),
@@ -30,35 +38,30 @@ namespace Test.Automated
                         environment.AdminKey,
                         environment.TestToken,
                         environment.UpstreamEndpoint,
-                        "nomic-embed-text",
-                        "gemma3:4b"
-                    },
+                        embeddingModel,
+                        completionModel),
                     repositoryRoot),
                 new HarnessCommand(
                     "JavaScript SDK harness",
                     "node",
-                    new[]
-                    {
+                    WithBearer(
                         Path.Combine(repositoryRoot, "sdk", "js", "test-harness.js"),
                         environment.Endpoint,
                         environment.AdminKey,
                         environment.UpstreamEndpoint,
-                        "nomic-embed-text",
-                        "gemma3:4b"
-                    },
+                        embeddingModel,
+                        completionModel),
                     repositoryRoot),
                 new HarnessCommand(
                     "Python SDK harness",
                     "python",
-                    new[]
-                    {
+                    WithBearer(
                         Path.Combine(repositoryRoot, "sdk", "python", "test_harness.py"),
                         environment.Endpoint,
                         environment.AdminKey,
                         environment.UpstreamEndpoint,
-                        "nomic-embed-text",
-                        "gemma3:4b"
-                    },
+                        embeddingModel,
+                        completionModel),
                     repositoryRoot)
             };
 

@@ -431,6 +431,58 @@
 					}
 				},
 				{
+					"name": "Proxy - OpenAI Chat Completions",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"model\": \"gpt-4.1-mini\",\n    \"messages\": [ { \"role\": \"user\", \"content\": \"Say hello in one word.\" } ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/proxy/{{completionEndpointId}}/v1/chat/completions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"proxy",
+								"{{completionEndpointId}}",
+								"v1",
+								"chat",
+								"completions"
+							]
+						},
+						"description": "Transparent proxy: relay a native OpenAI chat-completions request to the endpoint's upstream and return the provider's response verbatim (status codes and streaming pass through). The sub-path must match the endpoint's ApiFormat: OpenAI/vLLM use v1/..., Ollama uses api/... (for example api/chat), Gemini uses v1beta/models/{model}:generateContent. A sub-path that does not match the endpoint's dialect returns 404."
+					}
+				},
+				{
+					"name": "Proxy - List Models (GET)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/proxy/{{completionEndpointId}}/v1/models",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"proxy",
+								"{{completionEndpointId}}",
+								"v1",
+								"models"
+							]
+						},
+						"description": "Transparent proxy: GET the provider's native model-discovery path (OpenAI/vLLM v1/models; Ollama api/tags). The upstream response is returned verbatim."
+					}
+				},
+				{
 					"name": "Process Single Cell (Sentence-Based)",
 					"request": {
 						"method": "POST",

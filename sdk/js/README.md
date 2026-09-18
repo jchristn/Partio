@@ -16,6 +16,7 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Embedding & Completion Endpoint Health (`getEndpointHealth`, `getAllEndpointHealth`, `getCompletionEndpointHealth`, `getAllCompletionEndpointHealth`)
 - Semantic cell processing (`process`, `processBatch`)
 - Endpoint explorer (`exploreEmbeddingEndpoint`, `exploreCompletionEndpoint`)
+- Transparent completion proxy (`proxy`, `proxyPost`, `proxyGet`) — relay a native provider request through an endpoint and get the upstream response (`{statusCode, headers, body}`) verbatim; a non-2xx upstream status is returned, not thrown
 - Request history (`getRequestHistory`, `getRequestHistoryDetail`, `deleteRequestHistory`, `enumerateRequestHistory`)
 
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.

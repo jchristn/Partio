@@ -54,7 +54,7 @@ A `tools/call` result carries **structured content** — the tool's return value
       { "type": "text", "text": "{ ...structured result rendered as text... }" }
     ],
     "structuredContent": {
-      "McpServerVersion": "0.6.0",
+      "McpServerVersion": "0.7.0",
       "PartioServerHealthy": true,
       "ProtocolVersion": "2025-06-18",
       "Tools": ["partio_capabilities", "partio_enumerate_completion_endpoints", "..."]
@@ -140,7 +140,7 @@ The `get` result includes the full endpoint object, `MaxConcurrentRequests` and 
 
 ## Tools
 
-Fourteen tools are registered. All of them require authentication (subject to the bypass rules above); none is anonymous.
+Fifteen tools are registered. All of them require authentication (subject to the bypass rules above); none is anonymous.
 
 | Tool | Purpose | Auth |
 |---|---|---|
@@ -158,6 +158,7 @@ Fourteen tools are registered. All of them require authentication (subject to th
 | `partio_summarize` | Summarize text through a completion endpoint (no chunking or embedding). | Yes |
 | `partio_chunk` | Chunk a semantic cell into text chunks without embedding them. | Yes |
 | `partio_embed` | Embed one or more input strings through an embedding endpoint without chunking. | Yes |
+| `partio_proxy` | Relay a native provider request through a completion endpoint's transparent proxy (`endpointId`, `subpath`, optional `method`/`body`/`contentType`); returns the provider's response verbatim as `{ StatusCode, ContentType, Body, Headers }`. No translation; a non-2xx upstream status is returned, not raised. | Yes |
 
 The create and update tools — for both completion and embedding endpoints — accept the **full endpoint definition**. That includes the concurrency controls: **`MaxConcurrentRequests`** (clamped `>= 1`, default `2`) caps how many upstream provider calls run at once, and **`MaxQueueDepth`** (clamped `>= 0`, default `0`) sets how many further requests may wait for a slot before the endpoint sheds load with `429`.
 

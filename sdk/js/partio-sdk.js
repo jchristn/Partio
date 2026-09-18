@@ -63,6 +63,38 @@ export class PartioClient {
   async exploreEmbeddingEndpoint(request) { return this._request('POST', '/v1.0/explorer/embedding', request); }
   async exploreCompletionEndpoint(request) { return this._request('POST', '/v1.0/explorer/completion', request); }
 
+  // Proxy (transparent passthrough)
+  /**
+   * Send a native provider request through the transparent completion proxy. Partio injects the upstream
+   * API key, enforces per-endpoint concurrency and timeout, and relays the provider's response verbatim
+   * (status code and body). `subpath` must be the endpoint dialect's native path -- for example
+   * `v1/chat/completions` for an OpenAI endpoint or `api/chat` for an Ollama endpoint. `body` may be a
+   * string (sent verbatim) or an object (JSON-encoded). A non-2xx upstream status is returned, not thrown.
+   * @returns {Promise<{statusCode: number, headers: Object, body: string}>}
+   */
+  async proxy(endpointId, subpath, { method = 'POST', body = null, contentType = 'application/json' } = {}) {
+    const path = `/v1.0/proxy/${endpointId.replace(/^\/+|\/+$/g, '')}/${subpath.replace(/^\/+/, '')}`;
+    const options = { method, headers: { 'Authorization': `Bearer ${this.accessKey}` } };
+    if (body !== null && method !== 'GET' && method !== 'HEAD') {
+      options.body = typeof body === 'string' ? body : JSON.stringify(body);
+      options.headers['Content-Type'] = contentType;
+    }
+    const response = await fetch(`${this.endpoint}${path}`, options);
+    const headers = {};
+    for (const [k, v] of response.headers.entries()) headers[k] = v;
+    return { statusCode: response.status, headers, body: await response.text() };
+  }
+
+  /** Convenience: POST a native provider request body through the proxy. */
+  async proxyPost(endpointId, subpath, body, contentType = 'application/json') {
+    return this.proxy(endpointId, subpath, { method: 'POST', body, contentType });
+  }
+
+  /** Convenience: GET a native provider sub-path (for example model discovery) through the proxy. */
+  async proxyGet(endpointId, subpath) {
+    return this.proxy(endpointId, subpath, { method: 'GET' });
+  }
+
   // Tenants
   async createTenant(data) { return this._request('PUT', '/v1.0/tenants', data); }
   async getTenant(id) { return this._request('GET', `/v1.0/tenants/${id}`); }

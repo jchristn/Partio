@@ -14,6 +14,7 @@ namespace Partio.Server
     using Partio.Core.Exceptions;
     using Partio.Core.Models;
     using Partio.Core.Observability;
+    using Partio.Core.Proxy;
     using Partio.Core.Serialization;
     using Partio.Core.Settings;
     using Partio.Core.Summarization;
@@ -458,6 +459,59 @@ namespace Partio.Server
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                     .WithResponse(404, OpenApiResponseMetadata.NotFound());
             }, auth: true);
+
+            #endregion
+
+            #region Proxy
+
+            // Transparent completion proxy: /v1.0/proxy/{endpointId}/<provider-native-subpath>
+            //
+            // A caller points a native provider SDK's base URL at /v1.0/proxy/{endpointId} and issues the
+            // provider's own request (OpenAI, Ollama, Gemini, or vLLM). Partio authenticates the caller,
+            // resolves the endpoint (tenant scope + active + healthy), verifies the sub-path belongs to that
+            // endpoint's dialect, injects the upstream API key, and relays the request/response verbatim —
+            // passing the upstream HTTP status code through (unlike /v1.0/completion, which wraps failures as
+            // 200 + Success=false). No request/response translation is performed.
+            //
+            // Registered as PostAuthentication parameter routes (one per allowed native sub-path) so the
+            // shared authentication callback runs first (401 on a bad token) and the raw handler retains full
+            // control of the response (status, headers, and chunked/streamed body). Every route points at the
+            // same ProxyRequest handler, which re-derives the endpoint id and sub-path from the raw URL and
+            // enforces the per-format allow-list (so, e.g., an OpenAI path targeting an Ollama endpoint still
+            // resolves a route but is rejected 404 by policy — never forwarded). The registered set mirrors
+            // ProxyPathPolicy's allow-list. Routes are excluded from the generated OpenAPI document
+            // (openApiMetadata: null); the proxy is documented in REST_API.md and the Postman collection.
+            // Note: a plain regex/dynamic catch-all is not used because the full Watson webserver does not
+            // evaluate dynamic routes here; explicit parameter routes are the proven mechanism.
+            (WatsonWebserver.Core.HttpMethod Method, string Path)[] proxyRoutes = new (WatsonWebserver.Core.HttpMethod, string)[]
+            {
+                // OpenAI / vLLM
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/chat/completions"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/completions"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/embeddings"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/models"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/models/{model}"),
+                // Ollama
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/chat"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/generate"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/embed"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/embeddings"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/show"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/tags"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/ps"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/version"),
+                // Gemini (the model segment carries the operation, e.g. gemini-1.5-flash:generateContent)
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models/{model}"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1beta/models/{model}"),
+            };
+            foreach ((WatsonWebserver.Core.HttpMethod method, string path) in proxyRoutes)
+            {
+                if (method == WatsonWebserver.Core.HttpMethod.GET)
+                    server.Get(path, ProxyRequestApi, auth: true);
+                else
+                    server.Post(path, ProxyRequestApi, auth: true);
+            }
 
             #endregion
 
@@ -1388,6 +1442,303 @@ namespace Partio.Server
                 throw;
             }
         }
+
+        #region Proxy
+
+        // Maximum number of bytes of a proxied request/response body retained for request history.
+        private const int _ProxyHistoryBodyCap = 256 * 1024;
+
+        // Response headers that must not be copied verbatim from the upstream to the caller: hop-by-hop and
+        // framing headers (recomputed by Watson) plus Content-Type (relayed separately) and Server/Date
+        // (set by Watson). Everything else — including Content-Encoding and provider rate-limit headers — is
+        // passed through so the caller sees the upstream response faithfully.
+        private static readonly HashSet<string> _ProxyStripResponseHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Content-Length", "Transfer-Encoding", "Connection", "Keep-Alive", "Proxy-Connection",
+            "TE", "Trailer", "Upgrade", "Content-Type", "Server", "Date"
+        };
+
+        /// <summary>
+        /// ApiRequest adapter for the proxy routes. The proxy is registered through the high-level
+        /// <c>server.Get</c>/<c>server.Post</c> helpers (parameter routes with authentication), which expect an
+        /// <see cref="ApiRequest"/> handler; this forwards to the raw <see cref="ProxyRequest"/> which writes the
+        /// response directly (status, headers, and chunked/streamed body). Returns null because the response is
+        /// already written — the framework skips result serialization once the response has been sent.
+        /// </summary>
+        /// <param name="req">The API request.</param>
+        /// <returns>Null; the response is written directly by <see cref="ProxyRequest"/>.</returns>
+        private static async Task<object> ProxyRequestApi(ApiRequest req)
+        {
+            await ProxyRequest(req.Http).ConfigureAwait(false);
+            return null!;
+        }
+
+        /// <summary>
+        /// Transparent completion proxy handler. Relays a caller's native provider request to the endpoint's
+        /// upstream and streams the response back verbatim, passing the upstream status code through. Partio
+        /// authenticates the caller, resolves the endpoint (tenant scope + active + healthy), enforces the
+        /// per-format sub-path allow-list, injects the upstream API key, and records request history.
+        /// </summary>
+        /// <param name="ctx">The Watson HTTP context.</param>
+        private static async Task ProxyRequest(HttpContextBase ctx)
+        {
+            string connId = ctx.Guid.ToString();
+            _InFlightRequests.TryGetValue(connId, out InFlightRequest? inflight);
+            _RequestTokens.TryGetValue(connId, out CancellationToken token);
+
+            string rawPath = ctx.Request.Url.RawWithoutQuery ?? string.Empty;
+            string rawPathWithQuery = ctx.Request.Url.RawWithQuery ?? string.Empty;
+            string method = ctx.Request.Method.ToString().ToUpperInvariant();
+
+            Stopwatch sw = Stopwatch.StartNew();
+            using ProcessOperationScope op = ProcessOperationScope.Begin("proxy");
+
+            CompletionEndpoint? endpoint = null;
+            byte[]? requestBody = null;
+            string? requestContentType = null;
+
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                AuthContext auth = ctx.Metadata as AuthContext
+                    ?? throw new UnauthorizedAccessException("Authentication required.");
+
+                // Parse /v1.0/proxy/{endpointId}/{subpath...}
+                const string prefix = "/v1.0/proxy/";
+                if (!rawPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    throw new KeyNotFoundException("Not a proxy route.");
+
+                string rest = rawPath.Substring(prefix.Length);
+                int slash = rest.IndexOf('/');
+                string endpointId = slash >= 0 ? rest.Substring(0, slash) : rest;
+                string subpath = slash >= 0 ? rest.Substring(slash + 1) : string.Empty;
+                endpointId = Uri.UnescapeDataString(endpointId);
+
+                if (string.IsNullOrWhiteSpace(endpointId)) throw new ArgumentException("Proxy endpoint ID is required.");
+                if (string.IsNullOrWhiteSpace(subpath)) throw new ArgumentException("Proxy sub-path is required.");
+
+                endpoint = await ResolveCompletionEndpointFromBody(endpointId, auth, token).ConfigureAwait(false);
+
+                if (!ProxyPathPolicy.IsAllowed(endpoint.ApiFormat, subpath))
+                    throw new KeyNotFoundException("Proxy sub-path '/" + ProxyPathPolicy.Normalize(subpath)
+                        + "' is not permitted for a " + endpoint.ApiFormat + " endpoint. Allowed sub-paths: "
+                        + ProxyPathPolicy.DescribeAllowed(endpoint.ApiFormat) + ".");
+
+                string? query = null;
+                int q = rawPathWithQuery.IndexOf('?');
+                if (q >= 0) query = rawPathWithQuery.Substring(q);
+
+                requestBody = ctx.Request.ContentLength > 0 ? ctx.Request.DataAsBytes : null;
+                requestContentType = ctx.Request.ContentType;
+                Dictionary<string, string> inboundHeaders = ExtractHeaders(ctx.Request.Headers);
+
+                CompletionProxyClient proxy = new CompletionProxyClient(_Logging);
+                await using ProxyForwardResult result = await proxy.ForwardAsync(
+                    endpoint, method, subpath, query, requestBody, requestContentType,
+                    inboundHeaders, endpoint.MaximumTimeoutMs, token).ConfigureAwait(false);
+
+                // Relay status, content type, and pass-through headers.
+                ctx.Response.StatusCode = result.StatusCode;
+                if (!string.IsNullOrEmpty(result.ContentType)) ctx.Response.ContentType = result.ContentType;
+                foreach (KeyValuePair<string, string> header in result.Headers)
+                {
+                    if (_ProxyStripResponseHeaders.Contains(header.Key)) continue;
+                    ctx.Response.Headers[header.Key] = header.Value;
+                }
+                ctx.Response.Headers[Constants.EndpointIdHeader] = endpoint.Id;
+                ctx.Response.Headers[Constants.PartioModelHeader] = endpoint.Model;
+
+                // Relay the body. When the upstream declared a Content-Length and is not a stream, buffer and
+                // send with that length; otherwise stream it through with chunked transfer encoding (this
+                // covers SSE and provider streaming responses such as Ollama NDJSON).
+                byte[] capturedBody;
+                if (!result.IsEventStream && result.ContentLength.HasValue)
+                {
+                    using MemoryStream buffer = new MemoryStream();
+                    await result.Body.CopyToAsync(buffer, token).ConfigureAwait(false);
+                    capturedBody = buffer.ToArray();
+                    await ctx.Response.Send(capturedBody, token).ConfigureAwait(false);
+                }
+                else
+                {
+                    ctx.Response.ChunkedTransfer = true;
+                    capturedBody = await RelayProxyStreamAsync(ctx, result.Body, token).ConfigureAwait(false);
+                }
+
+                sw.Stop();
+                op.Complete();
+
+                await RecordProxyHistoryAsync(
+                    inflight, ctx, result.UpstreamUrl, method, result.StatusCode, result.Headers,
+                    requestBody, capturedBody, sw.Elapsed.TotalMilliseconds).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                if (ex is OperationCanceledException) op.Outcome = "cancelled";
+                if (_Settings.Debug.Exceptions) _Logging.Warn(_Header + "proxy error: " + ex.Message);
+
+                int statusCode = MapProxyExceptionToStatusCode(ex);
+
+                // Only emit an error body if streaming to the caller has not already begun; once the upstream
+                // response has started relaying, the status line and headers are already on the wire.
+                if (!ctx.Response.ResponseStarted)
+                {
+                    try
+                    {
+                        await SendApiErrorAsync(ctx, statusCode, MapStatusCodeToError(statusCode), ex.Message).ConfigureAwait(false);
+                    }
+                    catch { /* response may have started concurrently */ }
+                }
+
+                if (inflight != null && !inflight.DetailRecorded)
+                {
+                    try
+                    {
+                        inflight.Stopwatch.Stop();
+                        Dictionary<string, string> reqHeaders = ExtractHeaders(ctx.Request.Headers);
+                        Dictionary<string, string> respHeaders = ExtractHeaders(ctx.Response.Headers);
+                        string? reqBodyStr = requestBody != null ? SafeBodyString(requestBody) : null;
+                        await RecordDetailedHistoryAsync(
+                            inflight.Entry, statusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                            reqBodyStr, ex.Message, reqHeaders, respHeaders, null, null).ConfigureAwait(false);
+                        inflight.DetailRecorded = true;
+                    }
+                    catch (Exception hx)
+                    {
+                        _Logging.Warn(_Header + "failed to record proxy history: " + hx.Message);
+                    }
+                }
+
+                // Handled here (the response is already written). Do not rethrow — that would cause the
+                // request middleware to attempt a second response on the same context.
+            }
+        }
+
+        /// <summary>
+        /// Stream an upstream response body to the caller using chunked transfer encoding, capturing up to
+        /// <see cref="_ProxyHistoryBodyCap"/> bytes for request history.
+        /// </summary>
+        /// <param name="ctx">The Watson HTTP context (with <c>ChunkedTransfer</c> already enabled).</param>
+        /// <param name="body">The upstream response body stream.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The captured (possibly truncated) body bytes.</returns>
+        private static async Task<byte[]> RelayProxyStreamAsync(HttpContextBase ctx, Stream body, CancellationToken token)
+        {
+            byte[] buffer = new byte[16 * 1024];
+            using MemoryStream captured = new MemoryStream();
+            int read;
+            while ((read = await body.ReadAsync(buffer.AsMemory(0, buffer.Length), token).ConfigureAwait(false)) > 0)
+            {
+                byte[] chunk = new byte[read];
+                Array.Copy(buffer, chunk, read);
+                await ctx.Response.SendChunk(chunk, false, token).ConfigureAwait(false);
+
+                int remaining = _ProxyHistoryBodyCap - (int)captured.Length;
+                if (remaining > 0) captured.Write(buffer, 0, Math.Min(read, remaining));
+            }
+            await ctx.Response.SendChunk(Array.Empty<byte>(), true, token).ConfigureAwait(false);
+            return captured.ToArray();
+        }
+
+        /// <summary>
+        /// Record a request-history detail entry for a proxied call, including a synthetic upstream
+        /// <see cref="CompletionCallDetail"/> so the dashboard can render the upstream request/response.
+        /// </summary>
+        private static async Task RecordProxyHistoryAsync(
+            InFlightRequest? inflight,
+            HttpContextBase ctx,
+            string upstreamUrl,
+            string method,
+            int upstreamStatusCode,
+            Dictionary<string, string> upstreamResponseHeaders,
+            byte[]? requestBody,
+            byte[]? responseBody,
+            double responseTimeMs)
+        {
+            if (inflight == null || inflight.DetailRecorded) return;
+
+            try
+            {
+                inflight.Stopwatch.Stop();
+                string? reqBodyStr = requestBody != null ? SafeBodyString(requestBody) : null;
+                string? respBodyStr = responseBody != null ? SafeBodyString(responseBody) : null;
+                Dictionary<string, string> reqHeaders = ExtractHeaders(ctx.Request.Headers);
+                Dictionary<string, string> respHeaders = ExtractHeaders(ctx.Response.Headers);
+
+                CompletionCallDetail call = new CompletionCallDetail
+                {
+                    Url = upstreamUrl,
+                    Method = method,
+                    RequestHeaders = reqHeaders,
+                    RequestBody = reqBodyStr,
+                    StatusCode = upstreamStatusCode,
+                    ResponseHeaders = upstreamResponseHeaders,
+                    ResponseBody = respBodyStr,
+                    ResponseTimeMs = responseTimeMs,
+                    Success = upstreamStatusCode >= 200 && upstreamStatusCode < 300,
+                    TimestampUtc = DateTime.UtcNow
+                };
+
+                await RecordDetailedHistoryAsync(
+                    inflight.Entry, upstreamStatusCode, inflight.Stopwatch.Elapsed.TotalMilliseconds,
+                    reqBodyStr, respBodyStr, reqHeaders, respHeaders, null,
+                    new List<CompletionCallDetail> { call }).ConfigureAwait(false);
+                inflight.DetailRecorded = true;
+            }
+            catch (Exception ex)
+            {
+                _Logging.Warn(_Header + "failed to record proxy history: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Map a proxy-handler exception to the HTTP status code Partio returns for Partio-level failures
+        /// (authentication, resolution, disallowed path, upstream unreachable). Reaches to the upstream that
+        /// succeed relay the provider's status code directly and never pass through here.
+        /// </summary>
+        /// <param name="ex">The exception to map.</param>
+        /// <returns>The HTTP status code to return.</returns>
+        private static int MapProxyExceptionToStatusCode(Exception ex)
+        {
+            if (ex is HttpRequestException || ex is IOException) return 502;
+            return MapExceptionToStatusCode(ex);
+        }
+
+        /// <summary>
+        /// Map a status code to the short error label used in Partio JSON error bodies.
+        /// </summary>
+        /// <param name="statusCode">HTTP status code.</param>
+        /// <returns>The short error label.</returns>
+        private static string MapStatusCodeToError(int statusCode)
+        {
+            switch (statusCode)
+            {
+                case 400: return "BadRequest";
+                case 401: return "NotAuthorized";
+                case 403: return "Forbidden";
+                case 404: return "NotFound";
+                case 429: return "TooManyRequests";
+                case 502: return "BadGateway";
+                case 504: return "GatewayTimeout";
+                default: return "InternalError";
+            }
+        }
+
+        /// <summary>
+        /// Decode a captured body to a UTF-8 string for request history, truncating to the history cap.
+        /// </summary>
+        /// <param name="bytes">Body bytes.</param>
+        /// <returns>The decoded (possibly truncated) string.</returns>
+        private static string SafeBodyString(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length == 0) return string.Empty;
+            int len = Math.Min(bytes.Length, _ProxyHistoryBodyCap);
+            try { return System.Text.Encoding.UTF8.GetString(bytes, 0, len); }
+            catch { return "[" + bytes.Length + " bytes]"; }
+        }
+
+        #endregion
 
         private static async Task<object> SummarizeText(ApiRequest req)
         {

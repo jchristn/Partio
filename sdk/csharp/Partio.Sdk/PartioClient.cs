@@ -98,6 +98,64 @@ namespace Partio.Sdk
         public Task<CompletionResponse?> CompleteAsync(CompletionRequest request) =>
             MakeRequestAsync<CompletionResponse>(HttpMethod.Post, "/v1.0/completion", request);
 
+        // Proxy (transparent passthrough)
+
+        /// <summary>
+        /// Send a native provider request through the transparent completion proxy. Partio injects the
+        /// upstream API key, enforces per-endpoint concurrency/timeout, and relays the provider's response
+        /// verbatim (status code and body). The <paramref name="subpath"/> must be the endpoint dialect's
+        /// native path — for example <c>v1/chat/completions</c> for an OpenAI endpoint or <c>api/chat</c>
+        /// for an Ollama endpoint. A non-2xx upstream status is returned in <see cref="ProxyResponse"/>
+        /// rather than raised. A Partio-level failure (unknown endpoint, disallowed path, upstream
+        /// unreachable) is returned as a Partio JSON error body with the corresponding status code.
+        /// </summary>
+        /// <param name="endpointId">Target completion endpoint ID.</param>
+        /// <param name="subpath">Native provider sub-path (for example <c>v1/chat/completions</c>).</param>
+        /// <param name="method">HTTP method (defaults to POST).</param>
+        /// <param name="body">Raw request body, sent verbatim; null for a bodyless request.</param>
+        /// <param name="contentType">Content type for the body.</param>
+        /// <returns>The relayed upstream response.</returns>
+        public async Task<ProxyResponse> ProxyAsync(string endpointId, string subpath, HttpMethod? method = null, string? body = null, string contentType = "application/json")
+        {
+            HttpMethod httpMethod = method ?? HttpMethod.Post;
+            string path = "/v1.0/proxy/" + endpointId.Trim('/') + "/" + subpath.TrimStart('/');
+            HttpRequestMessage request = new HttpRequestMessage(httpMethod, _Endpoint + path);
+
+            if (body != null && httpMethod != HttpMethod.Get && httpMethod != HttpMethod.Head)
+                request.Content = new StringContent(body, Encoding.UTF8, contentType);
+
+            HttpResponseMessage response = await _HttpClient.SendAsync(request).ConfigureAwait(false);
+            string responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+            ProxyResponse result = new ProxyResponse
+            {
+                StatusCode = (int)response.StatusCode,
+                ContentType = response.Content.Headers.ContentType?.ToString(),
+                Body = responseBody
+            };
+            foreach (KeyValuePair<string, IEnumerable<string>> header in response.Headers)
+                result.Headers[header.Key] = string.Join(", ", header.Value);
+            foreach (KeyValuePair<string, IEnumerable<string>> header in response.Content.Headers)
+                result.Headers[header.Key] = string.Join(", ", header.Value);
+            return result;
+        }
+
+        /// <summary>Convenience: POST a native provider request body through the proxy.</summary>
+        /// <param name="endpointId">Target completion endpoint ID.</param>
+        /// <param name="subpath">Native provider sub-path.</param>
+        /// <param name="body">Raw request body, sent verbatim.</param>
+        /// <param name="contentType">Content type for the body.</param>
+        /// <returns>The relayed upstream response.</returns>
+        public Task<ProxyResponse> ProxyPostAsync(string endpointId, string subpath, string body, string contentType = "application/json") =>
+            ProxyAsync(endpointId, subpath, HttpMethod.Post, body, contentType);
+
+        /// <summary>Convenience: GET a native provider sub-path (for example model discovery) through the proxy.</summary>
+        /// <param name="endpointId">Target completion endpoint ID.</param>
+        /// <param name="subpath">Native provider sub-path.</param>
+        /// <returns>The relayed upstream response.</returns>
+        public Task<ProxyResponse> ProxyGetAsync(string endpointId, string subpath) =>
+            ProxyAsync(endpointId, subpath, HttpMethod.Get);
+
         // Explorer
         public Task<EndpointExplorerEmbeddingResponse?> ExploreEmbeddingEndpointAsync(EndpointExplorerEmbeddingRequest request) =>
             MakeRequestAsync<EndpointExplorerEmbeddingResponse>(HttpMethod.Post, "/v1.0/explorer/embedding", request);

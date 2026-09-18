@@ -30,6 +30,13 @@ namespace Test.Shared
         private static string _GeminiCepId = "";
         private static string _VllmCepId = "";
 
+        // Live proxy upstream config (populated from TestEnvironmentOptions when a real inference upstream
+        // is supplied). When set, the live proxy case forwards through it against the real provider.
+        private static string _LiveProxyUpstream = "";
+        private static string? _LiveProxyToken = null;
+        private static string _LiveProxyModel = "";
+        private static string _LiveProxyFormat = "Ollama";
+
         public static void Configure(string endpoint, string adminKey, string testToken, string? ollamaEndpoint = null)
         {
             _Endpoint = endpoint;
@@ -1924,6 +1931,187 @@ namespace Test.Shared
             }
         }
 
+        public static async Task TestProxyOpenAiChatAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Proxy OpenAI",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000
+                }).ConfigureAwait(false);
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No proxy test completion endpoint returned");
+
+                string body = "{\"model\":\"gpt-4.1-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}";
+                ProxyResponse result = await admin.ProxyPostAsync(endpoint.Id, "v1/chat/completions", body).ConfigureAwait(false);
+
+                if (result.StatusCode != 200) throw new Exception("Expected 200, got " + result.StatusCode + ": " + result.Body);
+                if (!result.IsSuccess) throw new Exception("Expected IsSuccess for a 2xx upstream status");
+                if (result.Body.IndexOf("Stub completion response", StringComparison.OrdinalIgnoreCase) < 0)
+                    throw new Exception("Expected the upstream body to be relayed verbatim, got: " + result.Body);
+                if (provider.CompletionRequestCount < 1)
+                    throw new Exception("Expected the upstream to receive the proxied chat completion call");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestProxyGetModelsAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Proxy Models",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000
+                }).ConfigureAwait(false);
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No proxy test completion endpoint returned");
+
+                ProxyResponse result = await admin.ProxyGetAsync(endpoint.Id, "v1/models").ConfigureAwait(false);
+                if (result.StatusCode != 200) throw new Exception("Expected 200 for GET v1/models, got " + result.StatusCode);
+                if (result.Body.IndexOf("gpt-4.1-mini", StringComparison.OrdinalIgnoreCase) < 0)
+                    throw new Exception("Expected the upstream model list to be relayed, got: " + result.Body);
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestProxyDisallowedPathAsync()
+        {
+            using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = _TestTenantId,
+                    Name = "Proxy Disallowed",
+                    Model = "gpt-4.1-mini",
+                    Endpoint = provider.BaseUrl,
+                    ApiFormat = "OpenAI",
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 60000
+                }).ConfigureAwait(false);
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No proxy test completion endpoint returned");
+
+                // api/chat is an Ollama sub-path; it is not permitted for an OpenAI endpoint and must be
+                // rejected with 404 without ever reaching the upstream.
+                ProxyResponse result = await admin.ProxyPostAsync(endpoint.Id, "api/chat", "{}").ConfigureAwait(false);
+                if (result.StatusCode != 404) throw new Exception("Expected 404 for a disallowed sub-path, got " + result.StatusCode);
+                if (provider.CompletionRequestCount != 0) throw new Exception("A disallowed sub-path must not reach the upstream");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
+        public static async Task TestProxyUnknownEndpointAsync()
+        {
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+            ProxyResponse result = await admin.ProxyPostAsync("cep_does_not_exist", "v1/chat/completions", "{}").ConfigureAwait(false);
+            if (result.StatusCode != 404) throw new Exception("Expected 404 for an unknown endpoint, got " + result.StatusCode);
+        }
+
+        /// <summary>
+        /// Live proxy passthrough against a REAL upstream provider. Only added to the suite when a real
+        /// inference upstream is configured (via <c>--inference-endpoint</c> etc.); it creates a completion
+        /// endpoint pointing at that upstream (with the upstream bearer injected) and relays native requests
+        /// through the proxy, verifying the provider's response comes back and that the per-format allow-list
+        /// is enforced.
+        /// </summary>
+        public static async Task TestProxyLiveUpstreamAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_LiveProxyUpstream)) return; // not configured; nothing to do
+
+            bool isOllama = _LiveProxyFormat.Equals("Ollama", StringComparison.OrdinalIgnoreCase);
+            string model = string.IsNullOrWhiteSpace(_LiveProxyModel) ? "llama3" : _LiveProxyModel;
+
+            using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
+            CompletionEndpoint? endpoint = null;
+            try
+            {
+                endpoint = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                {
+                    TenantId = "default",
+                    Name = "Proxy Live Upstream",
+                    Model = model,
+                    Endpoint = _LiveProxyUpstream,
+                    ApiFormat = _LiveProxyFormat,
+                    ApiKey = string.IsNullOrEmpty(_LiveProxyToken) ? null : _LiveProxyToken,
+                    HealthCheckEnabled = false,
+                    MaximumTimeoutMs = 120000
+                }).ConfigureAwait(false);
+
+                if (endpoint == null || string.IsNullOrEmpty(endpoint.Id))
+                    throw new Exception("No live proxy completion endpoint returned");
+
+                if (isOllama)
+                {
+                    ProxyResponse tags = await admin.ProxyGetAsync(endpoint.Id, "api/tags").ConfigureAwait(false);
+                    if (tags.StatusCode != 200) throw new Exception("Live proxy GET api/tags expected 200, got " + tags.StatusCode + ": " + tags.Body);
+
+                    string chatBody = "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}],\"stream\":false}";
+                    ProxyResponse chat = await admin.ProxyPostAsync(endpoint.Id, "api/chat", chatBody).ConfigureAwait(false);
+                    if (chat.StatusCode != 200) throw new Exception("Live proxy POST api/chat expected 200, got " + chat.StatusCode + ": " + chat.Body);
+
+                    // Cross-dialect path must be rejected by policy without reaching the upstream.
+                    ProxyResponse denied = await admin.ProxyPostAsync(endpoint.Id, "v1/chat/completions", "{}").ConfigureAwait(false);
+                    if (denied.StatusCode != 404) throw new Exception("Live proxy cross-dialect path expected 404, got " + denied.StatusCode);
+                }
+                else
+                {
+                    ProxyResponse models = await admin.ProxyGetAsync(endpoint.Id, "v1/models").ConfigureAwait(false);
+                    if (models.StatusCode != 200) throw new Exception("Live proxy GET v1/models expected 200, got " + models.StatusCode + ": " + models.Body);
+
+                    string chatBody = "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}]}";
+                    ProxyResponse chat = await admin.ProxyPostAsync(endpoint.Id, "v1/chat/completions", chatBody).ConfigureAwait(false);
+                    if (chat.StatusCode != 200) throw new Exception("Live proxy POST v1/chat/completions expected 200, got " + chat.StatusCode + ": " + chat.Body);
+
+                    ProxyResponse denied = await admin.ProxyPostAsync(endpoint.Id, "api/chat", "{}").ConfigureAwait(false);
+                    if (denied.StatusCode != 404) throw new Exception("Live proxy cross-dialect path expected 404, got " + denied.StatusCode);
+                }
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(endpoint?.Id))
+                    await admin.DeleteCompletionEndpointAsync(endpoint.Id).ConfigureAwait(false);
+            }
+        }
+
         /// <summary>
         /// Build the integration suite against a self-hosted, in-process Partio server and
         /// Ollama-compatible upstream. The environment lifecycle is managed by the suite's
@@ -1935,6 +2123,16 @@ namespace Test.Shared
             TestEnvironmentOptions effectiveOptions = options ?? new TestEnvironmentOptions();
             SelfHostedPartioTestEnvironment? environment = null;
             List<TestCaseDescriptor> cases = BuildCases();
+
+            // When a real inference upstream is supplied, exercise the proxy live against it.
+            if (!string.IsNullOrWhiteSpace(effectiveOptions.InferenceEndpoint))
+            {
+                _LiveProxyUpstream = effectiveOptions.InferenceEndpoint!.TrimEnd('/');
+                _LiveProxyToken = effectiveOptions.UpstreamApiKey;
+                _LiveProxyModel = effectiveOptions.InferenceModel;
+                _LiveProxyFormat = string.IsNullOrWhiteSpace(effectiveOptions.UpstreamApiFormat) ? "Ollama" : effectiveOptions.UpstreamApiFormat;
+                cases.Add(TestCaseFactory.Async("Integration", "Proxy Live Upstream Passthrough", async () => await TestProxyLiveUpstreamAsync()));
+            }
 
             cases.Add(TestCaseFactory.Async("Integration", "Health Checks Share Same URL Probe (self-hosted)", async () =>
             {
@@ -2166,6 +2364,12 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Complete Text", async () => await TestCompleteAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Complete Missing Endpoint (400)", async () => await TestCompleteMissingEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Complete Timeout Status (504)", async () => await TestCompleteTimeoutStatusAsync()));
+
+            // Proxy (transparent passthrough)
+            tests.Add(TestCaseFactory.Async("Integration","Proxy OpenAI Chat Completions", async () => await TestProxyOpenAiChatAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Proxy GET Models Passthrough", async () => await TestProxyGetModelsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Proxy Disallowed Sub-path (404)", async () => await TestProxyDisallowedPathAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Proxy Unknown Endpoint (404)", async () => await TestProxyUnknownEndpointAsync()));
 
             // Error Cases
             tests.Add(TestCaseFactory.Async("Integration","Unauthenticated Request (401)", async () => await TestUnauthenticatedRequestAsync()));

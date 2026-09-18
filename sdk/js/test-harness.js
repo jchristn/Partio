@@ -9,6 +9,7 @@ const adminKey = process.argv[3] || 'partioadmin';
 const providerEndpoint = process.env.PARTIO_TEST_PROVIDER_ENDPOINT || process.argv[4] || 'http://localhost:11434';
 const embeddingModel = process.env.PARTIO_TEST_EMBEDDING_MODEL || process.argv[5] || 'nomic-embed-text';
 const completionModel = process.env.PARTIO_TEST_COMPLETION_MODEL || process.argv[6] || 'gemma3:4b';
+const providerBearer = process.env.PARTIO_TEST_PROVIDER_BEARER || process.argv[7] || null;
 const providerAvailable = await isProviderAvailable(providerEndpoint);
 
 console.log('Partio JavaScript SDK Test Harness');
@@ -75,7 +76,9 @@ async function getHarnessEmbeddingEndpoint() {
 
 async function isProviderAvailable(url) {
   try {
+    const headers = providerBearer ? { Authorization: `Bearer ${providerBearer}` } : {};
     const response = await fetch(`${url.replace(/\/+$/, '')}/api/tags`, {
+      headers,
       signal: AbortSignal.timeout(2000)
     });
     return response.ok;
@@ -361,6 +364,41 @@ await runTest('Explore Completion Endpoint', async () => {
   });
   if (!result || result.EndpointId !== testCepId) throw new Error('Endpoint mismatch');
   if (!result.CompletionCalls || result.CompletionCalls.length === 0) throw new Error('Expected upstream call details');
+});
+
+// Proxy (transparent passthrough): relay native Ollama requests through a dedicated Ollama endpoint.
+let proxyCepId = null;
+await runTest('Proxy Create Endpoint', async () => {
+  const cep = await client.createCompletionEndpoint({
+    TenantId: testTenantId, Name: 'Proxy Passthrough', Model: completionModel,
+    Endpoint: providerEndpoint, ApiFormat: 'Ollama', ApiKey: providerBearer,
+    HealthCheckEnabled: false, MaximumTimeoutMs: 120000
+  });
+  if (!cep || !cep.Id) throw new Error('No proxy endpoint returned');
+  proxyCepId = cep.Id;
+});
+
+await runTest('Proxy GET api/tags', async () => {
+  skipIfProviderUnavailable();
+  const r = await client.proxyGet(proxyCepId, 'api/tags');
+  if (r.statusCode !== 200) throw new Error(`Expected 200, got ${r.statusCode}: ${r.body}`);
+});
+
+await runTest('Proxy POST api/chat', async () => {
+  skipIfProviderUnavailable();
+  const body = { model: completionModel, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], stream: false };
+  const r = await client.proxyPost(proxyCepId, 'api/chat', body);
+  if (r.statusCode !== 200) throw new Error(`Expected 200, got ${r.statusCode}: ${r.body}`);
+});
+
+await runTest('Proxy Disallowed Sub-path (404)', async () => {
+  // An OpenAI path is not permitted for an Ollama endpoint -> 404 by policy, not forwarded.
+  const r = await client.proxyPost(proxyCepId, 'v1/chat/completions', {});
+  if (r.statusCode !== 404) throw new Error(`Expected 404 for disallowed sub-path, got ${r.statusCode}`);
+});
+
+await runTest('Proxy Delete Endpoint', async () => {
+  if (proxyCepId) await client.deleteCompletionEndpoint(proxyCepId);
 });
 
 // Process Single Cell (requires an active embedding endpoint)

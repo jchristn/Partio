@@ -95,4 +95,44 @@ export class PartioApi {
   // Explorer
   exploreEmbeddingEndpoint(data) { return this.request('POST', '/v1.0/explorer/embedding', data); }
   exploreCompletionEndpoint(data) { return this.request('POST', '/v1.0/explorer/completion', data); }
+
+  // Proxy (transparent passthrough)
+  // Relays a native provider request to the endpoint's upstream and returns the response verbatim.
+  // A non-2xx upstream status is returned (not thrown) as { statusCode, headers, body }.
+  async proxy(endpointId, subpath, { method = 'POST', body = null, contentType = 'application/json', signal } = {}) {
+    const path = `/v1.0/proxy/${String(endpointId).replace(/^\/+|\/+$/g, '')}/${String(subpath).replace(/^\/+/, '')}`;
+    const options = { method, headers: { 'Authorization': `Bearer ${this.bearerToken}` }, signal };
+    if (body !== null && method !== 'GET' && method !== 'HEAD') {
+      options.body = typeof body === 'string' ? body : JSON.stringify(body);
+      options.headers['Content-Type'] = contentType;
+    }
+    const response = await fetch(`${this.serverUrl}${path}`, options);
+    const headers = {};
+    for (const [k, v] of response.headers.entries()) headers[k] = v;
+    return { statusCode: response.status, headers, body: await response.text() };
+  }
+
+  // Streaming variant: relays the upstream response as it arrives, invoking onChunk(text) with each
+  // decoded piece. Returns { statusCode }. On a non-2xx status it returns { statusCode, body } without
+  // streaming so the caller can surface the error.
+  async proxyStream(endpointId, subpath, { method = 'POST', body = null, contentType = 'application/json', onChunk, signal } = {}) {
+    const path = `/v1.0/proxy/${String(endpointId).replace(/^\/+|\/+$/g, '')}/${String(subpath).replace(/^\/+/, '')}`;
+    const options = { method, headers: { 'Authorization': `Bearer ${this.bearerToken}` }, signal };
+    if (body !== null && method !== 'GET' && method !== 'HEAD') {
+      options.body = typeof body === 'string' ? body : JSON.stringify(body);
+      options.headers['Content-Type'] = contentType;
+    }
+    const response = await fetch(`${this.serverUrl}${path}`, options);
+    if (!response.ok || !response.body) {
+      return { statusCode: response.status, body: await response.text() };
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && onChunk) onChunk(decoder.decode(value, { stream: true }));
+    }
+    return { statusCode: response.status };
+  }
 }

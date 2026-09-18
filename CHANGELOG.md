@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.7.0 - 2026-09-18
+
+### Added
+- **`/v1.0/proxy/{endpointId}/<provider-native-subpath>`**: a transparent completion proxy that relays a
+  caller's **native** provider request (OpenAI, Ollama, Gemini, or vLLM) to a configured completion
+  endpoint's upstream and returns the provider's response **verbatim**. Point a native provider SDK's base
+  URL at `…/v1.0/proxy/{endpointId}` and the SDK's own sub-path (`/v1/chat/completions`, `/api/chat`,
+  `/v1beta/models/{model}:generateContent`, …) is relayed unchanged. Partio authenticates the caller
+  (tenant bearer), resolves the endpoint (tenant scope + active + healthy), **injects the upstream API key**
+  (so the caller never holds the provider credential), enforces the endpoint's `MaxConcurrentRequests` /
+  `MaxQueueDepth` / `MaximumTimeoutMs`, and records request history — but performs **no request/response
+  translation**: an endpoint speaks exactly one dialect and only that dialect's native sub-paths are
+  relayed (any other path is rejected `404`, never forwarded). Unlike `POST /v1.0/completion`, the proxy
+  **passes the upstream HTTP status code through** (real `429`/`500`/`504` and native error bodies) rather
+  than wrapping failures as `200` + `Success=false`, so off-the-shelf provider SDKs behave normally.
+  **Streaming works**: the proxy relays the upstream response as it arrives (chunked transfer for SSE and
+  provider streaming such as Ollama NDJSON), making it Partio's streaming path while `/v1.0/completion`
+  stays buffered. Registered as authenticated dynamic (regex) `GET`/`POST` routes. Partio-level failures
+  (unknown/inactive/unhealthy endpoint → `404`/`502`, disallowed sub-path → `404`, upstream unreachable →
+  `502`, concurrency limit → `429`, timeout → `504`) return a Partio JSON error. Added to the C# SDK
+  (`PartioClient.ProxyAsync` / `ProxyPostAsync` / `ProxyGetAsync`, new `ProxyResponse` model), the Python
+  SDK (`proxy` / `proxy_post` / `proxy_get`), and the JavaScript SDK (`proxy` / `proxyPost` / `proxyGet`);
+  surfaced in the dashboard as a **Proxy** mode in the API Explorer and a **Chat** view — a live
+  conversation with an endpoint through the proxy in its native dialect (no client-side provider key), with
+  **token streaming** for Ollama (NDJSON), OpenAI/vLLM (SSE), and Gemini (SSE via `:streamGenerateContent`),
+  configurable generation parameters (temperature, top-p, max tokens), a **Stop** control that cancels an
+  in-flight response, and a per-response metrics tooltip (time-to-first-token, total time,
+  prompt/output/total/cached tokens, and provider timings — the request is massaged to request usage,
+  e.g. OpenAI `stream_options.include_usage`); exposed as the `partio_proxy` MCP tool
+  (bringing the MCP tool count to fifteen); with `ProxyPathPolicy` unit tests, self-hosted integration
+  tests (OpenAI chat relay, GET model discovery passthrough, disallowed sub-path `404`, unknown endpoint
+  `404`), a **live-upstream** proxy integration test in the general harness (opt-in via `--inference-endpoint`
+  / `--upstream-bearer` / `--upstream-format` / `--inference-model`), proxy exercises in all three SDK test
+  harnesses (C#, Python, JavaScript), a self-booting `Partio.Sdk.ProxyLiveTest` console for live end-to-end
+  runs, REST API docs, MCP API docs, and Postman entries.
+
 ## v0.6.0 - 2026-09-09
 
 ### Added

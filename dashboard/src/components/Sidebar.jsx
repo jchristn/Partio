@@ -21,6 +21,7 @@ const endpointLinks = [
 const processingLinks = [
   { to: '/process', label: 'Process Cells', tourId: 'nav-process' },
   { to: '/explorer', label: 'API Explorer', tourId: 'nav-explorer' },
+  { to: '/chat', label: 'Chat', tourId: 'nav-chat' },
   { to: '/history', label: 'Request History', tourId: 'nav-history' },
 ];
 

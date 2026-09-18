@@ -16,6 +16,7 @@ The Partio Python SDK provides a `PartioClient` class for interacting with a Par
 - Embedding & Completion Endpoint Health (`get_endpoint_health`, `get_all_endpoint_health`, `get_completion_endpoint_health`, `get_all_completion_endpoint_health`)
 - Semantic cell processing (`process`, `process_batch`)
 - Endpoint explorer (`explore_embedding_endpoint`, `explore_completion_endpoint`)
+- Transparent completion proxy (`proxy`, `proxy_post`, `proxy_get`) — relay a native provider request through an endpoint and get the upstream response (`{status_code, headers, body}`) verbatim; a non-2xx upstream status is returned, not raised
 - Request history (`get_request_history`, `get_request_history_detail`, `delete_request_history`, `enumerate_request_history`)
 
 Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
@@ -142,4 +143,4 @@ Result: PASS
 
 ## Release Versioning
 
-The Python SDK is currently source-distributed from this repository rather than published as a separate package artifact. Its release version tracks the Partio repository release tag for this feature set, which is `0.4.0`.
+The Python SDK is currently source-distributed from this repository rather than published as a separate package artifact. Its release version tracks the Partio repository release tag for this feature set, which is `0.7.0`.

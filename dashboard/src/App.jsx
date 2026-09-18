@@ -11,6 +11,7 @@ import CompletionEndpointsView from './components/CompletionEndpointsView';
 import RequestHistoryView from './components/RequestHistoryView';
 import ChunkEmbedView from './components/ChunkEmbedView';
 import EndpointExplorerView from './components/EndpointExplorerView';
+import ChatView from './components/ChatView';
 import DashboardView from './components/DashboardView';
 
 function ProtectedRoute({ children }) {
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="endpoints/embeddings" element={<EmbeddingEndpointsView />} />
           <Route path="endpoints/inference" element={<CompletionEndpointsView />} />
           <Route path="explorer" element={<EndpointExplorerView />} />
+          <Route path="chat" element={<ChatView />} />
           <Route path="history" element={<RequestHistoryView />} />
           <Route path="process" element={<ChunkEmbedView />} />
         </Route>

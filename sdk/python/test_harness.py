@@ -17,7 +17,8 @@ def main():
     provider_endpoint = os.environ.get("PARTIO_TEST_PROVIDER_ENDPOINT") or (sys.argv[3] if len(sys.argv) > 3 else "http://localhost:11434")
     embedding_model = os.environ.get("PARTIO_TEST_EMBEDDING_MODEL") or (sys.argv[4] if len(sys.argv) > 4 else "nomic-embed-text")
     completion_model = os.environ.get("PARTIO_TEST_COMPLETION_MODEL") or (sys.argv[5] if len(sys.argv) > 5 else "gemma3:4b")
-    provider_available = is_provider_available(provider_endpoint)
+    provider_bearer = os.environ.get("PARTIO_TEST_PROVIDER_BEARER") or (sys.argv[6] if len(sys.argv) > 6 else None)
+    provider_available = is_provider_available(provider_endpoint, provider_bearer)
 
     print("Partio Python SDK Test Harness")
     print(f"Endpoint: {endpoint}")
@@ -361,6 +362,43 @@ def main():
             assert result.get("CompletionCalls") and len(result["CompletionCalls"]) > 0, "Expected upstream call details"
         run_test("Explore Completion Endpoint", test_explore_completion_endpoint)
 
+        # Proxy (transparent passthrough): relay native Ollama requests through a dedicated Ollama endpoint.
+        proxy_state = {"cep_id": None}
+
+        def test_proxy_create_endpoint():
+            cep = client.create_completion_endpoint({
+                "TenantId": test_tenant_id, "Name": "Proxy Passthrough", "Model": completion_model,
+                "Endpoint": provider_endpoint, "ApiFormat": "Ollama", "ApiKey": provider_bearer,
+                "HealthCheckEnabled": False, "MaximumTimeoutMs": 120000
+            })
+            assert cep and "Id" in cep, "No proxy endpoint returned"
+            proxy_state["cep_id"] = cep["Id"]
+        run_test("Proxy Create Endpoint", test_proxy_create_endpoint)
+
+        def test_proxy_get_tags():
+            skip_if_provider_unavailable()
+            r = client.proxy_get(proxy_state["cep_id"], "api/tags")
+            assert r["status_code"] == 200, f"Expected 200, got {r['status_code']}: {r['body']}"
+        run_test("Proxy GET api/tags", test_proxy_get_tags)
+
+        def test_proxy_post_chat():
+            skip_if_provider_unavailable()
+            body = {"model": completion_model, "messages": [{"role": "user", "content": "Reply with exactly: OK"}], "stream": False}
+            r = client.proxy_post(proxy_state["cep_id"], "api/chat", body)
+            assert r["status_code"] == 200, f"Expected 200, got {r['status_code']}: {r['body']}"
+        run_test("Proxy POST api/chat", test_proxy_post_chat)
+
+        def test_proxy_disallowed_path():
+            # An OpenAI path is not permitted for an Ollama endpoint -> 404 by policy, not forwarded.
+            r = client.proxy_post(proxy_state["cep_id"], "v1/chat/completions", {})
+            assert r["status_code"] == 404, f"Expected 404 for disallowed sub-path, got {r['status_code']}"
+        run_test("Proxy Disallowed Sub-path (404)", test_proxy_disallowed_path)
+
+        def test_proxy_delete_endpoint():
+            if proxy_state["cep_id"]:
+                client.delete_completion_endpoint(proxy_state["cep_id"])
+        run_test("Proxy Delete Endpoint", test_proxy_delete_endpoint)
+
         # Process Single Cell (requires an active embedding endpoint)
         def test_process_single_cell():
             skip_if_provider_unavailable()
@@ -591,9 +629,12 @@ def main():
     sys.exit(0 if failed == 0 else 1)
 
 
-def is_provider_available(endpoint):
+def is_provider_available(endpoint, bearer=None):
     try:
-        with urllib.request.urlopen(endpoint.rstrip("/") + "/api/tags", timeout=2) as response:
+        req = urllib.request.Request(endpoint.rstrip("/") + "/api/tags")
+        if bearer:
+            req.add_header("Authorization", f"Bearer {bearer}")
+        with urllib.request.urlopen(req, timeout=2) as response:
             return 200 <= response.status < 300
     except Exception:
         return False

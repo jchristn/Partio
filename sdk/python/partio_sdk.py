@@ -85,6 +85,43 @@ class PartioClient:
     def explore_completion_endpoint(self, request):
         return self._request("POST", "/v1.0/explorer/completion", request)
 
+    # Proxy (transparent passthrough)
+    def proxy(self, endpoint_id, subpath, method="POST", body=None, content_type="application/json"):
+        """Send a native provider request through the transparent completion proxy.
+
+        Partio injects the upstream API key, enforces per-endpoint concurrency and timeout, and relays the
+        provider's response verbatim (status code and body). ``subpath`` must be the endpoint dialect's
+        native path -- for example ``v1/chat/completions`` for an OpenAI endpoint or ``api/chat`` for an
+        Ollama endpoint. ``body`` may be a str (sent verbatim) or a dict/list (JSON-encoded). A non-2xx
+        upstream status is returned rather than raised.
+
+        Returns a dict: ``{"status_code": int, "headers": dict, "body": str}``.
+        """
+        url = f"{self.endpoint}/v1.0/proxy/{endpoint_id.strip('/')}/{subpath.lstrip('/')}"
+        headers = {"Authorization": f"Bearer {self.access_key}"}
+        data = None
+        if body is not None and method.upper() not in ("GET", "HEAD"):
+            if isinstance(body, (dict, list)):
+                import json as _json
+                data = _json.dumps(body)
+            else:
+                data = body
+            headers["Content-Type"] = content_type
+        response = requests.request(method.upper(), url, headers=headers, data=data)
+        return {
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+            "body": response.text,
+        }
+
+    def proxy_post(self, endpoint_id, subpath, body, content_type="application/json"):
+        """Convenience: POST a native provider request body through the proxy."""
+        return self.proxy(endpoint_id, subpath, "POST", body, content_type)
+
+    def proxy_get(self, endpoint_id, subpath):
+        """Convenience: GET a native provider sub-path (for example model discovery) through the proxy."""
+        return self.proxy(endpoint_id, subpath, "GET")
+
     # Tenants
     def create_tenant(self, data):
         return self._request("PUT", "/v1.0/tenants", data)

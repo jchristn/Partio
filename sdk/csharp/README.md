@@ -16,6 +16,7 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 - Embedding & Completion Endpoint Health (`GetEndpointHealthAsync`, `GetAllEndpointHealthAsync`, `GetCompletionEndpointHealthAsync`, `GetAllCompletionEndpointHealthAsync`)
 - Semantic cell processing (`ProcessAsync`, `ProcessBatchAsync`)
 - Endpoint explorer (`ExploreEmbeddingEndpointAsync`, `ExploreCompletionEndpointAsync`)
+- Transparent completion proxy (`ProxyAsync`, `ProxyPostAsync`, `ProxyGetAsync`) — relay a native provider request through an endpoint and get the upstream response (`ProxyResponse`) verbatim; a non-2xx upstream status is returned, not thrown
 - Request history (`GetRequestHistoryAsync`, `GetRequestHistoryDetailAsync`, `DeleteRequestHistoryAsync`, `EnumerateRequestHistoryAsync`)
 
 Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.

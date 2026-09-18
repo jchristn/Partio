@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-alpha-orange?style=flat-square" alt="Alpha">
-  <img src="https://img.shields.io/badge/version-0.6.0-blue?style=flat-square" alt="v0.6.0">
+  <img src="https://img.shields.io/badge/version-0.7.0-blue?style=flat-square" alt="v0.7.0">
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square" alt=".NET 10.0">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--server-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Server">
@@ -13,7 +13,7 @@
 
 ---
 
-> ### ⚠️ v0.6.0 — Alpha
+> ### ⚠️ v0.7.0 — Alpha
 >
 > Partio is **alpha software**. It works, it's tested, and it's useful today — but APIs, models, configuration keys, and response shapes are **subject to change** while we iterate toward a stable surface.
 >
@@ -229,12 +229,13 @@ curl -X POST http://localhost:8400/v1.0/process \
 - **Completion (inference) endpoint management** for configuring LLM endpoints (Ollama, OpenAI, Gemini, vLLM) with health checks.
 - **API Explorer** in the dashboard for exercising a specific embedding or inference endpoint through the Partio backend path and inspecting upstream call details.
 - **PolyPrompt-backed provider runtime** centralizing provider-specific embeddings and inference wiring in a dedicated library.
+- **Transparent completion proxy** (`/v1.0/proxy/{endpointId}/...`) that relays a caller's **native** provider request (OpenAI, Ollama, Gemini, vLLM) to a managed endpoint's upstream and returns the response **verbatim** — point an off-the-shelf provider SDK's base URL at Partio, keep the upstream API key server-side, pass upstream status codes through, and get **streaming** for free. No request/response translation. The dashboard adds a **Chat** view — a live conversation through the proxy with **token streaming** (Ollama, OpenAI/vLLM, and Gemini), configurable generation parameters (temperature, top-p, max tokens), a **Stop** control to cancel a response, and a per-message metrics tooltip (time-to-first-token, total time, prompt/output/total/cached tokens, provider timings) — plus a **Proxy** mode in the API Explorer.
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history.
 - **SDKs** for C#, Python, and JavaScript.
 - **Docker images** with multi-architecture support (amd64/arm64).
 - **Pagination and filtering** with cursor-based continuation tokens, sorting, and label/tag/name/active filters on all list endpoints.
 - **Built-in observability** — Watson 7.1 HTTP metrics and per-request traces plus `partio_*` application metrics and spans for the processing pipeline, provider integrations, and background workers, exposed on Prometheus scrape endpoints and OTLP, with a bundled Prometheus + Tempo + Loki + Grafana stack and provisioned per-domain dashboards.
-- **MCP server** — a standalone `partio-mcp` executable (Voltaic 0.6.1) that exposes endpoint management and inference as 14 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
+- **MCP server** — a standalone `partio-mcp` executable (Voltaic 0.6.1) that exposes endpoint management and inference as 15 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
 
 ## Observability
 
@@ -337,6 +338,12 @@ All endpoints use JSON and require an `Authorization: Bearer {token}` header unl
 |--------|-------|-------------|
 | `POST` | `/v1.0/explorer/embedding` | Exercise one embedding endpoint through Partio and inspect upstream call details |
 | `POST` | `/v1.0/explorer/completion` | Exercise one inference endpoint through Partio and inspect upstream call details |
+
+### Proxy
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` / `POST` | `/v1.0/proxy/{endpointId}/{native-subpath}` | Transparent passthrough: relay a **native** provider request to the endpoint's upstream and return the response **verbatim** (status codes and streaming pass through; upstream key injected server-side; no translation) |
 
 ### Model loading
 
@@ -566,9 +573,16 @@ EndpointExplorerCompletionResponse? explorer = await client.ExploreCompletionEnd
     Prompt = "Explain what Partio does in one short paragraph.",
     TimeoutMs = 60000
 });
+
+// Transparent proxy: send a native provider request, get the provider's response verbatim.
+ProxyResponse proxied = await client.ProxyPostAsync(
+    "cep_YOUR_ENDPOINT_ID",
+    "v1/chat/completions",
+    "{\"model\":\"gpt-4.1-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}]}");
+Console.WriteLine($"{proxied.StatusCode}: {proxied.Body}");
 ```
 
-Explorer responses include `TokenizationProfile`. When a process route times out upstream, the SDK throws `PartioException` with HTTP status `504`; when an endpoint is already at its concurrency ceiling, Partio returns HTTP `429`.
+The proxy method (`ProxyAsync`/`ProxyPostAsync`/`ProxyGetAsync`, mirrored as `proxy`/`proxy_post`/`proxy_get` in Python and `proxy`/`proxyPost`/`proxyGet` in JavaScript) returns the upstream status and body without raising on a non-2xx — the transparent proxy passes provider status codes through. Explorer responses include `TokenizationProfile`. When a process route times out upstream, the SDK throws `PartioException` with HTTP status `504`; when an endpoint is already at its concurrency ceiling, Partio returns HTTP `429`.
 
 ### Python
 

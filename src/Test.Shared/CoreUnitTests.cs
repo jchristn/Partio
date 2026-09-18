@@ -7,6 +7,7 @@ namespace Test.Shared
     using Partio.Core.Chunking;
     using Partio.Core.Enums;
     using Partio.Core.Models;
+    using Partio.Core.Proxy;
     using Partio.Core.Serialization;
     using Partio.Core.Tokenization;
     using SyslogLogging;
@@ -356,6 +357,60 @@ namespace Test.Shared
 
                 Check.True(chunks.Count >= 2, "Expected multiple chunks for oversized text.");
                 Check.All(chunks, chunk => Check.True(tokenizer.CountTokens(chunk.Text) <= budget, "Chunk exceeded budget."));
+            }));
+
+            // ===== ProxyPathPolicy =====
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: normalizes surrounding slashes and whitespace", () =>
+            {
+                Check.True(ProxyPathPolicy.Normalize("/v1/chat/completions/") == "v1/chat/completions", "Trim slashes");
+                Check.True(ProxyPathPolicy.Normalize("  api/chat  ") == "api/chat", "Trim whitespace");
+                Check.True(ProxyPathPolicy.Normalize(null) == string.Empty, "Null -> empty");
+                Check.True(ProxyPathPolicy.Normalize("") == string.Empty, "Empty -> empty");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: OpenAI and vLLM allow only v1 completion paths", () =>
+            {
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.OpenAI, "v1/chat/completions"), "OpenAI chat");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.OpenAI, "/v1/embeddings/"), "OpenAI embeddings (slashes)");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.OpenAI, "v1/models"), "OpenAI models");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.OpenAI, "v1/models/gpt-4.1-mini"), "OpenAI model by id");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.vLLM, "v1/chat/completions"), "vLLM chat");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.OpenAI, "api/chat"), "OpenAI rejects Ollama path");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.OpenAI, "v1/../secrets"), "OpenAI rejects traversal-like path");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: Ollama allows only api sub-paths", () =>
+            {
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.Ollama, "api/chat"), "Ollama chat");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.Ollama, "api/generate"), "Ollama generate");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.Ollama, "api/tags"), "Ollama tags");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.Ollama, "v1/chat/completions"), "Ollama rejects OpenAI path");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.Ollama, ""), "Ollama rejects empty");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: Gemini allows v1beta model paths by prefix", () =>
+            {
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.Gemini, "v1beta/models"), "Gemini models list");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.Gemini, "v1beta/models/gemini-1.5-flash:generateContent"), "Gemini generate");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.Gemini, "v1/chat/completions"), "Gemini rejects OpenAI path");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: builds upstream URL joining base, sub-path, and query", () =>
+            {
+                Check.True(ProxyPathPolicy.BuildUpstreamUrl("http://host:11434/", "/api/chat", null) == "http://host:11434/api/chat", "Join + trim");
+                Check.True(ProxyPathPolicy.BuildUpstreamUrl("http://host:11434", "api/chat", "?stream=true") == "http://host:11434/api/chat?stream=true", "Query with '?'");
+                Check.True(ProxyPathPolicy.BuildUpstreamUrl("http://host", "v1/models", "limit=5") == "http://host/v1/models?limit=5", "Query without '?'");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: resolves the correct upstream auth header per dialect", () =>
+            {
+                ProxyAuthHeader? openai = ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.OpenAI, "sk-123");
+                Check.True(openai != null && openai.Value.Name == "Authorization" && openai.Value.Value == "Bearer sk-123", "OpenAI bearer");
+                ProxyAuthHeader? gemini = ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.Gemini, "g-123");
+                Check.True(gemini != null && gemini.Value.Name == "x-goog-api-key" && gemini.Value.Value == "g-123", "Gemini key header");
+                Check.True(ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.Ollama, null) == null, "No key -> no header");
+                Check.True(ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.Ollama, "") == null, "Empty key -> no header");
             }));
 
             return tests;

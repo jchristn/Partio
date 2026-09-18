@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.6.0" }
+{ "Status": "Healthy", "Version": "0.7.0" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.6.0" }
+{ "Status": "Healthy", "Version": "0.7.0" }
 ```
 
 ---
@@ -560,6 +560,81 @@ summarization engine as `/v1.0/process`.
 
 **Errors**: `400` (missing `Text` or `CompletionEndpointId`), `401`, `404` (unknown endpoint), `504`
 (completion timeout).
+
+---
+
+## Proxy
+
+The proxy is a **transparent passthrough** to a completion endpoint's upstream provider. You send the
+provider's **native** request and Partio relays the provider's response **verbatim** — it performs no
+request/response translation. This is the recommended way to use an off-the-shelf provider SDK (OpenAI,
+Ollama, Gemini, vLLM) against a Partio-managed endpoint: point the SDK's base URL at
+`{baseUrl}/v1.0/proxy/{endpointId}` and the SDK appends its own native sub-path.
+
+For each proxied request Partio: authenticates the caller (tenant bearer), resolves the endpoint (tenant
+scope + `Active` + healthy), verifies the sub-path is valid for that endpoint's `ApiFormat`, **injects the
+upstream API key** (so the caller never holds the provider credential), enforces the endpoint's
+`MaxConcurrentRequests` / `MaxQueueDepth` / `MaximumTimeoutMs`, and records request history.
+
+Two behaviors differ from the rest of the API on purpose, for native-SDK compatibility:
+
+- **Status codes pass through.** A reached upstream's status and body are relayed exactly (real `429`,
+  `500`, `504`, and native provider error JSON) — the proxy does **not** wrap failures as `200` +
+  `Success=false` the way `/v1.0/completion` does.
+- **Streaming passes through.** The upstream response is relayed as it arrives (chunked transfer for
+  `text/event-stream` and provider streaming such as Ollama NDJSON), so `"stream": true` works end to end.
+
+There is **no translation**: an endpoint speaks exactly one dialect and only that dialect's native
+sub-paths are relayed. A request for another provider's path is rejected, never forwarded.
+
+### {GET,POST} /v1.0/proxy/{endpointId}/{native-subpath}
+
+Relay a native provider request to the endpoint's upstream. The request body and headers are forwarded as
+sent (with hop-by-hop and the inbound `Authorization` header stripped; Partio injects the upstream key).
+
+**Path parameters**:
+- `endpointId` — target completion endpoint ID (`cep_...`).
+- `native-subpath` — the provider's own path (see the allow-list below).
+
+**Allowed sub-paths by `ApiFormat`** (any other path returns `404`):
+- **OpenAI / vLLM**: `v1/chat/completions`, `v1/completions`, `v1/embeddings`, `v1/models`, `v1/models/{model}`
+- **Ollama**: `api/chat`, `api/generate`, `api/embed`, `api/embeddings`, `api/tags`, `api/show`, `api/ps`, `api/version`
+- **Gemini**: `v1beta/models`, `v1beta/models/{model}:{method}`
+
+**Example** (OpenAI-dialect endpoint):
+
+```
+POST /v1.0/proxy/cep_abc123/v1/chat/completions
+Authorization: Bearer {partio-token}
+Content-Type: application/json
+
+{ "model": "gpt-4.1-mini", "messages": [ { "role": "user", "content": "Say hello in one word." } ] }
+```
+
+**Response**: the upstream provider's response, verbatim (status code, `Content-Type`, and body). Partio adds
+`X-Partio-Endpoint-Id` and `X-Partio-Model` response headers.
+
+```json
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "choices": [ { "index": 0, "message": { "role": "assistant", "content": "Hello" } } ]
+}
+```
+
+Using an off-the-shelf SDK, set only the base URL:
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:8400/v1.0/proxy/cep_abc123/v1", api_key="{partio-token}")
+client.chat.completions.create(model="gpt-4.1-mini", messages=[{"role": "user", "content": "Hi"}])
+```
+
+**Errors** (Partio-level failures return a Partio JSON error body): `400` (missing endpoint ID or
+sub-path), `401` (bad token), `404` (unknown/inactive endpoint, or a sub-path not permitted for the
+endpoint's dialect), `429` (endpoint concurrency limit reached), `502` (endpoint unhealthy or upstream
+unreachable), `504` (upstream timeout). A **reached** upstream's own non-2xx status is passed through
+unchanged rather than remapped.
 
 ---
 

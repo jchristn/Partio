@@ -225,6 +225,22 @@ namespace Partio.McpServer.Mcp
                     EmbedResponse? resp = await ResolveClient().EmbedAsync(req).ConfigureAwait(false);
                     return McpToolCallResult.FromStructured(resp);
                 });
+
+            server.RegisterTool(
+                "partio_proxy",
+                "Relay a native provider request through a completion endpoint's transparent proxy. Partio injects the upstream API key, enforces per-endpoint concurrency/timeout, and returns the provider's response verbatim as { StatusCode, ContentType, Body, Headers }. 'subpath' must be the endpoint dialect's native path (for example v1/chat/completions for an OpenAI endpoint or api/chat for an Ollama endpoint); 'body' is the raw request body sent verbatim (no translation). A non-2xx upstream status is returned, not raised.",
+                SchemaProxy(),
+                async (parameters, token) =>
+                {
+                    RpcParameters p = NonNull(parameters);
+                    string endpointId = RequireString(parameters, "endpointId");
+                    string subpath = RequireString(parameters, "subpath");
+                    string method = p.ContainsProperty("method") ? (p.GetString("method") ?? "POST") : "POST";
+                    string? body = p.ContainsProperty("body") ? p.GetString("body") : null;
+                    string contentType = p.ContainsProperty("contentType") ? (p.GetString("contentType") ?? "application/json") : "application/json";
+                    ProxyResponse resp = await ResolveClient().ProxyAsync(endpointId, subpath, new System.Net.Http.HttpMethod(method), body, contentType).ConfigureAwait(false);
+                    return McpToolCallResult.FromStructured(resp);
+                });
         }
 
         // ---------------- Handlers / helpers ----------------
@@ -256,7 +272,7 @@ namespace Partio.McpServer.Mcp
                     "partio_create_completion_endpoint", "partio_update_completion_endpoint", "partio_delete_completion_endpoint",
                     "partio_enumerate_embedding_endpoints", "partio_get_embedding_endpoint",
                     "partio_create_embedding_endpoint", "partio_update_embedding_endpoint", "partio_delete_embedding_endpoint",
-                    "partio_summarize", "partio_chunk", "partio_embed"
+                    "partio_summarize", "partio_chunk", "partio_embed", "partio_proxy"
                 }
             });
         }
@@ -393,6 +409,23 @@ namespace Partio.McpServer.Mcp
         private static object SchemaFreeform()
         {
             return new { type = "object", additionalProperties = true };
+        }
+
+        private static object SchemaProxy()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    endpointId = new { type = "string", description = "Target completion endpoint id." },
+                    subpath = new { type = "string", description = "Native provider sub-path, for example 'v1/chat/completions' (OpenAI/vLLM), 'api/chat' (Ollama), or 'v1beta/models/{model}:generateContent' (Gemini)." },
+                    method = new { type = "string", description = "HTTP method (default POST). Use GET for discovery paths such as v1/models or api/tags." },
+                    body = new { type = "string", description = "Raw request body, sent verbatim to the upstream provider. Omit for GET." },
+                    contentType = new { type = "string", description = "Content type of the body (default application/json)." }
+                },
+                required = new[] { "endpointId", "subpath" }
+            };
         }
 
         private static object SchemaEndpoint(bool includeId)
