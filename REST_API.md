@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.7.0" }
+{ "Status": "Healthy", "Version": "0.5.0" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.7.0" }
+{ "Status": "Healthy", "Version": "0.5.0" }
 ```
 
 ---

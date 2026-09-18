@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.7.0 - 2026-09-18
+## v0.5.0 - 2026-08-26
 
 ### Added
 - **`/v1.0/proxy/{endpointId}/<provider-native-subpath>`**: a transparent completion proxy that relays a
@@ -35,10 +35,6 @@
   / `--upstream-bearer` / `--upstream-format` / `--inference-model`), proxy exercises in all three SDK test
   harnesses (C#, Python, JavaScript), a self-booting `Partio.Sdk.ProxyLiveTest` console for live end-to-end
   runs, REST API docs, MCP API docs, and Postman entries.
-
-## v0.6.0 - 2026-09-09
-
-### Added
 - **`POST /v1.0/completion`**: a production completion endpoint that generates a completion for a prompt
   through a configured completion endpoint using a **single upstream call**. It mirrors `POST /v1.0/embed`
   for completions and is the recommended way to validate that a completion endpoint is reachable and
@@ -50,10 +46,6 @@
   `Success=false` and `StatusCode` set to the upstream failure code (for example `504`); an endpoint
   concurrency limit returns `429`. Added to the C# SDK as `PartioClient.CompleteAsync`, with integration
   tests, REST API docs, and a Postman entry.
-
-## v0.5.0 - 2026-08-26
-
-### Added
 - **Per-endpoint request queueing** via a new `MaxQueueDepth` setting on embedding and completion
   endpoints (default `0`, clamped server-side to `>= 0`). Once `MaxConcurrentRequests` upstream calls
   are in flight, up to `MaxQueueDepth` further requests wait for a slot instead of being rejected. A
