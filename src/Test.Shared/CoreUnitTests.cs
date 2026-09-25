@@ -58,6 +58,36 @@ namespace Test.Shared
                 }
             }));
 
+            // ===== SDK model timestamps =====
+
+            tests.Add(TestCaseFactory.Sync("Core", "SDK models default timestamps to UtcNow, never DateTime.MinValue", () =>
+            {
+                DateTime before = DateTime.UtcNow;
+                List<(string Name, object Model, DateTime Created, DateTime Updated)> models = new List<(string, object, DateTime, DateTime)>();
+
+                Partio.Sdk.Models.TenantMetadata tenant = new Partio.Sdk.Models.TenantMetadata();
+                models.Add(("TenantMetadata", tenant, tenant.CreatedUtc, tenant.LastUpdateUtc));
+                Partio.Sdk.Models.UserMaster user = new Partio.Sdk.Models.UserMaster();
+                models.Add(("UserMaster", user, user.CreatedUtc, user.LastUpdateUtc));
+                Partio.Sdk.Models.Credential credential = new Partio.Sdk.Models.Credential();
+                models.Add(("Credential", credential, credential.CreatedUtc, credential.LastUpdateUtc));
+                Partio.Sdk.Models.EmbeddingEndpoint embedding = new Partio.Sdk.Models.EmbeddingEndpoint();
+                models.Add(("EmbeddingEndpoint", embedding, embedding.CreatedUtc, embedding.LastUpdateUtc));
+                Partio.Sdk.Models.CompletionEndpoint completion = new Partio.Sdk.Models.CompletionEndpoint();
+                models.Add(("CompletionEndpoint", completion, completion.CreatedUtc, completion.LastUpdateUtc));
+
+                DateTime after = DateTime.UtcNow;
+                foreach ((string name, object model, DateTime created, DateTime updated) in models)
+                {
+                    Check.True(created >= before && created <= after, name + ".CreatedUtc should default to UtcNow but was " + created.ToString("o"));
+                    Check.True(updated >= before && updated <= after, name + ".LastUpdateUtc should default to UtcNow but was " + updated.ToString("o"));
+                    Check.Equal(DateTimeKind.Utc, created.Kind, name + ".CreatedUtc should be UTC.");
+
+                    string json = System.Text.Json.JsonSerializer.Serialize(model, model.GetType());
+                    Check.False(json.Contains("0001-01-01"), name + " must not serialize DateTime.MinValue: " + json);
+                }
+            }));
+
             tests.Add(TestCaseFactory.Sync("Core", "IdGenerator: identifiers are unique across all entity types", () =>
             {
                 HashSet<string> generated = new HashSet<string>(StringComparer.Ordinal);

@@ -257,6 +257,10 @@ namespace Test.Shared
             Check.False(string.IsNullOrEmpty(id), "create should return an id.");
             Check.Equal(5, created.GetProperty("MaxQueueDepth").GetInt32());
 
+            // Timestamps are server-set: never DateTime.MinValue, even though the tool passes an SDK model.
+            DateTime createdUtc = created.GetProperty("CreatedUtc").GetDateTime().ToUniversalTime();
+            Check.True((DateTime.UtcNow - createdUtc).Duration() < TimeSpan.FromMinutes(2), "CreatedUtc should be server-set near now but was " + createdUtc.ToString("o"));
+
             try
             {
                 JsonElement fetched = await CallToolStructuredAsync("partio_get_completion_endpoint", new { id }, _AdminKey).ConfigureAwait(false);

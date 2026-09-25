@@ -3418,6 +3418,7 @@ namespace Partio.Server
             RequireAdmin(req);
             TenantMetadata? tenant = req.GetData<TenantMetadata>();
             if (tenant == null) throw new ArgumentException("Request body is required.");
+            tenant.CreatedUtc = tenant.LastUpdateUtc = DateTime.UtcNow;
 
             TenantMetadata created = await _Database.Tenant.CreateAsync(tenant).ConfigureAwait(false);
 
@@ -3497,7 +3498,10 @@ namespace Partio.Server
             string id = req.Parameters["id"];
             TenantMetadata? tenant = req.GetData<TenantMetadata>();
             if (tenant == null) throw new ArgumentException("Request body is required.");
+            TenantMetadata existing = await _Database.Tenant.ReadByIdAsync(id).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException("Tenant not found: " + id);
             tenant.Id = id;
+            tenant.CreatedUtc = existing.CreatedUtc;
             TenantMetadata updated = await _Database.Tenant.UpdateAsync(tenant).ConfigureAwait(false);
             return updated;
         }
@@ -3538,6 +3542,7 @@ namespace Partio.Server
             RequireAdmin(req);
             UserMaster? user = req.GetData<UserMaster>();
             if (user == null) throw new ArgumentException("Request body is required.");
+            user.CreatedUtc = user.LastUpdateUtc = DateTime.UtcNow;
             UserMaster created = await _Database.User.CreateAsync(user).ConfigureAwait(false);
             return UserMaster.Redact(created);
         }
@@ -3557,7 +3562,10 @@ namespace Partio.Server
             string id = req.Parameters["id"];
             UserMaster? user = req.GetData<UserMaster>();
             if (user == null) throw new ArgumentException("Request body is required.");
+            UserMaster existing = await _Database.User.ReadByIdAsync(id).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException("User not found: " + id);
             user.Id = id;
+            user.CreatedUtc = existing.CreatedUtc;
             UserMaster updated = await _Database.User.UpdateAsync(user).ConfigureAwait(false);
             return UserMaster.Redact(updated);
         }
@@ -3604,6 +3612,7 @@ namespace Partio.Server
             RequireAdmin(req);
             Credential? cred = req.GetData<Credential>();
             if (cred == null) throw new ArgumentException("Request body is required.");
+            cred.CreatedUtc = cred.LastUpdateUtc = DateTime.UtcNow;
             Credential created = await _Database.Credential.CreateAsync(cred).ConfigureAwait(false);
             req.Http.Response.StatusCode = 201;
             return created;
@@ -3624,7 +3633,10 @@ namespace Partio.Server
             string id = req.Parameters["id"];
             Credential? cred = req.GetData<Credential>();
             if (cred == null) throw new ArgumentException("Request body is required.");
+            Credential existing = await _Database.Credential.ReadByIdAsync(id).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException("Credential not found: " + id);
             cred.Id = id;
+            cred.CreatedUtc = existing.CreatedUtc;
             Credential updated = await _Database.Credential.UpdateAsync(cred).ConfigureAwait(false);
             return updated;
         }
@@ -3667,6 +3679,7 @@ namespace Partio.Server
             RequireAdmin(req);
             EmbeddingEndpoint? ep = req.GetData<EmbeddingEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
+            ep.CreatedUtc = ep.LastUpdateUtc = DateTime.UtcNow;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
             EmbeddingEndpoint created = await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
             _TokenizationResolver?.Invalidate(created.Id);
@@ -3690,7 +3703,10 @@ namespace Partio.Server
             string id = req.Parameters["id"];
             EmbeddingEndpoint? ep = req.GetData<EmbeddingEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
+            EmbeddingEndpoint existing = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException("Embedding endpoint not found: " + id);
             ep.Id = id;
+            ep.CreatedUtc = existing.CreatedUtc;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
             EmbeddingEndpoint updated = await _Database.EmbeddingEndpoint.UpdateAsync(ep).ConfigureAwait(false);
             _TokenizationResolver?.Invalidate(updated.Id);
@@ -3776,6 +3792,7 @@ namespace Partio.Server
             RequireAdmin(req);
             CompletionEndpoint? ep = req.GetData<CompletionEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
+            ep.CreatedUtc = ep.LastUpdateUtc = DateTime.UtcNow;
             CompletionEndpoint.ApplyHealthCheckDefaults(ep);
             CompletionEndpoint created = await _Database.CompletionEndpoint.CreateAsync(ep).ConfigureAwait(false);
             _CompletionHealthCheckService?.OnEndpointCreated(created);
@@ -3798,7 +3815,10 @@ namespace Partio.Server
             string id = req.Parameters["id"];
             CompletionEndpoint? ep = req.GetData<CompletionEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
+            CompletionEndpoint existing = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException("Completion endpoint not found: " + id);
             ep.Id = id;
+            ep.CreatedUtc = existing.CreatedUtc;
             CompletionEndpoint.ApplyHealthCheckDefaults(ep);
             CompletionEndpoint updated = await _Database.CompletionEndpoint.UpdateAsync(ep).ConfigureAwait(false);
             _CompletionHealthCheckService?.OnEndpointUpdated(updated);

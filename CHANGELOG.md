@@ -108,6 +108,12 @@
   false` schemas are enforced (`partio_capabilities` rejects undeclared arguments with `-32602`). Stateless
   `2026-07-28` clients such as Claude Code 2.1.x now see the tools on both `/mcp` and `/rpc`.
   `partio_capabilities` reports the negotiated default protocol version (`2025-11-25`).
+- **`CreatedUtc` and `LastUpdateUtc` are server-set.** Create (`PUT`) on tenants, users, credentials, and
+  embedding/completion endpoints stamps both from the server clock and ignores caller-supplied values;
+  update (`PUT /{id}`) keeps the stored `CreatedUtc` and stamps `LastUpdateUtc`. Previously the caller's
+  values were stored verbatim, so C# SDK callers (and MCP tools, which use the SDK) created records dated
+  `0001-01-01`. Update of a nonexistent id now returns `404` instead of echoing the body. The C# SDK
+  models now default both timestamps to `DateTime.UtcNow` rather than `DateTime.MinValue`.
 - Dependency updates: Watson 7.2.0, PolyPrompt 2.6.0, Microsoft.NET.Test.Sdk 18.10.1, NUnit3TestAdapter 6.3.0.
 - Added the `Mcp` Touchstone integration suite (20 cases, run by the console, xUnit, and NUnit runners): it
   starts Partio and `partio-mcp` and exercises the `/rpc`, handshake `/mcp`, and stateless Claude Code

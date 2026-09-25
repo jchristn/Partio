@@ -20,9 +20,9 @@ namespace Partio.Sdk.Models
         public Dictionary<string, string>? Tags { get; set; }
 
         [JsonPropertyName("CreatedUtc")]
-        public DateTime CreatedUtc { get; set; }
+        public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 
         [JsonPropertyName("LastUpdateUtc")]
-        public DateTime LastUpdateUtc { get; set; }
+        public DateTime LastUpdateUtc { get; set; } = DateTime.UtcNow;
     }
 }

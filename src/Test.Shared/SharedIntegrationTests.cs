@@ -10,7 +10,7 @@ namespace Test.Shared
     using Partio.Sdk.Models;
     using Touchstone.Core;
 
-    public static class SharedIntegrationTests
+    public static partial class SharedIntegrationTests
     {
         private const string DefaultOllamaEndpoint = "http://127.0.0.1:11434";
         private static string _Endpoint = "http://localhost:8400";
@@ -2375,6 +2375,11 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Unauthenticated Request (401)", async () => await TestUnauthenticatedRequestAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Invalid Bearer Token (401)", async () => await TestInvalidBearerTokenAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Non-existent Resource (404)", async () => await TestNonExistentResourceAsync()));
+
+            // Server-set timestamps
+            tests.Add(TestCaseFactory.Async("Integration","Server Sets Timestamps (create/update ignore caller values)", async () => await TestServerSetTimestampsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Server Sets Timestamps When Omitted", async () => await TestServerSetTimestampsWhenOmittedAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Update Missing Resource (404)", async () => await TestUpdateMissingResourceReturns404Async()));
 
             // Cleanup
             tests.Add(TestCaseFactory.Async("Integration","Delete Completion Endpoint", async () => await TestDeleteCompletionEndpointAsync()));
