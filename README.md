@@ -235,7 +235,7 @@ curl -X POST http://localhost:8400/v1.0/process \
 - **Docker images** with multi-architecture support (amd64/arm64).
 - **Pagination and filtering** with cursor-based continuation tokens, sorting, and label/tag/name/active filters on all list endpoints.
 - **Built-in observability** — Watson 7.1 HTTP metrics and per-request traces plus `partio_*` application metrics and spans for the processing pipeline, provider integrations, and background workers, exposed on Prometheus scrape endpoints and OTLP, with a bundled Prometheus + Tempo + Loki + Grafana stack and provisioned per-domain dashboards.
-- **MCP server** — a standalone `partio-mcp` executable (Voltaic 0.6.1) that exposes endpoint management and inference as 15 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
+- **MCP server** — a standalone `partio-mcp` executable (Voltaic 2.0) that exposes endpoint management and inference as 15 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
 
 ## Observability
 

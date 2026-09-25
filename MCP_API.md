@@ -1,6 +1,6 @@
 # Partio MCP Server
 
-`partio-mcp` is a standalone Model Context Protocol server that puts Partio's endpoint management and inference operations in front of an AI agent as callable tools. It is a separate executable from the Partio REST server — you point it at a running Partio instance, and it calls that server through the Partio C# SDK on your behalf, using your own bearer token. It is built on **Voltaic 0.7.1** and speaks **JSON-RPC 2.0** over MCP Streamable HTTP at `/mcp` (with a plain JSON-RPC endpoint at `/rpc` and an SSE stream at `/events`).
+`partio-mcp` is a standalone Model Context Protocol server that puts Partio's endpoint management and inference operations in front of an AI agent as callable tools. It is a separate executable from the Partio REST server — you point it at a running Partio instance, and it calls that server through the Partio C# SDK on your behalf, using your own bearer token. It is built on **Voltaic 2.0** and speaks **JSON-RPC 2.0** over MCP Streamable HTTP at `/mcp` (with a plain JSON-RPC endpoint at `/rpc` and an SSE stream at `/events`).
 
 The MCP server does not invent its own authorization model. It carries the same credentials and enforces the same permissions as the REST API — every tool call is a Partio SDK call made with the caller's own token, so an agent can do through MCP exactly what that token can do directly against REST, and no more.
 
@@ -12,7 +12,7 @@ A few things bypass this check by design:
 
 - **CORS preflight** (`OPTIONS`) requests, so browsers can negotiate cross-origin access.
 - The **health endpoint** `GET /`, so liveness probes work without a credential.
-- The **`ping`** JSON-RPC method, so a client can confirm the transport is alive before authenticating.
+- The MCP protocol **`ping`** method, so a client can confirm the transport is alive before authenticating. It returns an empty result (`{}`) and runs no tool code.
 
 Authentication can be turned off entirely by setting `RequireAuthentication: false` in configuration. Do that only on a trusted local socket; with it off, any caller that can reach the port can invoke every tool.
 
@@ -27,7 +27,8 @@ The server implements the standard MCP JSON-RPC methods.
 | `initialize` | Handshake. The client announces its protocol version and capabilities; the server returns its own, including server info. |
 | `tools/list` | Return the catalog of available tools, each with a name, description, and JSON Schema for its arguments. |
 | `tools/call` | Invoke one tool by name with an `arguments` object. Returns the tool result. |
-| `ping` | Liveness check. Bypasses authentication. |
+| `ping` | Liveness check. Returns `{}`. Bypasses authentication. |
+| `server/discover` | Stateless-revision (`2026-07-28`) discovery, as sent by Claude Code 2.1.x. |
 
 A `tools/call` result carries **structured content** — the tool's return value is a typed object, not just a formatted string — so a client can consume the result programmatically rather than parsing prose. A minimal call and reply:
 
@@ -56,7 +57,7 @@ A `tools/call` result carries **structured content** — the tool's return value
     "structuredContent": {
       "McpServerVersion": "0.5.0",
       "PartioServerHealthy": true,
-      "ProtocolVersion": "2025-06-18",
+      "ProtocolVersion": "2025-11-25",
       "Tools": ["partio_capabilities", "partio_enumerate_completion_endpoints", "..."]
     }
   }
@@ -140,7 +141,9 @@ The `get` result includes the full endpoint object, `MaxConcurrentRequests` and 
 
 ## Tools
 
-Fifteen tools are registered. All of them require authentication (subject to the bypass rules above); none is anonymous.
+Fifteen tools are registered, and `tools/list` returns exactly these fifteen: the server publishes no Voltaic diagnostic or demo tools (`echo`, `getTime`, `getSessions`, ...). All of them require authentication (subject to the bypass rules above); none is anonymous.
+
+Tools are invoked only through `tools/call`; calling a tool name as a bare JSON-RPC method returns `-32601` (method not found). Arguments are validated against each tool's input schema before the tool runs: a missing required argument, a wrong argument type, or an undeclared argument on a tool whose schema sets `additionalProperties: false` (for example `partio_capabilities`) is rejected with `-32602`. The endpoint create/update tools and the inference tools accept additional fields, so a full endpoint or request definition can be passed through.
 
 | Tool | Purpose | Auth |
 |---|---|---|

@@ -36,7 +36,8 @@ namespace Test.Shared
 
         /// <summary>
         /// Every suite, including the self-hosted integration suite that starts an in-process
-        /// Partio server and Ollama-compatible upstream via its before/after hooks.
+        /// Partio server and Ollama-compatible upstream via its before/after hooks, and the MCP
+        /// integration suite that additionally starts the partio-mcp server against it.
         /// </summary>
         public static IReadOnlyList<TestSuiteDescriptor> All
         {
@@ -44,6 +45,7 @@ namespace Test.Shared
             {
                 List<TestSuiteDescriptor> suites = UnitSuites.ToList();
                 suites.Add(SharedIntegrationTests.SelfHostedSuite());
+                suites.Add(McpServerIntegrationTests.SelfHostedSuite());
                 return suites;
             }
         }

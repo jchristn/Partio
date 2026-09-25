@@ -40,8 +40,8 @@ namespace Partio.McpServer.Mcp
                 _Settings.McpPort,
                 _Settings.McpRpcPath,
                 _Settings.McpSsePath,
-                true,
-                _Settings.McpPath);
+                includeDiagnosticTools: false,
+                mcpPath: _Settings.McpPath);
 
             _Server.ServerName = "partio-mcp";
             _Server.ServerVersion = typeof(PartioMcpServer).Assembly.GetName().Version?.ToString() ?? "0.0.0";

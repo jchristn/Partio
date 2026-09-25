@@ -261,7 +261,7 @@ namespace Partio.McpServer.Mcp
             {
                 Server = "partio-mcp",
                 Version = typeof(PartioMcpToolCatalog).Assembly.GetName().Version?.ToString() ?? "0.0.0",
-                ProtocolVersion = "2025-06-18",
+                ProtocolVersion = McpProtocol.LatestProtocolVersion,
                 PartioEndpoint = _Settings.PartioEndpoint,
                 PartioHealth = health,
                 MaxResults = _Settings.MaxResults,

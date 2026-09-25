@@ -101,6 +101,17 @@
 - Grafana **Overview → Server Up** stat now renders `UP` (green) / `DOWN` (red) instead of a bare `1`.
 - Moved `LOAD_MODELS.md` and `TELEMETRY_PLAN.md` into `archive/` — the model-loading API is documented
   in `README.md`, `REST_API.md`, and the Postman collection.
+- **MCP server upgraded from Voltaic 0.7.1 to 2.0.0.** `tools/list` now returns exactly the fifteen Partio
+  tools (Voltaic's `ping`/`echo`/`getTime`/`getSessions` demo tools are no longer published; `getSessions`
+  disclosed other callers' session ids). The protocol `ping` returns `{}` instead of `"pong"`. Tools are
+  callable only through `tools/call` (a bare tool-name method returns `-32601`), and `additionalProperties:
+  false` schemas are enforced (`partio_capabilities` rejects undeclared arguments with `-32602`). Stateless
+  `2026-07-28` clients such as Claude Code 2.1.x now see the tools on both `/mcp` and `/rpc`.
+  `partio_capabilities` reports the negotiated default protocol version (`2025-11-25`).
+- Dependency updates: Watson 7.2.0, PolyPrompt 2.6.0, Microsoft.NET.Test.Sdk 18.10.1, NUnit3TestAdapter 6.3.0.
+- Added the `Mcp` Touchstone integration suite (20 cases, run by the console, xUnit, and NUnit runners): it
+  starts Partio and `partio-mcp` and exercises the `/rpc`, handshake `/mcp`, and stateless Claude Code
+  sequences, authentication, and the Voltaic 2.0 behavior changes in both directions.
 
 ## v0.4.0 - 2026-08-19
 
