@@ -15,7 +15,10 @@ namespace Test.Shared
     /// <c>2026-07-28</c> sequence Claude Code 2.1.x sends (<c>server/discover</c>, <c>tools/list</c>,
     /// <c>tools/call</c>). Cases cover both directions of each Voltaic 2.0 behavior change: only Partio's
     /// tools are published, <c>ping</c> returns <c>{}</c>, tools are reachable only through
-    /// <c>tools/call</c>, and <c>additionalProperties: false</c> schemas are enforced.
+    /// <c>tools/call</c>, and <c>additionalProperties: false</c> schemas are enforced. They also cover the
+    /// Voltaic 2.1.4+ lifecycle rules: every request (including <c>ping</c>) must authenticate, and on the
+    /// handshake era every request other than <c>initialize</c> and <c>ping</c> needs an initialized session,
+    /// on <c>/rpc</c> as well as <c>/mcp</c>.
     /// </summary>
     public static class McpServerIntegrationTests
     {
@@ -50,6 +53,8 @@ namespace Test.Shared
         private static SelfHostedMcpServerEnvironment? _Mcp;
         private static string _AdminKey = "partioadmin";
         private static string _TestToken = "default";
+        private static readonly Dictionary<string, Dictionary<string, string>> _RpcSessions = new Dictionary<string, Dictionary<string, string>>();
+        private static readonly SemaphoreSlim _RpcSessionsLock = new SemaphoreSlim(1, 1);
 
         /// <summary>
         /// Build the MCP integration suite. The before hook starts Partio and the MCP server; the after hook
@@ -66,6 +71,7 @@ namespace Test.Shared
                 BuildCases(),
                 beforeSuiteAsync: async ct =>
                 {
+                    _RpcSessions.Clear();
                     partio = await SelfHostedPartioTestEnvironment.StartAsync(ct).ConfigureAwait(false);
                     _AdminKey = partio.AdminKey;
                     _TestToken = partio.TestToken;
@@ -93,12 +99,13 @@ namespace Test.Shared
 
             // Positive: transport and protocol surface
             cases.Add(TestCaseFactory.Async(SuiteId, "Health GET / without credentials", TestHealthAsync));
-            cases.Add(TestCaseFactory.Async(SuiteId, "Ping on /rpc returns empty object without credentials", TestPingRpcAsync));
-            cases.Add(TestCaseFactory.Async(SuiteId, "Ping on /mcp returns empty object without credentials", TestPingMcpAsync));
+            cases.Add(TestCaseFactory.Async(SuiteId, "Authenticated ping on /rpc returns empty object", TestPingRpcAsync));
+            cases.Add(TestCaseFactory.Async(SuiteId, "Ping on /mcp returns empty object within a session", TestPingMcpAsync));
             cases.Add(TestCaseFactory.Async(SuiteId, "Handshake initialize and tools/list on /mcp", TestHandshakeFlowAsync));
             cases.Add(TestCaseFactory.Async(SuiteId, "tools/list on /rpc lists exactly the Partio tools", TestToolsListRpcAsync));
             cases.Add(TestCaseFactory.Async(SuiteId, "Stateless Claude Code sequence on /mcp", () => TestStatelessSequenceAsync("/mcp")));
             cases.Add(TestCaseFactory.Async(SuiteId, "Stateless Claude Code sequence on /rpc", () => TestStatelessSequenceAsync("/rpc")));
+            cases.Add(TestCaseFactory.Async(SuiteId, "stdio bridge carries the session through initialize, tools/list, and tools/call", TestStdioBridgeAsync));
 
             // Positive: tool behavior
             cases.Add(TestCaseFactory.Async(SuiteId, "partio_capabilities matches tools/list", TestCapabilitiesAsync));
@@ -110,6 +117,11 @@ namespace Test.Shared
             cases.Add(TestCaseFactory.Async(SuiteId, "tools/list without bearer is 401", TestMissingBearerAsync));
             cases.Add(TestCaseFactory.Async(SuiteId, "tools/call with invalid bearer is 401", TestInvalidBearerAsync));
             cases.Add(TestCaseFactory.Async(SuiteId, "Stateless tools/list without bearer is 401", TestStatelessMissingBearerAsync));
+            cases.Add(TestCaseFactory.Async(SuiteId, "Ping without bearer is 401 on /rpc and /mcp", TestPingMissingBearerAsync));
+
+            // Negative: Voltaic 2.1.4+ lifecycle
+            cases.Add(TestCaseFactory.Async(SuiteId, "tools/list on /rpc before initialize returns -32600", TestRpcBeforeInitializeAsync));
+            cases.Add(TestCaseFactory.Async(SuiteId, "Ping on /mcp without a session is 400", TestPingMcpWithoutSessionAsync));
 
             // Negative: Voltaic 2.0 breaking changes
             cases.Add(TestCaseFactory.Async(SuiteId, "Bare tool method call returns -32601", TestBareToolCallAsync));
@@ -132,15 +144,18 @@ namespace Test.Shared
 
         private static async Task TestPingRpcAsync()
         {
-            McpResponse response = await PostAsync("/rpc", Body("ping", 1, null), null).ConfigureAwait(false);
-            Check.Equal(HttpStatusCode.OK, response.StatusCode, "ping should bypass authentication. Body: " + response.Body);
+            // ping is the one request a sessionless /rpc call may make before initialize.
+            McpResponse response = await PostAsync("/rpc", Body("ping", 1, null), Bearer(_AdminKey)).ConfigureAwait(false);
+            Check.Equal(HttpStatusCode.OK, response.StatusCode, "authenticated ping on /rpc should succeed. Body: " + response.Body);
             AssertEmptyObjectResult(response, "ping");
         }
 
         private static async Task TestPingMcpAsync()
         {
-            McpResponse response = await PostAsync("/mcp", Body("ping", 1, null), null, mcpAccept: true).ConfigureAwait(false);
-            Check.Equal(HttpStatusCode.OK, response.StatusCode, "ping on /mcp should bypass authentication. Body: " + response.Body);
+            string auth = Bearer(_AdminKey);
+            Dictionary<string, string> headers = await InitializeSessionAsync("/mcp", auth).ConfigureAwait(false);
+            McpResponse response = await PostAsync("/mcp", Body("ping", 2, null), auth, mcpAccept: true, headers: headers).ConfigureAwait(false);
+            Check.Equal(HttpStatusCode.OK, response.StatusCode, "ping on an initialized /mcp session should succeed. Body: " + response.Body);
             AssertEmptyObjectResult(response, "ping");
         }
 
@@ -183,7 +198,7 @@ namespace Test.Shared
 
         private static async Task TestToolsListRpcAsync()
         {
-            McpResponse response = await PostAsync("/rpc", Body("tools/list", 1, new { }), Bearer(_AdminKey)).ConfigureAwait(false);
+            McpResponse response = await PostRpcAsync(Body("tools/list", 1, new { }), _AdminKey).ConfigureAwait(false);
             Check.Equal(HttpStatusCode.OK, response.StatusCode, "tools/list should succeed. Body: " + response.Body);
             AssertExactlyPartioTools(RequireResult(response, "tools/list"));
         }
@@ -222,6 +237,51 @@ namespace Test.Shared
             Check.Equal("complete", callResult.GetProperty("resultType").GetString());
             Check.False(IsToolError(callResult), "enumerate should not report a tool error. Body: " + call.Body);
             Check.True(callResult.GetProperty("structuredContent").GetProperty("Data").GetArrayLength() >= 1, "The default completion endpoint should be listed.");
+        }
+
+        private static async Task TestStdioBridgeAsync()
+        {
+            // The bridge is what Codex runs. It must carry the MCP-Session-Id from initialize, or every
+            // later request reaches /rpc uninitialized and is rejected with -32600 (Voltaic 2.1.4+).
+            using System.Diagnostics.Process bridge = Mcp.StartStdioBridge();
+            try
+            {
+                JsonElement init = await BridgeRequestAsync(bridge, Body("initialize", 1, new
+                {
+                    protocolVersion = HandshakeVersion,
+                    capabilities = new { },
+                    clientInfo = new { name = "partio-tests-stdio", version = "1.0.0" }
+                })).ConfigureAwait(false);
+                Check.Equal("partio-mcp", init.GetProperty("result").GetProperty("serverInfo").GetProperty("name").GetString());
+
+                await bridge.StandardInput.WriteLineAsync(NotificationBody("notifications/initialized")).ConfigureAwait(false);
+                await bridge.StandardInput.FlushAsync().ConfigureAwait(false);
+
+                JsonElement tools = await BridgeRequestAsync(bridge, Body("tools/list", 2, new { })).ConfigureAwait(false);
+                Check.True(tools.TryGetProperty("result", out JsonElement toolsResult), "tools/list through the bridge should return a result: " + tools.GetRawText());
+                AssertExactlyPartioTools(toolsResult);
+
+                JsonElement call = await BridgeRequestAsync(bridge, ToolCallBody(3, "partio_capabilities", new { })).ConfigureAwait(false);
+                Check.True(call.TryGetProperty("result", out JsonElement callResult), "tools/call through the bridge should return a result: " + call.GetRawText());
+                Check.False(IsToolError(callResult), "partio_capabilities through the bridge should not report a tool error: " + call.GetRawText());
+                Check.Equal("partio-mcp", callResult.GetProperty("structuredContent").GetProperty("Server").GetString());
+            }
+            finally
+            {
+                try { bridge.StandardInput.Close(); } catch { }
+                try { if (!bridge.WaitForExit(5000)) bridge.Kill(entireProcessTree: true); } catch { }
+            }
+        }
+
+        private static async Task<JsonElement> BridgeRequestAsync(System.Diagnostics.Process bridge, string body)
+        {
+            await bridge.StandardInput.WriteLineAsync(body).ConfigureAwait(false);
+            await bridge.StandardInput.FlushAsync().ConfigureAwait(false);
+
+            string? line = await bridge.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            Check.NotNull(line, "the stdio bridge closed its output before answering.");
+            using JsonDocument doc = JsonDocument.Parse(line!);
+            return doc.RootElement.Clone();
         }
 
         // ---------------- Positive: tool behavior ----------------
@@ -291,8 +351,8 @@ namespace Test.Shared
             // is admin-only in Partio, so the same call that succeeds for the admin key is refused here.
             McpResponse response = await CallToolAsync("partio_enumerate_embedding_endpoints", new { maxResults = 5 }, _TestToken).ConfigureAwait(false);
             Check.Equal(HttpStatusCode.OK, response.StatusCode, "the tenant token should be authenticated. Body: " + response.Body);
-            Check.True(response.HasError, "an admin-only tool should fail for a tenant token. Body: " + response.Body);
-            Check.Contains("Admin access required", response.Body);
+            Check.True(IsToolError(RequireResult(response, "tools/call partio_enumerate_embedding_endpoints")), "an admin-only tool should fail for a tenant token. Body: " + response.Body);
+            Check.Contains("Admin access required", response.Body, "the Partio error message should reach the caller rather than a generic internal error.");
         }
 
         private static async Task TestEndpointSchemaAllowsExtraFieldsAsync()
@@ -336,12 +396,37 @@ namespace Test.Shared
             Check.Equal(HttpStatusCode.Unauthorized, response.StatusCode, "stateless tools/list without a bearer must be rejected. Body: " + response.Body);
         }
 
+        private static async Task TestPingMissingBearerAsync()
+        {
+            // Voltaic 2.1.4+: the MCP authorization spec requires 401 on every request, ping included.
+            McpResponse rpc = await PostAsync("/rpc", Body("ping", 1, null), null).ConfigureAwait(false);
+            Check.Equal(HttpStatusCode.Unauthorized, rpc.StatusCode, "ping on /rpc without a bearer must be rejected. Body: " + rpc.Body);
+
+            McpResponse mcp = await PostAsync("/mcp", Body("ping", 1, null), null, mcpAccept: true).ConfigureAwait(false);
+            Check.Equal(HttpStatusCode.Unauthorized, mcp.StatusCode, "ping on /mcp without a bearer must be rejected. Body: " + mcp.Body);
+        }
+
+        // ---------------- Negative: Voltaic 2.1.4+ lifecycle ----------------
+
+        private static async Task TestRpcBeforeInitializeAsync()
+        {
+            McpResponse response = await PostAsync("/rpc", Body("tools/list", 1, new { }), Bearer(_AdminKey)).ConfigureAwait(false);
+            Check.Equal(HttpStatusCode.OK, response.StatusCode, "a sessionless /rpc request returns a JSON-RPC error body. Body: " + response.Body);
+            Check.Equal(-32600, RequireErrorCode(response, "tools/list on /rpc before initialize"));
+        }
+
+        private static async Task TestPingMcpWithoutSessionAsync()
+        {
+            McpResponse response = await PostAsync("/mcp", Body("ping", 1, null), Bearer(_AdminKey), mcpAccept: true).ConfigureAwait(false);
+            Check.Equal(HttpStatusCode.BadRequest, response.StatusCode, "ping on /mcp without MCP-Session-Id should be 400. Body: " + response.Body);
+        }
+
         // ---------------- Negative: Voltaic 2.0 breaking changes ----------------
 
         private static async Task TestBareToolCallAsync()
         {
             // Voltaic 2.x: RegisterTool no longer also registers a bare JSON-RPC method.
-            McpResponse response = await PostAsync("/rpc", Body("partio_capabilities", 1, new { }), Bearer(_AdminKey)).ConfigureAwait(false);
+            McpResponse response = await PostRpcAsync(Body("partio_capabilities", 1, new { }), _AdminKey).ConfigureAwait(false);
             Check.Equal(-32601, RequireErrorCode(response, "bare partio_capabilities"));
         }
 
@@ -357,29 +442,29 @@ namespace Test.Shared
             // getSessions/getClients are gone as bare methods too.
             foreach (string method in new[] { "getSessions", "getClients", "echo", "getTime" })
             {
-                McpResponse response = await PostAsync("/rpc", Body(method, 1, new { }), Bearer(_AdminKey)).ConfigureAwait(false);
+                McpResponse response = await PostRpcAsync(Body(method, 1, new { }), _AdminKey).ConfigureAwait(false);
                 Check.Equal(-32601, RequireErrorCode(response, "bare " + method));
             }
         }
 
         private static async Task TestAdditionalPropertiesRejectedAsync()
         {
-            // partio_capabilities declares additionalProperties: false, which Voltaic 2.x now enforces.
-            McpResponse response = await CallToolAsync("partio_capabilities", new { verbose = true }, _AdminKey).ConfigureAwait(false);
-            Check.Equal(-32602, RequireErrorCode(response, "partio_capabilities with an undeclared argument"));
-            Check.Contains("unexpected property 'verbose'", response.ErrorMessage ?? "");
+            // partio_capabilities declares additionalProperties: false, which Voltaic 2.x enforces. Since Voltaic
+            // 2.2 input validation failures are tool execution errors (isError results), per MCP 2025-11-25.
+            JsonElement result = await CallToolExpectingToolErrorAsync("partio_capabilities", new { verbose = true }).ConfigureAwait(false);
+            Check.Contains("unexpected property 'verbose'", ToolErrorText(result));
         }
 
         private static async Task TestMissingRequiredArgumentAsync()
         {
-            McpResponse response = await CallToolAsync("partio_get_completion_endpoint", new { }, _AdminKey).ConfigureAwait(false);
-            Check.Equal(-32602, RequireErrorCode(response, "partio_get_completion_endpoint without id"));
+            JsonElement result = await CallToolExpectingToolErrorAsync("partio_get_completion_endpoint", new { }).ConfigureAwait(false);
+            Check.Contains("missing required property 'id'", ToolErrorText(result));
         }
 
         private static async Task TestWrongArgumentTypeAsync()
         {
-            McpResponse response = await CallToolAsync("partio_enumerate_completion_endpoints", new { maxResults = "ten" }, _AdminKey).ConfigureAwait(false);
-            Check.Equal(-32602, RequireErrorCode(response, "partio_enumerate_completion_endpoints with a string maxResults"));
+            JsonElement result = await CallToolExpectingToolErrorAsync("partio_enumerate_completion_endpoints", new { maxResults = "ten" }).ConfigureAwait(false);
+            Check.Contains("maxResults must be a JSON integer", ToolErrorText(result));
         }
 
         private static async Task TestUnknownEndpointAsync()
@@ -394,9 +479,80 @@ namespace Test.Shared
 
         private static string Bearer(string token) => "Bearer " + token;
 
+        private static async Task<JsonElement> CallToolExpectingToolErrorAsync(string name, object arguments)
+        {
+            McpResponse response = await CallToolAsync(name, arguments, _AdminKey).ConfigureAwait(false);
+            Check.Equal(HttpStatusCode.OK, response.StatusCode, "tools/call " + name + " should return a result. Body: " + response.Body);
+            JsonElement result = RequireResult(response, "tools/call " + name);
+            Check.True(IsToolError(result), "tools/call " + name + " should report isError. Body: " + response.Body);
+            return result;
+        }
+
+        private static string ToolErrorText(JsonElement result)
+        {
+            return string.Join("\n", result.GetProperty("content").EnumerateArray()
+                .Where(c => c.TryGetProperty("text", out _))
+                .Select(c => c.GetProperty("text").GetString() ?? ""));
+        }
+
         private static async Task<McpResponse> CallToolAsync(string name, object arguments, string token)
         {
-            return await PostAsync("/rpc", ToolCallBody(1, name, arguments), Bearer(token)).ConfigureAwait(false);
+            return await PostRpcAsync(ToolCallBody(1, name, arguments), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// POST a JSON-RPC body to <c>/rpc</c> on an initialized session owned by <paramref name="token"/>.
+        /// Since Voltaic 2.1.4 a sessionless <c>/rpc</c> call runs on a fresh, uninitialized connection, so
+        /// anything other than <c>initialize</c> and <c>ping</c> needs the session the handshake issues.
+        /// </summary>
+        private static async Task<McpResponse> PostRpcAsync(string body, string token)
+        {
+            Dictionary<string, string> headers = await GetRpcSessionAsync(token).ConfigureAwait(false);
+            return await PostAsync("/rpc", body, Bearer(token), headers: headers).ConfigureAwait(false);
+        }
+
+        private static async Task<Dictionary<string, string>> GetRpcSessionAsync(string token)
+        {
+            await _RpcSessionsLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (!_RpcSessions.TryGetValue(token, out Dictionary<string, string>? headers))
+                {
+                    headers = await InitializeSessionAsync("/rpc", Bearer(token)).ConfigureAwait(false);
+                    _RpcSessions[token] = headers;
+                }
+
+                return headers;
+            }
+            finally
+            {
+                _RpcSessionsLock.Release();
+            }
+        }
+
+        private static async Task<Dictionary<string, string>> InitializeSessionAsync(string path, string authorization)
+        {
+            bool mcpAccept = path == "/mcp";
+            McpResponse init = await PostAsync(path, Body("initialize", 1, new
+            {
+                protocolVersion = HandshakeVersion,
+                capabilities = new { },
+                clientInfo = new { name = "partio-tests", version = "1.0.0" }
+            }), authorization, mcpAccept: mcpAccept).ConfigureAwait(false);
+
+            Check.Equal(HttpStatusCode.OK, init.StatusCode, "initialize on " + path + " should succeed. Body: " + init.Body);
+            RequireResult(init, "initialize on " + path);
+            Check.False(string.IsNullOrEmpty(init.SessionId), "initialize on " + path + " should issue an MCP-Session-Id.");
+
+            Dictionary<string, string> headers = new Dictionary<string, string>
+            {
+                ["MCP-Session-Id"] = init.SessionId!,
+                ["MCP-Protocol-Version"] = HandshakeVersion
+            };
+
+            McpResponse initialized = await PostAsync(path, NotificationBody("notifications/initialized"), authorization, mcpAccept: mcpAccept, headers: headers).ConfigureAwait(false);
+            Check.True((int)initialized.StatusCode is >= 200 and < 300, "notifications/initialized on " + path + " should be accepted. Status: " + (int)initialized.StatusCode);
+            return headers;
         }
 
         private static async Task<JsonElement> CallToolStructuredAsync(string name, object arguments, string token)

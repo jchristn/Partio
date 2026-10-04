@@ -1,5 +1,6 @@
 namespace Partio.McpServer.Commands
 {
+    using System.Net;
     using System.Net.Http;
     using System.Net.Http.Headers;
     using System.Text;
@@ -9,9 +10,13 @@ namespace Partio.McpServer.Commands
     /// A minimal stdio&lt;-&gt;HTTP JSON-RPC bridge. Reads newline-delimited JSON-RPC messages from stdin,
     /// forwards each to the running MCP server's JSON-RPC endpoint over HTTP, and writes the response to stdout.
     /// This lets harnesses that prefer stdio (or that cannot send an Authorization header) talk to the HTTP server.
+    /// The bridge carries the <c>MCP-Session-Id</c> that <c>initialize</c> returns on every later request, because
+    /// the server (Voltaic 2.1.4+) runs a sessionless <c>/rpc</c> call on a fresh, uninitialized connection.
     /// </summary>
     public static class StdioBridge
     {
+        private const string SessionHeader = "MCP-Session-Id";
+
         /// <summary>
         /// Run the stdio bridge until stdin is closed.
         /// </summary>
@@ -31,6 +36,7 @@ namespace Partio.McpServer.Commands
             using TextReader stdin = Console.In;
             using TextWriter stdout = Console.Out;
 
+            string? sessionId = null;
             string? line;
             while ((line = await stdin.ReadLineAsync().ConfigureAwait(false)) != null)
             {
@@ -39,9 +45,20 @@ namespace Partio.McpServer.Commands
                 string responseBody;
                 try
                 {
-                    using StringContent content = new StringContent(line, Encoding.UTF8, "application/json");
-                    using HttpResponseMessage response = await http.PostAsync(url, content).ConfigureAwait(false);
+                    using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url);
+                    request.Content = new StringContent(line, Encoding.UTF8, "application/json");
+                    if (sessionId != null)
+                        request.Headers.TryAddWithoutValidation(SessionHeader, sessionId);
+
+                    using HttpResponseMessage response = await http.SendAsync(request).ConfigureAwait(false);
                     responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                    // A successful initialize issues the session; an expired or unknown session is 404, after
+                    // which the harness re-initializes and the next initialize issues a new one.
+                    if (response.Headers.TryGetValues(SessionHeader, out IEnumerable<string>? issued))
+                        sessionId = issued.FirstOrDefault() ?? sessionId;
+                    else if (response.StatusCode == HttpStatusCode.NotFound)
+                        sessionId = null;
                 }
                 catch (Exception ex)
                 {

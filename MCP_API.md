@@ -1,6 +1,6 @@
 # Partio MCP Server
 
-`partio-mcp` is a standalone Model Context Protocol server that puts Partio's endpoint management and inference operations in front of an AI agent as callable tools. It is a separate executable from the Partio REST server — you point it at a running Partio instance, and it calls that server through the Partio C# SDK on your behalf, using your own bearer token. It is built on **Voltaic 2.0** and speaks **JSON-RPC 2.0** over MCP Streamable HTTP at `/mcp` (with a plain JSON-RPC endpoint at `/rpc` and an SSE stream at `/events`).
+`partio-mcp` is a standalone Model Context Protocol server that puts Partio's endpoint management and inference operations in front of an AI agent as callable tools. It is a separate executable from the Partio REST server — you point it at a running Partio instance, and it calls that server through the Partio C# SDK on your behalf, using your own bearer token. It is built on **Voltaic 2.2** and speaks **JSON-RPC 2.0** over MCP Streamable HTTP at `/mcp` (with a plain JSON-RPC endpoint at `/rpc` and an SSE stream at `/events`).
 
 The MCP server does not invent its own authorization model. It carries the same credentials and enforces the same permissions as the REST API — every tool call is a Partio SDK call made with the caller's own token, so an agent can do through MCP exactly what that token can do directly against REST, and no more.
 
@@ -8,11 +8,12 @@ The MCP server does not invent its own authorization model. It carries the same 
 
 Inbound MCP requests authenticate with a bearer token, and MCP accepts **exactly what the REST API accepts** — because it validates the token against Partio itself rather than keeping its own key list. Present an `Authorization: Bearer <token>` header carrying either a Partio **admin API key** or a **tenant credential bearer token** (the same tokens REST honors). The server validates it against Partio (`GET /v1.0/whoami`) **before any tool runs**; if Partio rejects it, MCP returns **HTTP 401** and the tool body never executes. On success the very same token is forwarded on every SDK call the tool makes, so each operation runs as **your identity and tenant**, with the same authorization you would get calling REST directly.
 
-A few things bypass this check by design:
+Two things bypass this check by design:
 
 - **CORS preflight** (`OPTIONS`) requests, so browsers can negotiate cross-origin access.
 - The **health endpoint** `GET /`, so liveness probes work without a credential.
-- The MCP protocol **`ping`** method, so a client can confirm the transport is alive before authenticating. It returns an empty result (`{}`) and runs no tool code.
+
+Every MCP request, including **`ping`**, must authenticate: the MCP authorization specification requires a `401` for a missing or invalid token on every request. Use `GET /` to probe connectivity without a credential.
 
 Authentication can be turned off entirely by setting `RequireAuthentication: false` in configuration. Do that only on a trusted local socket; with it off, any caller that can reach the port can invoke every tool.
 
@@ -27,7 +28,7 @@ The server implements the standard MCP JSON-RPC methods.
 | `initialize` | Handshake. The client announces its protocol version and capabilities; the server returns its own, including server info. |
 | `tools/list` | Return the catalog of available tools, each with a name, description, and JSON Schema for its arguments. |
 | `tools/call` | Invoke one tool by name with an `arguments` object. Returns the tool result. |
-| `ping` | Liveness check. Returns `{}`. Bypasses authentication. |
+| `ping` | Liveness check. Returns `{}`. Requires authentication like every other method. |
 | `server/discover` | Stateless-revision (`2026-07-28`) discovery, as sent by Claude Code 2.1.x. |
 
 A `tools/call` result carries **structured content** — the tool's return value is a typed object, not just a formatted string — so a client can consume the result programmatically rather than parsing prose. A minimal call and reply:
@@ -55,7 +56,7 @@ A `tools/call` result carries **structured content** — the tool's return value
       { "type": "text", "text": "{ ...structured result rendered as text... }" }
     ],
     "structuredContent": {
-      "McpServerVersion": "0.5.0",
+      "McpServerVersion": "0.5.1",
       "PartioServerHealthy": true,
       "ProtocolVersion": "2025-11-25",
       "Tools": ["partio_capabilities", "partio_enumerate_completion_endpoints", "..."]
@@ -143,7 +144,7 @@ The `get` result includes the full endpoint object, `MaxConcurrentRequests` and 
 
 Fifteen tools are registered, and `tools/list` returns exactly these fifteen: the server publishes no Voltaic diagnostic or demo tools (`echo`, `getTime`, `getSessions`, ...). All of them require authentication (subject to the bypass rules above); none is anonymous.
 
-Tools are invoked only through `tools/call`; calling a tool name as a bare JSON-RPC method returns `-32601` (method not found). Arguments are validated against each tool's input schema before the tool runs: a missing required argument, a wrong argument type, or an undeclared argument on a tool whose schema sets `additionalProperties: false` (for example `partio_capabilities`) is rejected with `-32602`. The endpoint create/update tools and the inference tools accept additional fields, so a full endpoint or request definition can be passed through.
+Tools are invoked only through `tools/call`; calling a tool name as a bare JSON-RPC method returns `-32601` (method not found). Arguments are validated against each tool's input schema before the tool runs: a missing required argument, a wrong argument type, or an undeclared argument on a tool whose schema sets `additionalProperties: false` (for example `partio_capabilities`) is rejected with a tool result whose `isError` is `true` and whose text names the problem (for example `Tool 'partio_get_completion_endpoint' arguments is missing required property 'id'.`); the tool does not run. A tool that fails while running (for example Partio answering `Admin access required` to a tenant token) is also reported as an `isError` result carrying Partio's error message. The endpoint create/update tools and the inference tools accept additional fields, so a full endpoint or request definition can be passed through.
 
 | Tool | Purpose | Auth |
 |---|---|---|
@@ -190,10 +191,10 @@ By default the server binds to `localhost:8500`. The base URL is therefore `http
 Three surfaces are exposed on that port:
 
 - `/mcp` — MCP Streamable HTTP (the endpoint harnesses connect to).
-- `/rpc` — plain JSON-RPC 2.0.
+- `/rpc` — plain JSON-RPC 2.0. As on `/mcp`, send `initialize` first and pass the `MCP-Session-Id` it returns on every later request; a sessionless `/rpc` call runs on a fresh, uninitialized connection, so anything other than `initialize` and `ping` gets `-32600`. (Stateless `2026-07-28` requests, which carry `MCP-Protocol-Version`, `Mcp-Method`, and `_meta`, need no session.)
 - `/events` — Server-Sent Events stream.
 
-For harnesses that prefer a subprocess to an HTTP connection, `partio-mcp mcp stdio` runs a **stdio ↔ HTTP JSON-RPC bridge**: the harness speaks JSON-RPC over the process's stdin/stdout, and the bridge relays each call to the HTTP server. This is what Codex uses, and it is the recommended path anywhere you need a bearer token but the harness has no field to supply one.
+For harnesses that prefer a subprocess to an HTTP connection, `partio-mcp mcp stdio` runs a **stdio ↔ HTTP JSON-RPC bridge**: the harness speaks JSON-RPC over the process's stdin/stdout, and the bridge relays each call to the HTTP server, carrying the session that `initialize` opens. This is what Codex uses, and it is the recommended path anywhere you need a bearer token but the harness has no field to supply one.
 
 ### Configuration and precedence
 

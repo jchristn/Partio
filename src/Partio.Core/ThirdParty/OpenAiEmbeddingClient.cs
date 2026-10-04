@@ -4,7 +4,7 @@ namespace Partio.Core.ThirdParty
     using Partio.Core.Models;
     using Partio.Core.Observability;
     using PolyPromptEmbeddingOptions = PolyPrompt.Models.EmbeddingOptions;
-    using PolyPromptOpenAiClient = PolyPrompt.Clients.OpenAiClient;
+    using PolyPromptOpenAiEmbeddingClient = PolyPrompt.Clients.OpenAiEmbeddingClient;
     using SyslogLogging;
 
     /// <summary>
@@ -51,7 +51,7 @@ namespace Partio.Core.ThirdParty
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "embedding", _ConcurrencyKey);
             PolyPrompt.Models.EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
-            using (PolyPromptOpenAiClient client = CreateConfiguredClient(_MaximumTimeoutMs))
+            using (PolyPromptOpenAiEmbeddingClient client = CreateConfiguredClient(_MaximumTimeoutMs))
             {
                 try
                 {
@@ -126,18 +126,18 @@ namespace Partio.Core.ThirdParty
             return Task.FromResult<EmbeddingModelCapabilities?>(capabilities);
         }
 
-        private PolyPromptOpenAiClient CreateConfiguredClient(int timeoutMs)
+        private PolyPromptOpenAiEmbeddingClient CreateConfiguredClient(int timeoutMs)
         {
-            PolyPromptOpenAiClient client = new PolyPromptOpenAiClient(_Endpoint, _ApiKey, _Logging);
+            PolyPromptOpenAiEmbeddingClient client = new PolyPromptOpenAiEmbeddingClient(_Endpoint, _ApiKey, _Logging);
             client.TimeoutMs = timeoutMs;
             return client;
         }
 
-        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CompletionCallDetail> source)
+        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CallDetail> source)
         {
             lock (_CallDetailsLock)
             {
-                foreach (PolyPrompt.Models.CompletionCallDetail src in source)
+                foreach (PolyPrompt.Models.CallDetail src in source)
                 {
                     AddCallDetail(new EmbeddingCallDetail
                     {

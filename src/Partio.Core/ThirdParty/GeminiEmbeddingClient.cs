@@ -4,6 +4,7 @@ namespace Partio.Core.ThirdParty
     using Partio.Core.Models;
     using Partio.Core.Observability;
     using PolyPrompt.Clients;
+    using PolyPromptGeminiEmbeddingClient = PolyPrompt.Clients.GeminiEmbeddingClient;
     using PolyPrompt.Models;
     using SyslogLogging;
 
@@ -51,7 +52,7 @@ namespace Partio.Core.ThirdParty
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "embedding", _ConcurrencyKey);
             EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
-            using (GeminiClient client = CreateConfiguredClient(_MaximumTimeoutMs))
+            using (PolyPromptGeminiEmbeddingClient client = CreateConfiguredClient(_MaximumTimeoutMs))
             {
                 try
                 {
@@ -124,18 +125,18 @@ namespace Partio.Core.ThirdParty
             return Task.FromResult<EmbeddingModelCapabilities?>(capabilities);
         }
 
-        private GeminiClient CreateConfiguredClient(int timeoutMs)
+        private PolyPromptGeminiEmbeddingClient CreateConfiguredClient(int timeoutMs)
         {
-            GeminiClient client = new GeminiClient(_Endpoint, _ApiKey, _Logging);
+            PolyPromptGeminiEmbeddingClient client = new PolyPromptGeminiEmbeddingClient(_Endpoint, _ApiKey, _Logging);
             client.TimeoutMs = timeoutMs;
             return client;
         }
 
-        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CompletionCallDetail> source)
+        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CallDetail> source)
         {
             lock (_CallDetailsLock)
             {
-                foreach (PolyPrompt.Models.CompletionCallDetail src in source)
+                foreach (PolyPrompt.Models.CallDetail src in source)
                 {
                     AddCallDetail(new EmbeddingCallDetail
                     {

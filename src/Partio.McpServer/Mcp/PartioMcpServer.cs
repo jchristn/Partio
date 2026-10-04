@@ -52,6 +52,11 @@ namespace Partio.McpServer.Mcp
             _Server.EnableCors = _Settings.Cors.Enabled;
             _Server.CorsHeaders = _Settings.Cors.BuildHeaders();
 
+            // Tool failures surface as isError results. Since Voltaic 2.2 their text is a generic "internal
+            // error" unless this is set; Partio's own API errors (for example "Admin access required") carry
+            // no secrets and are what the caller needs to react, so pass the exception message through.
+            _Server.IncludeToolExceptionMessages = true;
+
             McpAuthenticationHandler auth = new McpAuthenticationHandler(_Settings, _Logging);
             _Server.AuthenticationHandler = auth.AuthenticateAsync;
 

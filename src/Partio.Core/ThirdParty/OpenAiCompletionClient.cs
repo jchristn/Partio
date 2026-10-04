@@ -1,8 +1,8 @@
 namespace Partio.Core.ThirdParty
 {
-    using PolyPromptChatCompletionOptions = PolyPrompt.Models.ChatCompletionOptions;
+    using PolyPromptCompletionOptions = PolyPrompt.Models.CompletionOptions;
     using PolyPromptChatResponse = PolyPrompt.Models.ChatResponse;
-    using PolyPromptOpenAiClient = PolyPrompt.Clients.OpenAiClient;
+    using PolyPromptOpenAiCompletionClient = PolyPrompt.Clients.OpenAiCompletionClient;
     using Partio.Core.Observability;
     using SyslogLogging;
 
@@ -47,7 +47,7 @@ namespace Partio.Core.ThirdParty
         {
             int effectiveTimeoutMs = ClampTimeoutMs(timeoutMs);
 
-            PolyPromptChatCompletionOptions options = new PolyPromptChatCompletionOptions
+            PolyPromptCompletionOptions options = new PolyPromptCompletionOptions
             {
                 MaxTokens = maxTokens,
                 SystemPrompt = systemPrompt
@@ -56,7 +56,7 @@ namespace Partio.Core.ThirdParty
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "completion", _ConcurrencyKey);
             PolyPromptChatResponse response;
             IDisposable? concurrencyLease = null;
-            using (PolyPromptOpenAiClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
+            using (PolyPromptOpenAiCompletionClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
             {
                 try
                 {
@@ -107,19 +107,19 @@ namespace Partio.Core.ThirdParty
             }
         }
 
-        private PolyPromptOpenAiClient CreateConfiguredClient(string model, int timeoutMs)
+        private PolyPromptOpenAiCompletionClient CreateConfiguredClient(string model, int timeoutMs)
         {
-            PolyPromptOpenAiClient client = new PolyPromptOpenAiClient(_Endpoint, _ApiKey, _Logging);
+            PolyPromptOpenAiCompletionClient client = new PolyPromptOpenAiCompletionClient(_Endpoint, _ApiKey, _Logging);
             client.Model = model;
             client.TimeoutMs = timeoutMs;
             return client;
         }
 
-        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CompletionCallDetail> source)
+        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CallDetail> source)
         {
             lock (_CallDetailsLock)
             {
-                foreach (PolyPrompt.Models.CompletionCallDetail src in source)
+                foreach (PolyPrompt.Models.CallDetail src in source)
                 {
                     AddCallDetail(new Partio.Core.Models.CompletionCallDetail
                     {

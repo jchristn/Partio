@@ -2,6 +2,7 @@ namespace Partio.Core.ThirdParty
 {
     using Partio.Core.Observability;
     using PolyPrompt.Clients;
+    using PolyPromptGeminiCompletionClient = PolyPrompt.Clients.GeminiCompletionClient;
     using PolyPrompt.Models;
     using SyslogLogging;
 
@@ -46,7 +47,7 @@ namespace Partio.Core.ThirdParty
         {
             int effectiveTimeoutMs = ClampTimeoutMs(timeoutMs);
 
-            ChatCompletionOptions options = new ChatCompletionOptions
+            CompletionOptions options = new CompletionOptions
             {
                 MaxTokens = maxTokens,
                 SystemPrompt = systemPrompt
@@ -55,7 +56,7 @@ namespace Partio.Core.ThirdParty
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "completion", _ConcurrencyKey);
             ChatResponse response;
             IDisposable? concurrencyLease = null;
-            using (GeminiClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
+            using (PolyPromptGeminiCompletionClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
             {
                 try
                 {
@@ -106,19 +107,19 @@ namespace Partio.Core.ThirdParty
             }
         }
 
-        private GeminiClient CreateConfiguredClient(string model, int timeoutMs)
+        private PolyPromptGeminiCompletionClient CreateConfiguredClient(string model, int timeoutMs)
         {
-            GeminiClient client = new GeminiClient(_Endpoint, _ApiKey, _Logging);
+            PolyPromptGeminiCompletionClient client = new PolyPromptGeminiCompletionClient(_Endpoint, _ApiKey, _Logging);
             client.Model = model;
             client.TimeoutMs = timeoutMs;
             return client;
         }
 
-        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CompletionCallDetail> source)
+        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CallDetail> source)
         {
             lock (_CallDetailsLock)
             {
-                foreach (PolyPrompt.Models.CompletionCallDetail src in source)
+                foreach (PolyPrompt.Models.CallDetail src in source)
                 {
                     AddCallDetail(new Partio.Core.Models.CompletionCallDetail
                     {

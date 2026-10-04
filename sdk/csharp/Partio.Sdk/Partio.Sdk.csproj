@@ -6,10 +6,28 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>CS1591</NoWarn>
-    <Version>0.5.0</Version>
-    <PackageVersion>0.5.0</PackageVersion>
+    <Version>0.5.1</Version>
+    <PackageVersion>0.5.1</PackageVersion>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageId>Partio.Sdk</PackageId>
+    <Title>Partio.Sdk</Title>
+    <Authors>Joel Christner</Authors>
+    <Company>Joel Christner</Company>
+    <Copyright>(c)2026 Joel Christner</Copyright>
+    <Description>C# client SDK for Partio, a multi-tenant REST service for chunking, embedding, and summarizing semantic cells. Covers tenants, users, credentials, embedding and completion endpoints, health, model loading, semantic cell processing, the transparent completion proxy, and request history.</Description>
+    <PackageProjectUrl>https://github.com/jchristn/Partio</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jchristn/Partio</RepositoryUrl>
+    <RepositoryType>Github</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageTags>partio;sdk;client;chunking;embedding;embeddings;summarization;completion;rag;semantic;llm;ai;ollama;openai;gemini;vllm;proxy</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

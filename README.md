@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-alpha-orange?style=flat-square" alt="Alpha">
-  <img src="https://img.shields.io/badge/version-0.5.0-blue?style=flat-square" alt="v0.5.0">
+  <img src="https://img.shields.io/badge/version-0.5.1-blue?style=flat-square" alt="v0.5.1">
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square" alt=".NET 10.0">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--server-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Server">
@@ -13,7 +13,7 @@
 
 ---
 
-> ### ⚠️ v0.5.0 — Alpha
+> ### ⚠️ v0.5.1 — Alpha
 >
 > Partio is **alpha software**. It works, it's tested, and it's useful today — but APIs, models, configuration keys, and response shapes are **subject to change** while we iterate toward a stable surface.
 >
@@ -235,7 +235,7 @@ curl -X POST http://localhost:8400/v1.0/process \
 - **Docker images** with multi-architecture support (amd64/arm64).
 - **Pagination and filtering** with cursor-based continuation tokens, sorting, and label/tag/name/active filters on all list endpoints.
 - **Built-in observability** — Watson 7.1 HTTP metrics and per-request traces plus `partio_*` application metrics and spans for the processing pipeline, provider integrations, and background workers, exposed on Prometheus scrape endpoints and OTLP, with a bundled Prometheus + Tempo + Loki + Grafana stack and provisioned per-domain dashboards.
-- **MCP server** — a standalone `partio-mcp` executable (Voltaic 2.0) that exposes endpoint management and inference as 15 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
+- **MCP server** — a standalone `partio-mcp` executable (Voltaic 2.2) that exposes endpoint management and inference as 15 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
 
 ## Observability
 
@@ -672,7 +672,7 @@ Partio is alpha and moving fast — feedback and contributions are welcome.
 
 [Open an issue](https://github.com/jchristn/partio/issues) and include:
 
-1. The Partio version (`v0.5.0`, or the Docker image tag)
+1. The Partio version (`v0.5.1`, or the Docker image tag)
 2. Steps to reproduce
 3. The request/response (redact any credentials)
 4. Relevant log output from `./logs/`

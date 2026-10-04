@@ -9,6 +9,6 @@ fi
 TAG="$1"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-"$SCRIPT_DIR/build-dashboard.bat" "$TAG"
-"$SCRIPT_DIR/build-server.bat" "$TAG"
-"$SCRIPT_DIR/build-mcp.bat" "$TAG"
+"$SCRIPT_DIR/build-dashboard.sh" "$TAG"
+"$SCRIPT_DIR/build-server.sh" "$TAG"
+"$SCRIPT_DIR/build-mcp.sh" "$TAG"

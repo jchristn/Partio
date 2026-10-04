@@ -8,6 +8,7 @@ namespace Partio.Core.ThirdParty
     using Partio.Core.Models;
     using Partio.Core.Observability;
     using PolyPrompt.Clients;
+    using PolyPromptOllamaEmbeddingClient = PolyPrompt.Clients.OllamaEmbeddingClient;
     using PolyPrompt.Models;
     using SyslogLogging;
 
@@ -57,7 +58,7 @@ namespace Partio.Core.ThirdParty
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "embedding", _ConcurrencyKey);
             EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
-            using (OllamaClient client = CreateConfiguredClient(_MaximumTimeoutMs))
+            using (PolyPromptOllamaEmbeddingClient client = CreateConfiguredClient(_MaximumTimeoutMs))
             {
                 try
                 {
@@ -224,18 +225,18 @@ namespace Partio.Core.ThirdParty
             return capabilities?.MaxInputTokens;
         }
 
-        private OllamaClient CreateConfiguredClient(int timeoutMs)
+        private PolyPromptOllamaEmbeddingClient CreateConfiguredClient(int timeoutMs)
         {
-            OllamaClient client = new OllamaClient(_Endpoint, _ApiKey, _Logging);
+            PolyPromptOllamaEmbeddingClient client = new PolyPromptOllamaEmbeddingClient(_Endpoint, _ApiKey, _Logging);
             client.TimeoutMs = timeoutMs;
             return client;
         }
 
-        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CompletionCallDetail> source)
+        private void AppendCallDetails(IEnumerable<PolyPrompt.Models.CallDetail> source)
         {
             lock (_CallDetailsLock)
             {
-                foreach (PolyPrompt.Models.CompletionCallDetail src in source)
+                foreach (PolyPrompt.Models.CallDetail src in source)
                 {
                     AddCallDetail(new EmbeddingCallDetail
                     {

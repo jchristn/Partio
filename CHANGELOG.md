@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.5.1 - 2026-10-03
+
+### Changed
+- **Dependency updates:** PolyPrompt 2.6.0 → 3.1.0, Voltaic 2.0.0 → 2.2.1, Watson 7.2.0 → 7.2.2,
+  SyslogLogging 2.2.2 → 2.3.1 (floating), NUnit 4.6.1 → 5.0.0, and Touchstone (Core, Cli, XunitAdapter,
+  NunitAdapter) 0.1.12 → 0.2.0.
+- **PolyPrompt 3.x migration.** PolyPrompt 3 splits each provider client into one client per capability, so
+  Partio's provider wrappers now use `OpenAiCompletionClient` / `OpenAiEmbeddingClient`,
+  `OllamaCompletionClient` / `OllamaEmbeddingClient`, and `GeminiCompletionClient` / `GeminiEmbeddingClient`
+  (replacing `OpenAiClient`, `OllamaClient`, and `GeminiClient`), `CompletionOptions` (replacing
+  `ChatCompletionOptions`), and `CallDetail` (replacing `CompletionCallDetail`). No change to Partio's REST
+  API or request history shape. PolyPrompt 3 sends the Gemini API key only in the `x-goog-api-key` header.
+- **MCP server on Voltaic 2.2.1.** Voltaic now follows the MCP specification more strictly, which changes what
+  raw JSON-RPC callers see (MCP clients such as Claude Code, Codex, Cursor, Gemini, and Mux already behave this
+  way and are unaffected):
+  - `ping` requires authentication like every other request (a missing or invalid bearer is `401`); use
+    `GET /` to probe liveness without a credential.
+  - On the handshake era, every request other than `initialize` and `ping` needs an initialized session,
+    on `/rpc` as well as `/mcp`. A sessionless `/rpc` call runs on a fresh connection, so `tools/list` or
+    `tools/call` without the `MCP-Session-Id` from `initialize` gets `-32600`. Stateless `2026-07-28`
+    requests are unaffected.
+  - Tool argument validation failures (missing required argument, wrong type, undeclared argument on an
+    `additionalProperties: false` schema) are tool results with `isError: true` and a message naming the
+    problem, rather than JSON-RPC `-32602` errors.
+  - Tool failures keep Partio's error message (for example `Admin access required`): the server sets
+    `IncludeToolExceptionMessages`, since Voltaic 2.2 otherwise replaces it with a generic internal error.
+
+- **C# SDK published to NuGet** as [`Partio.Sdk`](https://www.nuget.org/packages/Partio.Sdk/) (0.5.1, with
+  symbols). The package now carries authors, description, MIT license, repository URL, tags, README, and icon.
+
+### Fixed
+- **`partio-mcp mcp stdio` bridge works with Voltaic 2.2.** The bridge (used by Codex) now carries the
+  `MCP-Session-Id` that `initialize` returns on every later request, and drops it on a `404` so the harness
+  can re-initialize. Without this, every request after the handshake was rejected with `-32600`.
+
+### Tests
+- `Mcp` suite updated for the Voltaic 2.2 lifecycle (`/rpc` calls run on an initialized session; validation
+  failures assert `isError` results and their messages) and extended with: authenticated `ping` on `/rpc`,
+  `ping` within an `/mcp` session, `ping` without a bearer is `401` on both endpoints, `/rpc` before
+  `initialize` is `-32600`, `/mcp` `ping` without a session is `400`, and an end-to-end stdio bridge test
+  (initialize → tools/list → tools/call through `partio-mcp mcp stdio`).
+- `ProviderClients` suite extended with PolyPrompt 3 coverage: OpenAI completion call details map the
+  request/response fields (URL, method, status, model, prompt, system prompt, max tokens, response body), and
+  Gemini completion/embedding clients never place the API key in the request URL.
+
 ## v0.5.0 - 2026-08-26
 
 ### Added

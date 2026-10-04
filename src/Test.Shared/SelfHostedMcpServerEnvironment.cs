@@ -108,6 +108,44 @@ namespace Test.Shared
             }
         }
 
+        /// <summary>Path of the generated settings file.</summary>
+        public string ConfigPath => Path.Combine(WorkingDirectory, "partio.mcp.json");
+
+        /// <summary>
+        /// Start <c>partio-mcp mcp stdio</c> against this server with the generated settings file. The bridge
+        /// injects the configured Partio API key as its bearer. The caller owns and must dispose the process.
+        /// </summary>
+        /// <returns>The running bridge process, with stdin and stdout redirected.</returns>
+        public Process StartStdioBridge()
+        {
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = FindDotnetExecutable(),
+                WorkingDirectory = WorkingDirectory,
+                UseShellExecute = false,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            psi.ArgumentList.Add(FindServerAssemblyPath());
+            psi.ArgumentList.Add("mcp");
+            psi.ArgumentList.Add("stdio");
+            psi.ArgumentList.Add("--config=" + ConfigPath);
+            psi.Environment.Remove("PARTIO_ENDPOINT");
+            psi.Environment.Remove("PARTIO_API_KEY");
+            psi.Environment.Remove("PARTIO_MCP_HOST");
+            psi.Environment.Remove("PARTIO_MCP_PORT");
+
+            Process bridge = new Process { StartInfo = psi };
+            if (!bridge.Start())
+                throw new InvalidOperationException("Unable to start the Partio MCP stdio bridge process.");
+
+            bridge.ErrorDataReceived += (_, e) => RecordServerOutput(e.Data);
+            bridge.BeginErrorReadLine();
+            return bridge;
+        }
+
         /// <summary>
         /// Return the most recent lines the MCP server wrote to stdout/stderr.
         /// </summary>

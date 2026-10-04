@@ -534,6 +534,53 @@ namespace Test.Shared
                 Check.Equal(2, client.CallDetails.Count(d => d.Success));
             }));
 
+            tests.Add(TestCaseFactory.Async("ProviderClients", "OpenAI completion call details map PolyPrompt request and response fields", async () =>
+            {
+                using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using OpenAiCompletionClient client = new OpenAiCompletionClient(provider.BaseUrl, null, logging, 5000);
+
+                string? result = await client.GenerateCompletionAsync("map this prompt", "gpt-4.1-mini", 64, 5000, default, "be terse");
+
+                Check.Equal("Stub completion response.", result);
+                Partio.Core.Models.CompletionCallDetail detail = Check.Single(client.CallDetails);
+                Check.True(detail.Success, "the recorded call should be successful");
+                Check.Equal(200, detail.StatusCode);
+                Check.Equal("POST", detail.Method);
+                Check.NotNull(detail.Url);
+                Check.True(detail.Url!.StartsWith(provider.BaseUrl, StringComparison.OrdinalIgnoreCase), "the call detail URL should target the configured endpoint: " + detail.Url);
+                Check.NotNull(detail.RequestBody);
+                Check.Contains("gpt-4.1-mini", detail.RequestBody!);
+                Check.Contains("map this prompt", detail.RequestBody!);
+                Check.Contains("be terse", detail.RequestBody!);
+                Check.Contains("64", detail.RequestBody!);
+                Check.NotNull(detail.ResponseBody);
+                Check.Contains("Stub completion response.", detail.ResponseBody!);
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Gemini clients never place the API key in the request URL", async () =>
+            {
+                using SlowGeminiCompatibleServer provider = new SlowGeminiCompatibleServer();
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using GeminiCompletionClient completion = new GeminiCompletionClient(provider.BaseUrl, "secret-gemini-key", logging, 5000);
+                using GeminiEmbeddingClient embedding = new GeminiEmbeddingClient(provider.BaseUrl, "secret-gemini-key", logging, 5000);
+
+                await completion.GenerateCompletionAsync("prompt", "gemini-2.5-flash", 64, 5000);
+                await embedding.EmbedBatchAsync(new List<string> { "input" }, "text-embedding-004");
+
+                Check.True(completion.CallDetails.Count > 0, "the completion call should be recorded");
+                Check.True(embedding.CallDetails.Count > 0, "the embedding call should be recorded");
+                foreach (string? url in completion.CallDetails.Select(d => d.Url).Concat(embedding.CallDetails.Select(d => d.Url)))
+                {
+                    Check.NotNull(url);
+                    Check.False(url!.Contains("secret-gemini-key", StringComparison.Ordinal), "the Gemini API key must not appear in the URL: " + url);
+                }
+            }));
+
             return tests;
         }
 

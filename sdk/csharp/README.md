@@ -23,6 +23,14 @@ Embedding and completion endpoint models accept `ApiFormat` values such as `Olla
 Endpoint models also expose `MaximumTimeoutMs` and `MaxConcurrentRequests`, the per-endpoint caps enforced for upstream provider calls. Process routes that hit the timeout cap return HTTP `504`, while requests rejected by the concurrency cap return HTTP `429`, both surfaced by the SDK as `PartioException`.
 Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.
 
+## Installation
+
+```bash
+dotnet add package Partio.Sdk
+```
+
+The package is published on [NuGet](https://www.nuget.org/packages/Partio.Sdk/) with symbols. You can also reference `Partio.Sdk.csproj` directly from this repository.
+
 ## Prerequisites
 
 - .NET 8.0 SDK or later

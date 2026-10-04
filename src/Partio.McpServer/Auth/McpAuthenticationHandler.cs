@@ -37,8 +37,8 @@ namespace Partio.McpServer.Auth
         }
 
         /// <summary>
-        /// Authenticate an inbound request. CORS preflight (OPTIONS), the health endpoint, and the ping
-        /// method bypass this handler in Voltaic.
+        /// Authenticate an inbound request. CORS preflight (OPTIONS) and the health endpoint bypass this
+        /// handler in Voltaic; every MCP request, including <c>ping</c>, is authenticated (Voltaic 2.1.4+).
         /// </summary>
         /// <param name="request">The inbound HTTP request.</param>
         /// <returns>An authentication result; rejected with 401 when the bearer is missing or Partio rejects it.</returns>
