@@ -1,6 +1,6 @@
 services:
   partio-server:
-    image: jchristn77/partio-server:v0.5.0
+    image: jchristn77/partio-server:v0.5.2
     container_name: partio-server
     ports:
       - "8400:8400"
@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
 
   partio-mcp:
-    image: jchristn77/partio-mcp:v0.5.0
+    image: jchristn77/partio-mcp:v0.5.2
     container_name: partio-mcp
     ports:
       - "8500:8500"
@@ -25,7 +25,7 @@ services:
       - partio-server
 
   partio-dashboard:
-    image: jchristn77/partio-dashboard:v0.5.0
+    image: jchristn77/partio-dashboard:v0.5.2
     container_name: partio-dashboard
     ports:
       - "8401:8401"
