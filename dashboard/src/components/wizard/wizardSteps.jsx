@@ -49,7 +49,7 @@ const wizardSteps = [
       </svg>
     ),
     description:
-      'Configure at least one embedding endpoint to generate vector embeddings from your document chunks. Supports Ollama, Ollama Cloud, OpenAI, Gemini, vLLM, xAI, and other compatible providers.',
+      'Configure at least one embedding endpoint to generate vector embeddings from your document chunks. Pick a provider (Ollama, vLLM, Hugging Face TEI, OpenAI, Azure OpenAI, Gemini, Vertex AI, AWS Bedrock, Cohere, VoyageAI, xAI, or Ollama Cloud) and the form asks only for what that provider needs.',
     tip: 'This is required for processing. Make sure your API key and model name are correct.',
   },
   {

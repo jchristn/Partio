@@ -14,53 +14,22 @@ import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
 import EndpointMetadataEditor, { createLabelRows, createTagRows, normalizeLabelRows, normalizeTagRows } from './EndpointMetadataEditor';
 import { t } from '../i18n';
+import ProviderPicker from './ProviderPicker';
+import ProviderConnectionFields from './ProviderConnectionFields';
 import {
-  API_FORMAT_OPTIONS,
-  API_FORMAT_TOOLTIP,
-  API_KEY_TOOLTIP_SUFFIX,
-  OLLAMA_CLOUD_ENDPOINT,
-  XAI_ENDPOINT,
-  applyApiFormatDefaults,
-  getHealthCheckDefaults,
-  isFixedEndpoint,
-  requiresApiKey,
-} from '../utils/apiFormats';
+  applyProviderChange,
+  buildConnectionPayload,
+  getProvider,
+  hasEndpointOverride,
+  hasMaskedSecrets,
+  mergeRevealedSecrets,
+  probeDescription,
+  providerLabel,
+  providerSettingsToForm,
+  usesConnectivityProbe,
+  validateConnection,
+} from '../utils/providers';
 import './EmbeddingEndpointsView.css';
-
-function getApiFormatDefaults(apiFormat) {
-  switch (apiFormat) {
-    case 'OpenAI':
-      return {
-        Model: 'text-embedding-3-small',
-        Endpoint: 'https://api.openai.com',
-      };
-    case 'vLLM':
-      return {
-        Model: 'intfloat/e5-small-v2',
-        Endpoint: 'http://localhost:8000',
-      };
-    case 'Gemini':
-      return {
-        Model: 'gemini-embedding-001',
-        Endpoint: 'https://generativelanguage.googleapis.com',
-      };
-    case 'OllamaCloud':
-      return {
-        Model: 'embeddinggemma',
-        Endpoint: OLLAMA_CLOUD_ENDPOINT,
-      };
-    case 'xAI':
-      return {
-        Model: '',
-        Endpoint: XAI_ENDPOINT,
-      };
-    default:
-      return {
-        Model: 'nomic-embed-text',
-        Endpoint: 'http://localhost:11434',
-      };
-  }
-}
 
 function formatTenantOption(tenant) {
   const id = tenant.Id || '';
@@ -291,7 +260,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -299,7 +268,8 @@ export default function EmbeddingEndpointsView() {
   const [healthData, setHealthData] = useState({});
   const [healthDetailModal, setHealthDetailModal] = useState({ isOpen: false, data: null });
   const [healthFieldsEdited, setHealthFieldsEdited] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [revealing, setRevealing] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
   const [loadModal, setLoadModal] = useState({ isOpen: false, endpoint: null });
   const [loadingModelId, setLoadingModelId] = useState(null);
   const [validateModal, setValidateModal] = useState({ isOpen: false, endpoint: null });
@@ -344,17 +314,16 @@ export default function EmbeddingEndpointsView() {
   const openCreate = () => {
     setEditing(null);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
-    const providerDefaults = getApiFormatDefaults('Ollama');
-    const defaults = getHealthCheckDefaults('Ollama', providerDefaults.Endpoint);
-    setForm({ TenantId: tenantId, Name: '', ApiFormat: 'Ollama', ApiKey: '', Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm(), ...providerDefaults, ...defaults });
+    setForm({ TenantId: tenantId, Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm() });
     setHealthFieldsEdited(false);
-    setShowApiKey(false);
+    setFormErrors({});
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditing(item);
-    setShowApiKey(false);
+    setFormErrors({});
+    const providerSettings = providerSettingsToForm(item.ApiFormat, item.ProviderSettings);
     setForm({
       TenantId: item.TenantId,
       Name: item.Name || '',
@@ -362,6 +331,8 @@ export default function EmbeddingEndpointsView() {
       Endpoint: item.Endpoint,
       ApiFormat: item.ApiFormat,
       ApiKey: item.ApiKey || '',
+      ProviderSettings: providerSettings,
+      EndpointOverride: hasEndpointOverride(item.ApiFormat, item.Endpoint, providerSettings),
       Active: item.Active !== false,
       EnableRequestHistory: item.EnableRequestHistory || false,
       MaximumTimeoutMs: (item.MaximumTimeoutMs || defaultMaximumTimeoutMs).toString(),
@@ -386,27 +357,31 @@ export default function EmbeddingEndpointsView() {
   };
 
   const handleFormatChange = (newFormat) => {
-    setForm(applyApiFormatDefaults(form, newFormat, healthFieldsEdited, getApiFormatDefaults));
+    setFormErrors({});
+    setForm(applyProviderChange(form, newFormat, 'embedding', healthFieldsEdited));
   };
 
-  const handleEndpointChange = (newEndpoint) => {
-    const newForm = { ...form, Endpoint: newEndpoint };
-    if (!healthFieldsEdited) {
-      const defaults = getHealthCheckDefaults(form.ApiFormat, newEndpoint);
-      newForm.HealthCheckUrl = defaults.HealthCheckUrl;
+  const handleReveal = async () => {
+    if (!editing) return;
+    setRevealing(true);
+    try {
+      const revealed = await api.revealEndpoint(editing.Id);
+      setForm(current => mergeRevealedSecrets(current, revealed));
+    } catch (err) {
+      setAlertModal({ isOpen: true, message: 'Could not reveal secrets: ' + err.message, type: 'error' });
     }
-    setForm(newForm);
+    setRevealing(false);
   };
 
   const handleSave = async () => {
+    const errors = validateConnection(form, 'embedding');
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     try {
       const payload = {
         TenantId: form.TenantId,
         Name: form.Name || null,
-        Model: form.Model,
-        Endpoint: form.Endpoint,
-        ApiFormat: form.ApiFormat,
-        ApiKey: form.ApiKey || null,
+        ...buildConnectionPayload(form),
         Active: form.Active,
         EnableRequestHistory: form.EnableRequestHistory,
         MaximumTimeoutMs: parsePositiveInteger(form.MaximumTimeoutMs, defaultMaximumTimeoutMs),
@@ -416,7 +391,7 @@ export default function EmbeddingEndpointsView() {
         Labels: normalizeLabelRows(form.Labels),
         Tags: normalizeTagRows(form.Tags),
         HealthCheckEnabled: form.HealthCheckEnabled,
-        HealthCheckUrl: form.HealthCheckUrl || null,
+        HealthCheckUrl: usesConnectivityProbe(form.ApiFormat) ? null : (form.HealthCheckUrl || null),
         HealthCheckMethod: form.HealthCheckMethod === 'HEAD' ? 1 : 0,
         HealthCheckIntervalMs: parseInt(form.HealthCheckIntervalMs) || 5000,
         HealthCheckTimeoutMs: parseInt(form.HealthCheckTimeoutMs) || 2000,
@@ -498,8 +473,10 @@ export default function EmbeddingEndpointsView() {
     },
     {
       key: 'ApiFormat',
-      label: 'Format',
-      tooltip: 'API protocol format: Ollama, Ollama Cloud, OpenAI, Gemini, vLLM, or xAI'
+      label: 'Provider',
+      tooltip: 'Provider (ApiFormat) that serves this endpoint',
+      filterValue: (item) => providerLabel(item.ApiFormat),
+      render: (item) => providerLabel(item.ApiFormat)
     },
     {
       key: 'Active',
@@ -579,6 +556,23 @@ export default function EmbeddingEndpointsView() {
       <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
         <Modal title={editing ? 'Edit Endpoint' : 'Create Endpoint'} onClose={() => setShowModal(false)} className="modal-wide">
+          {/* Provider Section */}
+          <div className="endpoint-form-section">
+            <div className="endpoint-form-section-header">Provider</div>
+            <ProviderPicker
+              key={editing ? editing.Id : 'new'}
+              kind="embedding"
+              value={form.ApiFormat}
+              onChange={handleFormatChange}
+              confirmChange={!!editing}
+            />
+            {formErrors.ApiFormat && <div className="field-error" role="alert">{formErrors.ApiFormat}</div>}
+          </div>
+
+          {!form.ApiFormat ? (
+            <p className="text-muted provider-empty-hint">Choose a provider to configure the connection.</p>
+          ) : (
+          <>
           {/* Connection Section */}
           <div className="endpoint-form-section">
             <div className="endpoint-form-section-header">Connection</div>
@@ -592,60 +586,22 @@ export default function EmbeddingEndpointsView() {
                 </Tooltip>
               </div>
               <div className="form-group">
-                <FormFieldLabel text="API Format" tooltip={API_FORMAT_TOOLTIP} />
-                <Tooltip content={API_FORMAT_TOOLTIP} block>
-                  <select value={form.ApiFormat} onChange={e => handleFormatChange(e.target.value)}>
-                    {API_FORMAT_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </Tooltip>
-              </div>
-            </div>
-            <div className="endpoint-form-row">
-              <div className="form-group">
                 <FormFieldLabel text="Name" tooltip="Human-readable name for this endpoint. Optional but recommended for easy identification." />
                 <Tooltip content="Human-readable name for this endpoint. Optional but recommended for easy identification." block>
                   <input value={form.Name} onChange={e => setForm({ ...form, Name: e.target.value })} placeholder="e.g. Default Embedding" />
                 </Tooltip>
               </div>
-              <div className="form-group">
-                <FormFieldLabel text="Model" tooltip="Embedding model name served by this endpoint. Example: nomic-embed-text, text-embedding-3-small, gemini-embedding-001" />
-                <Tooltip content="Embedding model name served by this endpoint. Example: nomic-embed-text, text-embedding-3-small, gemini-embedding-001." block>
-                  <input value={form.Model} onChange={e => setForm({ ...form, Model: e.target.value })} placeholder="e.g. nomic-embed-text" />
-                </Tooltip>
-              </div>
             </div>
-            <div className="endpoint-form-row">
-              <div className="form-group">
-                <FormFieldLabel text="API Key" tooltip={"Authentication key for the embedding API. " + API_KEY_TOOLTIP_SUFFIX} />
-                <div className="password-input-wrapper">
-                  <Tooltip content={"Authentication key for the embedding API. " + API_KEY_TOOLTIP_SUFFIX} block>
-                    <input type={showApiKey ? "text" : "password"} value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder={requiresApiKey(form.ApiFormat) ? "Required" : "Optional"} />
-                  </Tooltip>
-                  <button type="button" className="password-toggle-btn" onClick={() => setShowApiKey(!showApiKey)} title={showApiKey ? "Hide API Key" : "Show API Key"}>
-                    {showApiKey ? (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                        <line x1="1" y1="1" x2="23" y2="23" />
-                      </svg>
-                    ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="form-group">
-              <FormFieldLabel text="Endpoint URL" tooltip="Base URL of the embedding API server. Example: http://localhost:11434 or https://api.openai.com. Ollama Cloud always uses https://ollama.com." />
-              <Tooltip content="Base URL of the embedding API server. Example: http://localhost:11434 or https://api.openai.com. Ollama Cloud always uses https://ollama.com." block>
-                <input value={form.Endpoint} onChange={e => handleEndpointChange(e.target.value)} placeholder="http://localhost:11434" disabled={isFixedEndpoint(form.ApiFormat)} />
-              </Tooltip>
-            </div>
+            <ProviderConnectionFields
+              kind="embedding"
+              form={form}
+              setForm={setForm}
+              errors={formErrors}
+              healthFieldsEdited={healthFieldsEdited}
+              editing={!!editing && hasMaskedSecrets(form)}
+              onReveal={handleReveal}
+              revealing={revealing}
+            />
           </div>
 
           <div className="endpoint-form-section">
@@ -795,8 +751,15 @@ export default function EmbeddingEndpointsView() {
                 <Tooltip content="Periodically probe the endpoint to track availability and uptime.">Enable Health Checks</Tooltip>
               </label>
             </div>
+            {form.HealthCheckEnabled && usesConnectivityProbe(form.ApiFormat) && (
+              <div className="provider-note health-probe-note">
+                {getProvider(form.ApiFormat).label} is checked with a PolyPrompt connectivity probe that {probeDescription(form.ApiFormat, 'embedding')}, so the URL, method, and status fields do not apply.
+              </div>
+            )}
             {form.HealthCheckEnabled && (
               <>
+                {!usesConnectivityProbe(form.ApiFormat) && (
+                <>
                 <div className="form-group">
                   <FormFieldLabel text="Health Check URL" tooltip="Full URL to probe for health. Auto-set from endpoint and format. Example: http://localhost:11434/api/tags" />
                   <Tooltip content="Full URL to probe for health. Auto-set from endpoint and format. Example: http://localhost:11434/api/tags." block>
@@ -820,6 +783,8 @@ export default function EmbeddingEndpointsView() {
                     </Tooltip>
                   </div>
                 </div>
+                </>
+                )}
                 <div className="endpoint-form-row">
                   <div className="form-group">
                     <FormFieldLabel text="Interval (ms)" tooltip="Milliseconds between health checks. Example: 15000 = every 15 seconds. Use positive values only." />
@@ -848,21 +813,26 @@ export default function EmbeddingEndpointsView() {
                     </Tooltip>
                   </div>
                 </div>
+                {!usesConnectivityProbe(form.ApiFormat) && (
                 <div className="form-group">
                   <label className="checkbox-label">
                     <input type="checkbox" checked={form.HealthCheckUseAuth} onChange={e => { setHealthFieldsEdited(true); setForm({ ...form, HealthCheckUseAuth: e.target.checked }); }} />
                     {' '}
-                    <Tooltip content="Include the API key as a Bearer token in health check requests. Enable for authenticated endpoints.">
-                      Send API Key as Bearer Token
+                    <Tooltip content="Send the endpoint credential with health check requests, using the provider's header (Authorization, api-key, x-api-key, or x-goog-api-key).">
+                      Authenticate Health Checks
                     </Tooltip>
                   </label>
                 </div>
+                )}
               </>
             )}
           </div>
 
+          </>
+          )}
+
           <div className="btn-group" style={{ marginTop: 16 }}>
-            <button className="primary" onClick={handleSave}>Save</button>
+            <button className="primary" onClick={handleSave} disabled={!form.ApiFormat}>Save</button>
             <button className="secondary" onClick={() => setShowModal(false)}>Cancel</button>
           </div>
         </Modal>

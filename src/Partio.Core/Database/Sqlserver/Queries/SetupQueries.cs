@@ -80,7 +80,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     model NVARCHAR(256) NOT NULL,
                     endpoint NVARCHAR(512) NOT NULL,
                     api_format NVARCHAR(32) NOT NULL,
-                    api_key NVARCHAR(512) NULL,
+                    api_key NVARCHAR(MAX) NULL,
                     active BIT NOT NULL DEFAULT 1,
                     enable_request_history BIT NOT NULL DEFAULT 0,
                     health_check_enabled BIT NOT NULL DEFAULT 0,
@@ -97,6 +97,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     unhealthy_threshold INT NOT NULL DEFAULT 2,
                     health_check_use_auth BIT NOT NULL DEFAULT 0,
                     tokenization_json NVARCHAR(MAX) NULL,
+                    provider_settings_json NVARCHAR(MAX) NULL,
                     labels_json NVARCHAR(MAX) NULL,
                     tags_json NVARCHAR(MAX) NULL,
                     created_utc NVARCHAR(64) NOT NULL,
@@ -117,7 +118,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     name NVARCHAR(256) NULL,
                     endpoint NVARCHAR(512) NOT NULL,
                     api_format NVARCHAR(32) NOT NULL,
-                    api_key NVARCHAR(512) NULL,
+                    api_key NVARCHAR(MAX) NULL,
                     model NVARCHAR(256) NOT NULL,
                     active BIT NOT NULL DEFAULT 1,
                     enable_request_history BIT NOT NULL DEFAULT 0,
@@ -134,6 +135,7 @@ namespace Partio.Core.Database.Sqlserver.Queries
                     healthy_threshold INT NOT NULL DEFAULT 2,
                     unhealthy_threshold INT NOT NULL DEFAULT 2,
                     health_check_use_auth BIT NOT NULL DEFAULT 0,
+                    provider_settings_json NVARCHAR(MAX) NULL,
                     labels_json NVARCHAR(MAX) NULL,
                     tags_json NVARCHAR(MAX) NULL,
                     created_utc NVARCHAR(64) NOT NULL,
@@ -291,6 +293,36 @@ namespace Partio.Core.Database.Sqlserver.Queries
             BEGIN
                 ALTER TABLE completion_endpoints ADD tags_json NVARCHAR(MAX) NULL;
             END;";
+
+        /// <summary>
+        /// Migration: add provider_settings_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddProviderSettingsJson =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('embedding_endpoints') AND name = 'provider_settings_json')
+            BEGIN
+                ALTER TABLE embedding_endpoints ADD provider_settings_json NVARCHAR(MAX) NULL;
+            END;";
+
+        /// <summary>
+        /// Migration: widen embedding_endpoints.api_key so long bearer tokens (for example Entra ID access tokens) fit.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsWidenApiKey =
+            @"ALTER TABLE embedding_endpoints ALTER COLUMN api_key NVARCHAR(MAX) NULL;";
+
+        /// <summary>
+        /// Migration: add provider_settings_json column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddProviderSettingsJson =
+            @"IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('completion_endpoints') AND name = 'provider_settings_json')
+            BEGIN
+                ALTER TABLE completion_endpoints ADD provider_settings_json NVARCHAR(MAX) NULL;
+            END;";
+
+        /// <summary>
+        /// Migration: widen completion_endpoints.api_key so long bearer tokens (for example Entra ID access tokens) fit.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsWidenApiKey =
+            @"ALTER TABLE completion_endpoints ALTER COLUMN api_key NVARCHAR(MAX) NULL;";
 
         /// <summary>
         /// All table creation queries in dependency order.

@@ -34,6 +34,7 @@ namespace Partio.Core.Models
         private int _HealthyThreshold = 2;
         private int _UnhealthyThreshold = 2;
         private bool _HealthCheckUseAuth = false;
+        private ProviderSettings? _ProviderSettings = null;
         private DateTime _CreatedUtc = DateTime.UtcNow;
         private DateTime _LastUpdateUtc = DateTime.UtcNow;
 
@@ -67,13 +68,11 @@ namespace Partio.Core.Models
         /// <summary>
         /// Base URL for the completion API (e.g., http://ollama:11434).
         /// </summary>
-        /// <remarks>OllamaCloud endpoints always resolve to https://ollama.com; xAI defaults to https://api.x.ai.</remarks>
+        /// <remarks>OllamaCloud endpoints always resolve to https://ollama.com. When omitted, hosted providers use their public API root and Bedrock and Vertex AI derive the regional URL from ProviderSettings. Azure OpenAI uses the resource URL. Null or empty selects the provider default; create and update return 400 when the provider has none.</remarks>
         public string Endpoint
         {
             get => _Endpoint;
-            set => _Endpoint = !string.IsNullOrEmpty(value)
-                ? value
-                : throw new ArgumentException("Endpoint must not be null or empty.", nameof(Endpoint));
+            set => _Endpoint = value ?? string.Empty;
         }
 
         /// <summary>
@@ -86,7 +85,7 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
-        /// API key for the upstream inference provider (optional, required for OpenAI/Gemini/vLLM/OllamaCloud/xAI).
+        /// API key for the upstream inference provider (nullable; required for Ollama Cloud, xAI, Azure OpenAI, Anthropic, and Cohere). Masked in API responses; use the reveal API to read it.
         /// </summary>
         public string? ApiKey
         {
@@ -258,12 +257,22 @@ namespace Partio.Core.Models
 
         /// <summary>
         /// Whether to send the endpoint's ApiKey on health check requests.
-        /// OpenAI, vLLM, Ollama Cloud, and xAI use a Bearer token. Gemini uses x-goog-api-key.
+        /// Gemini uses x-goog-api-key, Anthropic uses x-api-key, Azure OpenAI uses api-key (or a bearer token), and other providers use a Bearer token. Bedrock, Vertex AI, and VoyageAI are checked with a PolyPrompt connectivity probe instead.
         /// </summary>
         public bool HealthCheckUseAuth
         {
             get => _HealthCheckUseAuth;
             set => _HealthCheckUseAuth = value;
+        }
+
+        /// <summary>
+        /// Optional provider-specific settings. Only the section matching ApiFormat is kept; Bedrock and
+        /// Vertex AI endpoints require their section. Secret fields are masked in API responses.
+        /// </summary>
+        public ProviderSettings? ProviderSettings
+        {
+            get => _ProviderSettings;
+            set => _ProviderSettings = value;
         }
 
         /// <summary>
@@ -338,6 +347,13 @@ namespace Partio.Core.Models
                     ep.Tags = new SerializationHelper.Serializer().DeserializeJson<Dictionary<string, string>>(tagsJson) ?? new Dictionary<string, string>();
             }
 
+            if (row.Table.Columns.Contains("provider_settings_json"))
+            {
+                string? providerSettingsJson = row["provider_settings_json"] == DBNull.Value ? null : row["provider_settings_json"].ToString();
+                if (!string.IsNullOrEmpty(providerSettingsJson))
+                    ep.ProviderSettings = new SerializationHelper.Serializer().DeserializeJson<ProviderSettings>(providerSettingsJson);
+            }
+
             return ep;
         }
 
@@ -367,28 +383,24 @@ namespace Partio.Core.Models
         {
             if (ep == null) throw new ArgumentNullException(nameof(ep));
 
-            // Ollama Cloud has a fixed host and xAI has a well-known default; resolve them before deriving URLs.
-            string normalizedEndpoint = ProviderDefaults.NormalizeEndpoint(ep.ApiFormat, ep.Endpoint);
+            ep.ProviderSettings = ProviderDefaults.NormalizeProviderSettings(ep.ApiFormat, ep.ProviderSettings);
+
+            // Resolve fixed hosts, well-known defaults, and region-derived URLs before deriving health check URLs.
+            string normalizedEndpoint = ProviderDefaults.NormalizeEndpoint(ep.ApiFormat, ep.Endpoint, ep.ProviderSettings);
             if (!string.IsNullOrEmpty(normalizedEndpoint))
                 ep.Endpoint = normalizedEndpoint;
 
+            // Providers checked with a connectivity probe (Bedrock, Vertex AI, VoyageAI) have no health check URL.
             if (string.IsNullOrEmpty(ep.HealthCheckUrl))
-            {
-                string baseUrl = ep.Endpoint.TrimEnd('/');
-                ep.HealthCheckUrl = ep.ApiFormat switch
-                {
-                    ApiFormatEnum.Ollama => baseUrl + "/api/tags",
-                    ApiFormatEnum.OllamaCloud => baseUrl + "/api/tags",
-                    ApiFormatEnum.Gemini => baseUrl + "/v1beta/models",
-                    _ => baseUrl + "/v1/models"
-                };
-            }
+                ep.HealthCheckUrl = ProviderDefaults.DefaultHealthCheckUrl(ep.ApiFormat, ep.Endpoint, ep.ProviderSettings);
+
+            bool probe = ProviderDefaults.UsesConnectivityProbe(ep.ApiFormat);
 
             if (ep.HealthCheckIntervalMs <= 0)
-                ep.HealthCheckIntervalMs = ep.ApiFormat == ApiFormatEnum.Ollama ? 5000 : 15000;
+                ep.HealthCheckIntervalMs = probe ? ProviderDefaults.ProbeHealthCheckIntervalMs : ep.ApiFormat == ApiFormatEnum.Ollama ? 5000 : 15000;
 
             if (ep.HealthCheckTimeoutMs <= 0)
-                ep.HealthCheckTimeoutMs = ep.ApiFormat == ApiFormatEnum.Ollama ? 2000 : 5000;
+                ep.HealthCheckTimeoutMs = probe ? ProviderDefaults.ProbeHealthCheckTimeoutMs : ep.ApiFormat == ApiFormatEnum.Ollama ? 2000 : 5000;
 
             if (ep.HealthCheckExpectedStatusCode <= 0)
                 ep.HealthCheckExpectedStatusCode = 200;
@@ -399,14 +411,21 @@ namespace Partio.Core.Models
             if (ep.UnhealthyThreshold <= 0)
                 ep.UnhealthyThreshold = 2;
 
-            // OpenAI, vLLM, Gemini, Ollama Cloud, and xAI typically require auth for model listing.
-            if ((ep.ApiFormat == ApiFormatEnum.OpenAI
-                || ep.ApiFormat == ApiFormatEnum.vLLM
-                || ep.ApiFormat == ApiFormatEnum.Gemini
-                || ep.ApiFormat == ApiFormatEnum.OllamaCloud
-                || ep.ApiFormat == ApiFormatEnum.xAI)
-                && !string.IsNullOrEmpty(ep.ApiKey))
+            // Every provider except local Ollama typically requires auth for its health check.
+            if (ProviderDefaults.DefaultHealthCheckUseAuth(ep.ApiFormat) && !string.IsNullOrEmpty(ep.ApiKey))
                 ep.HealthCheckUseAuth = true;
+        }
+
+        /// <summary>
+        /// Return a shallow copy of this endpoint with ApiKey and secret provider settings masked, for API responses.
+        /// </summary>
+        /// <returns>A redacted copy.</returns>
+        public CompletionEndpoint Redacted()
+        {
+            CompletionEndpoint copy = (CompletionEndpoint)MemberwiseClone();
+            copy._ApiKey = EndpointSecrets.Mask(_ApiKey);
+            copy._ProviderSettings = EndpointSecrets.Redact(_ProviderSettings);
+            return copy;
         }
     }
 }

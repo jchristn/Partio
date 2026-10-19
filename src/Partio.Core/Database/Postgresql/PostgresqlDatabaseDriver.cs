@@ -82,6 +82,14 @@ namespace Partio.Core.Database.Postgresql
             catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddTagsJson, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddProviderSettingsJson, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddProviderSettingsJson, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsWidenApiKey, false, token).ConfigureAwait(false); }
+            catch { /* column already widened */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsWidenApiKey, false, token).ConfigureAwait(false); }
+            catch { /* column already widened */ }
 
             Tenant = new TenantMethods(this, _Logging);
             User = new UserMethods(this, _Logging);

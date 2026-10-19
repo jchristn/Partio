@@ -50,7 +50,8 @@ no ids) so series stay bounded — identifiers live on spans, never on metric la
 
 ### Integrations (app)
 - `partio_integration_requests_total{service,operation,outcome}` — outbound provider calls. `service` ∈
-  `ollama`, `ollamacloud`, `openai`, `gemini`, `vllm`, `xai`; `operation` ∈ `embedding`, `completion`; `outcome` ∈ `ok`,
+  `ollama`, `ollamacloud`, `openai`, `gemini`, `vllm`, `xai`, `azureopenai`, `anthropic`, `cohere`, `bedrock`, `vertexai`,
+  `tei`, `voyageai`; `operation` ∈ `embedding`, `completion`; `outcome` ∈ `ok`,
   `error`, `cancelled`, `rejected` (429 from the per-endpoint concurrency limiter).
 - `partio_integration_request_duration_seconds{service,operation}` — per-integration latency histogram.
 

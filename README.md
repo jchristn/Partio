@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-alpha-orange?style=flat-square" alt="Alpha">
-  <img src="https://img.shields.io/badge/version-0.5.1-blue?style=flat-square" alt="v0.5.1">
+  <img src="https://img.shields.io/badge/version-0.5.2-blue?style=flat-square" alt="v0.5.2">
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square" alt=".NET 10.0">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/docker-jchristn77%2Fpartio--server-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Server">
@@ -13,7 +13,7 @@
 
 ---
 
-> ### ⚠️ v0.5.1 — Alpha
+> ### ⚠️ v0.5.2 — Alpha
 >
 > Partio is **alpha software**. It works, it's tested, and it's useful today — but APIs, models, configuration keys, and response shapes are **subject to change** while we iterate toward a stable surface.
 >
@@ -52,7 +52,7 @@ It ships as a server, a React admin dashboard, three SDKs (C#, Python, JavaScrip
 ## What It Does
 
 - **Chunks** structured content using type-aware strategies (token, sentence, paragraph, regex, list, and table strategies), sizing every chunk to the target embedding model's real token budget.
-- **Embeds** chunks (or arbitrary strings) through pluggable providers: Ollama, Ollama Cloud, OpenAI, Gemini, xAI (Grok), and OpenAI-compatible backends like vLLM.
+- **Embeds** chunks (or arbitrary strings) through pluggable providers: Ollama, Ollama Cloud, OpenAI, Azure OpenAI, Gemini, Google Vertex AI, AWS Bedrock, Cohere, VoyageAI, xAI (Grok), Hugging Face TEI, and OpenAI-compatible backends like vLLM.
 - **Summarizes** cells with an LLM before chunking and embedding, when you want denser or condensed representations.
 - **Exposes each stage independently** — `/v1.0/chunk`, `/v1.0/embed`, and `/v1.0/summarize` — so you can run and time chunking, embedding, and summarization on their own, or combine them in one call with `/v1.0/process`.
 - **Isolates tenants** — tenants, users, credentials, and endpoints are fully partitioned behind scoped bearer tokens.
@@ -73,7 +73,7 @@ It ships as a server, a React admin dashboard, three SDKs (C#, Python, JavaScrip
 |---|---|
 | A RAG ingestion pipeline | Type-aware chunking + embeddings from one endpoint, deterministic chunk output, and traceable labels/tags from input to every chunk. |
 | A multi-tenant SaaS with per-customer embeddings | Row-level tenant isolation, scoped credentials, and per-tenant endpoint configuration. |
-| A model/provider migration | A config-only switch between Ollama, Ollama Cloud, OpenAI, Gemini, xAI, and vLLM — no application code changes. |
+| A model/provider migration | A config-only switch between Ollama, Ollama Cloud, OpenAI, Azure OpenAI, Gemini, Vertex AI, Bedrock, Anthropic, Cohere, VoyageAI, xAI, TEI, and vLLM — no application code changes. |
 | An embedding gateway for many apps | One API, policy-managed endpoints, health gating, timeouts, and concurrency caps enforced centrally. |
 | Anything you have to debug | Full request history + an API Explorer that shows the exact upstream exchange, tokenizer source, and effective budget. |
 
@@ -215,21 +215,22 @@ curl -X POST http://localhost:8400/v1.0/process \
 - **Standalone chunk, embed, and summarize endpoints** (`POST /v1.0/chunk`, `/v1.0/embed`, `/v1.0/summarize`) so each stage can be run and timed independently, in addition to the combined `/v1.0/process`. Chunking uses a built-in tokenizer and needs no embedding endpoint.
 - **Multiple chunking strategies** — fixed token count, sentence, paragraph, regex, whole list, list entry, and several table strategies — with configurable overlap via sliding window.
 - **Endpoint-aware token budgeting** with model-native token counting, endpoint overrides, provider probing where available, provider defaults, and a required global fallback profile.
-- **Pluggable provider support** for Ollama, Ollama Cloud, OpenAI, Gemini, xAI (Grok), and OpenAI-compatible backends such as vLLM, selectable per endpoint. Ollama Cloud and xAI endpoints require an API key; Ollama Cloud always targets `https://ollama.com`.
+- **Pluggable provider support** for every PolyPrompt provider, selectable per endpoint: Ollama, Ollama Cloud, OpenAI, Azure OpenAI, Gemini, Google Vertex AI, AWS Bedrock, Anthropic (completion only), Cohere, VoyageAI and Hugging Face TEI (embedding only), xAI (Grok), and OpenAI-compatible backends such as vLLM. Provider-specific values (Azure api-version and auth mode, Bedrock region and AWS credentials, Vertex project, region, and service account, and so on) go in an optional `ProviderSettings` object, and the server validates each provider's required fields. Ollama Cloud always targets `https://ollama.com`.
+- **Secret masking** — endpoint API keys and secret provider settings are masked (`****` plus the last four characters) in every endpoint response; admins read them through dedicated reveal APIs (`GET /v1.0/endpoints/{embedding|completion}/{id}/reveal`), and echoing a masked value back on update keeps the stored secret.
 - **Multi-tenant architecture** with tenant, user, credential, and endpoint isolation.
 - **Four database backends** out of the box: SQLite (default, zero config), PostgreSQL, MySQL, and SQL Server.
 - **Request history and audit logging** with automatic cleanup, filesystem body persistence, configurable retention, and upstream embedding call capture (request/response headers, bodies, timing, and status for each provider call).
 - **Bearer token authentication** with global admin API keys and tenant-scoped credentials.
 - **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return `502`).
 - **Endpoint metadata** — `Labels` and string key/value `Tags` on embedding and inference endpoints for operator-owned grouping and routing context.
-- **Model loading and warming** for configured endpoints, with native Ollama preload and warm-request semantics for Ollama Cloud, OpenAI, Gemini, vLLM, and xAI.
+- **Model loading and warming** for configured endpoints, with native Ollama preload and warm-request semantics for every other provider.
 - **Per-endpoint provider timeout caps** with a default 60-second ceiling, configurable in the API and dashboard and enforced independently from health checks.
 - **Batch processing** for submitting multiple semantic cells in a single request.
 - **Optional LLM summarization** before chunking and embedding, supporting top-down and bottom-up strategies.
-- **Completion (inference) endpoint management** for configuring LLM endpoints (Ollama, Ollama Cloud, OpenAI, Gemini, vLLM, xAI) with health checks.
+- **Completion (inference) endpoint management** for configuring LLM endpoints (Ollama, Ollama Cloud, OpenAI, Azure OpenAI, Gemini, Vertex AI, Bedrock, Anthropic, Cohere, vLLM, xAI) with health checks. Bedrock, Vertex AI, and VoyageAI are health-checked with PolyPrompt's connectivity probe, because their requests are signed or the provider has no model-listing API.
 - **API Explorer** in the dashboard for exercising a specific embedding or inference endpoint through the Partio backend path and inspecting upstream call details.
 - **PolyPrompt-backed provider runtime** centralizing provider-specific embeddings and inference wiring in a dedicated library.
-- **Transparent completion proxy** (`/v1.0/proxy/{endpointId}/...`) that relays a caller's **native** provider request (OpenAI, Ollama, Ollama Cloud, Gemini, vLLM, xAI) to a managed endpoint's upstream and returns the response **verbatim** — point an off-the-shelf provider SDK's base URL at Partio, keep the upstream API key server-side, pass upstream status codes through, and get **streaming** for free. No request/response translation. The dashboard adds a **Chat** view — a live conversation through the proxy with **token streaming** (Ollama/Ollama Cloud, OpenAI/vLLM/xAI, and Gemini), configurable generation parameters (temperature, top-p, max tokens), a **Stop** control to cancel a response, and a per-message metrics tooltip (time-to-first-token, total time, prompt/output/total/cached tokens, provider timings) — plus a **Proxy** mode in the API Explorer.
+- **Transparent completion proxy** (`/v1.0/proxy/{endpointId}/...`) that relays a caller's **native** provider request (OpenAI, Ollama, Ollama Cloud, Gemini, vLLM, xAI, Azure OpenAI, Anthropic, Cohere; Bedrock and Vertex AI are not proxied because every request must be signed) to a managed endpoint's upstream and returns the response **verbatim** — point an off-the-shelf provider SDK's base URL at Partio, keep the upstream API key server-side, pass upstream status codes through, and get **streaming** for free. No request/response translation. The dashboard adds a **Chat** view — a live conversation through the proxy with **token streaming** (Ollama/Ollama Cloud, OpenAI/vLLM/xAI, and Gemini), configurable generation parameters (temperature, top-p, max tokens), a **Stop** control to cancel a response, and a per-message metrics tooltip (time-to-first-token, total time, prompt/output/total/cached tokens, provider timings) — plus a **Proxy** mode in the API Explorer.
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history.
 - **SDKs** for C#, Python, and JavaScript.
 - **Docker images** with multi-architecture support (amd64/arm64).
@@ -352,7 +353,7 @@ All endpoints use JSON and require an `Authorization: Bearer {token}` header unl
 | `POST` | `/v1.0/endpoints/embedding/{id}/load` | Load or warm one embedding endpoint model |
 | `POST` | `/v1.0/endpoints/completion/{id}/load` | Load or warm one inference endpoint model |
 
-Ollama endpoints can return `Loaded` because Partio uses Ollama's native keep-alive preload path. Ollama Cloud, OpenAI, Gemini, vLLM, and xAI endpoints return `Warmed` when their minimal provider request succeeds; vLLM must already be serving the configured model.
+Ollama endpoints can return `Loaded` because Partio uses Ollama's native keep-alive preload path. Endpoints for every other provider return `Warmed` when their minimal provider request succeeds; vLLM must already be serving the configured model.
 
 ### Endpoint health
 
@@ -529,7 +530,9 @@ Partio is configured via `partio.json`, created automatically on first run.
 }
 ```
 
-Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `Labels` and string key/value `Tags`, plus `MaximumTimeoutMs` (milliseconds, clamped server-side to a positive non-zero integer) and `MaxConcurrentRequests` (clamped to `>= 1`, default `2`). They also accept `MaxQueueDepth` (clamped to `>= 0`, default `0`): once `MaxConcurrentRequests` upstream calls are in flight, up to `MaxQueueDepth` further requests wait for a slot (bounded by `MaximumTimeoutMs`, which returns `504` on expiry); when the queue is full the endpoint returns `429`, and the default `0` rejects over-limit requests immediately with `429`.
+`TokenizationDefaults` also accepts `AzureOpenAI` (default `MaxInputTokens` 8192), `Cohere` (512), `Bedrock` (8192), `VertexAI` (2048), `TEI` (512), and `VoyageAI` (32000) profiles with the same shape. These apply to those providers' embedding endpoints when no endpoint `Tokenization` override is set.
+
+Embedding endpoints also accept an optional `Tokenization` object with `TokenizerKind`, `TokenizerModel`, `MaxInputTokens`, `ReservedInputTokens`, `BatchLimitMode`, and `AutoDetect` fields. Both embedding and inference endpoint definitions accept `Labels` and string key/value `Tags`, an optional `ProviderSettings` object (see [REST_API.md](REST_API.md#providers)), plus `MaximumTimeoutMs` (milliseconds, clamped server-side to a positive non-zero integer) and `MaxConcurrentRequests` (clamped to `>= 1`, default `2`). They also accept `MaxQueueDepth` (clamped to `>= 0`, default `0`): once `MaxConcurrentRequests` upstream calls are in flight, up to `MaxQueueDepth` further requests wait for a slot (bounded by `MaximumTimeoutMs`, which returns `504` on expiry); when the queue is full the endpoint returns `429`, and the default `0` rejects over-limit requests immediately with `429`.
 
 ### Database options
 
@@ -680,7 +683,7 @@ Partio is alpha and moving fast — feedback and contributions are welcome.
 
 [Open an issue](https://github.com/jchristn/partio/issues) and include:
 
-1. The Partio version (`v0.5.1`, or the Docker image tag)
+1. The Partio version (`v0.5.2`, or the Docker image tag)
 2. Steps to reproduce
 3. The request/response (redact any credentials)
 4. Relevant log output from `./logs/`

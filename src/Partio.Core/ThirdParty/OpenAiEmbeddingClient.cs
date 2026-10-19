@@ -25,6 +25,7 @@ namespace Partio.Core.ThirdParty
         /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
         /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
         /// <param name="maxQueueDepth">Maximum number of requests allowed to wait for a concurrency slot.</param>
+        /// <param name="transport">Optional HTTP message handler for upstream requests. The caller owns it.</param>
         public OpenAiEmbeddingClient(
             string endpoint,
             string? apiKey,
@@ -32,8 +33,9 @@ namespace Partio.Core.ThirdParty
             int maximumTimeoutMs,
             string? concurrencyKey = null,
             int maxConcurrentRequests = 2,
-            int maxQueueDepth = 0)
-            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth)
+            int maxQueueDepth = 0,
+            HttpMessageHandler? transport = null)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth, transport)
         {
             _Header = "[OpenAiEmbedding] ";
         }
@@ -48,7 +50,7 @@ namespace Partio.Core.ThirdParty
         /// <inheritdoc />
         public override async Task<List<List<float>>> EmbedBatchAsync(List<string> texts, string model, CancellationToken token = default)
         {
-            PolyPromptEmbeddingOptions options = new PolyPromptEmbeddingOptions { Model = model };
+            PolyPromptEmbeddingOptions options = CreateEmbeddingOptions(model);
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "embedding", _ConcurrencyKey);
             PolyPrompt.Models.EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
@@ -128,6 +130,17 @@ namespace Partio.Core.ThirdParty
         }
 
         /// <summary>
+        /// Create the PolyPrompt embedding options for a request. Providers with request-level settings
+        /// (for example Cohere and VoyageAI input types) return their provider-specific options type.
+        /// </summary>
+        /// <param name="model">Embedding model.</param>
+        /// <returns>The embedding options.</returns>
+        protected virtual PolyPromptEmbeddingOptions CreateEmbeddingOptions(string model)
+        {
+            return new PolyPromptEmbeddingOptions { Model = model };
+        }
+
+        /// <summary>
         /// Provider display name used in error messages.
         /// </summary>
         protected virtual string ProviderName => "OpenAI";
@@ -139,6 +152,18 @@ namespace Partio.Core.ThirdParty
         protected virtual PolyPromptEmbeddingClientBase CreateProviderClient()
         {
             return new PolyPromptOpenAiEmbeddingClient(_Endpoint, _ApiKey, _Logging);
+        }
+
+        /// <inheritdoc />
+        public override async Task<bool> ValidateConnectivityAsync(string model, int timeoutMs, CancellationToken token = default)
+        {
+            using (PolyPromptEmbeddingClientBase client = CreateConfiguredClient(timeoutMs > 0 ? timeoutMs : _MaximumTimeoutMs))
+            {
+                if (!string.IsNullOrEmpty(model)) client.Model = model;
+                bool reachable = await client.ValidateConnectivityAsync(token).ConfigureAwait(false);
+                AppendCallDetails(client.CallDetails);
+                return reachable;
+            }
         }
 
         private PolyPromptEmbeddingClientBase CreateConfiguredClient(int timeoutMs)

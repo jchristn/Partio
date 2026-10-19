@@ -146,6 +146,20 @@ namespace Partio.Core.ThirdParty
             string? systemPrompt = null);
 
         /// <summary>
+        /// Verify that the provider accepts a lightweight authenticated request, using the PolyPrompt client's
+        /// connectivity probe. Used to health-check providers that cannot be probed with a plain HTTP request.
+        /// The default implementation reports that no probe is available.
+        /// </summary>
+        /// <param name="model">Model to probe with (some providers probe with a one-word request).</param>
+        /// <param name="timeoutMs">Probe timeout in milliseconds.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>True when the provider accepted the probe.</returns>
+        public virtual Task<bool> ValidateConnectivityAsync(string model, int timeoutMs, CancellationToken token = default)
+        {
+            return Task.FromResult(false);
+        }
+
+        /// <summary>
         /// Load or warm a model for this completion provider.
         /// </summary>
         /// <param name="model">Model name.</param>

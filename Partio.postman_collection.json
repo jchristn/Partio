@@ -167,6 +167,58 @@
 		{
 			"key": "xaiEmbeddingModel",
 			"value": ""
+		},
+		{
+			"key": "azureEndpoint",
+			"value": "https://my-resource.openai.azure.com"
+		},
+		{
+			"key": "azureApiKey",
+			"value": ""
+		},
+		{
+			"key": "azureDeployment",
+			"value": "gpt-4o-mini"
+		},
+		{
+			"key": "anthropicApiKey",
+			"value": ""
+		},
+		{
+			"key": "cohereApiKey",
+			"value": ""
+		},
+		{
+			"key": "voyageApiKey",
+			"value": ""
+		},
+		{
+			"key": "teiEndpoint",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "awsRegion",
+			"value": "us-east-1"
+		},
+		{
+			"key": "awsAccessKeyId",
+			"value": ""
+		},
+		{
+			"key": "awsSecretAccessKey",
+			"value": ""
+		},
+		{
+			"key": "gcpProjectId",
+			"value": ""
+		},
+		{
+			"key": "gcpRegion",
+			"value": "us-central1"
+		},
+		{
+			"key": "gcpServiceAccountJson",
+			"value": ""
 		}
 	],
 	"item": [
@@ -501,6 +553,69 @@
 							]
 						},
 						"description": "Transparent proxy for an xAI endpoint: relay a native xAI Responses API request (/v1/responses) and return the provider response verbatim. xAI endpoints also relay v1/chat/completions, v1/embeddings, v1/models, v1/language-models, and v1/embedding-models."
+					}
+				},
+				{
+					"name": "Proxy - Anthropic Messages",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"model\": \"claude-opus-4-8\",\n    \"max_tokens\": 64,\n    \"messages\": [\n        {\n            \"role\": \"user\",\n            \"content\": \"Say hello in one word.\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/proxy/{{completionEndpointId}}/v1/messages",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"proxy",
+								"{{completionEndpointId}}",
+								"v1",
+								"messages"
+							]
+						},
+						"description": "Transparent proxy for an Anthropic endpoint: relay a native Messages API request. Partio injects x-api-key and anthropic-version (a caller-supplied anthropic-version is kept). Anthropic endpoints also relay v1/messages/count_tokens, v1/models, and v1/models/{model}."
+					}
+				},
+				{
+					"name": "Proxy - Azure OpenAI Chat Completions",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"messages\": [\n        {\n            \"role\": \"user\",\n            \"content\": \"Say hello in one word.\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/proxy/{{completionEndpointId}}/openai/deployments/{{azureDeployment}}/chat/completions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"proxy",
+								"{{completionEndpointId}}",
+								"openai",
+								"deployments",
+								"{{azureDeployment}}",
+								"chat",
+								"completions"
+							]
+						},
+						"description": "Transparent proxy for an Azure OpenAI endpoint. Partio injects the api-key header (or Bearer for AuthMode BearerToken) and appends the endpoint's api-version when the query string has none. Azure endpoints also relay openai/deployments/{deployment}/completions and /embeddings, openai/models, and the openai/v1/* GA routes."
 					}
 				},
 				{
@@ -1859,6 +1974,276 @@
 					}
 				},
 				{
+					"name": "Create Embedding Endpoint - Azure OpenAI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Azure OpenAI Embedding\",\n    \"Model\": \"text-embedding-3-small\",\n    \"Endpoint\": \"{{azureEndpoint}}\",\n    \"ApiFormat\": \"AzureOpenAI\",\n    \"ApiKey\": \"{{azureApiKey}}\",\n    \"ProviderSettings\": {\n        \"AzureOpenAI\": {\n            \"ApiVersion\": \"2024-10-21\",\n            \"AuthMode\": \"ApiKey\"\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create an Azure OpenAI embedding endpoint. Model is the Azure deployment name. Endpoint is the resource URL. Set AuthMode to BearerToken to send ApiKey as an Entra ID access token."
+					}
+				},
+				{
+					"name": "Create Embedding Endpoint - Cohere",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Cohere Embedding\",\n    \"Model\": \"embed-v4.0\",\n    \"ApiFormat\": \"Cohere\",\n    \"ApiKey\": \"{{cohereApiKey}}\",\n    \"ProviderSettings\": {\n        \"Cohere\": {\n            \"InputType\": \"search_document\"\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create a Cohere embedding endpoint. ApiKey is required; Endpoint defaults to https://api.cohere.com."
+					}
+				},
+				{
+					"name": "Create Embedding Endpoint - Bedrock",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Bedrock Embedding\",\n    \"Model\": \"amazon.titan-embed-text-v2:0\",\n    \"ApiFormat\": \"Bedrock\",\n    \"ProviderSettings\": {\n        \"Bedrock\": {\n            \"Region\": \"{{awsRegion}}\",\n            \"CredentialSource\": \"Static\",\n            \"AccessKeyId\": \"{{awsAccessKeyId}}\",\n            \"SecretAccessKey\": \"{{awsSecretAccessKey}}\",\n            \"SessionToken\": null\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create an AWS Bedrock embedding endpoint. Endpoint is omitted and derived from the region (https://bedrock-runtime.{Region}.amazonaws.com). Requests are signed with AWS Signature V4. Use CredentialSource Environment to read AWS_* variables from the Partio server instead of storing keys. SecretAccessKey is masked in responses. Health checks use the PolyPrompt connectivity probe (60s interval)."
+					}
+				},
+				{
+					"name": "Create Embedding Endpoint - Vertex AI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Vertex AI Embedding\",\n    \"Model\": \"text-embedding-005\",\n    \"ApiFormat\": \"VertexAI\",\n    \"ProviderSettings\": {\n        \"VertexAI\": {\n            \"ProjectId\": \"{{gcpProjectId}}\",\n            \"Region\": \"{{gcpRegion}}\",\n            \"CredentialSource\": \"ServiceAccountJson\",\n            \"ServiceAccountJson\": \"{{gcpServiceAccountJson}}\"\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create a Google Vertex AI embedding endpoint. Endpoint is omitted and derived from the region (https://{Region}-aiplatform.googleapis.com). ServiceAccountJson must be the full key JSON as a string; it is masked in responses. CredentialSource can also be ApplicationDefault or AccessToken (token in ApiKey). Health checks use the PolyPrompt connectivity probe (60s interval)."
+					}
+				},
+				{
+					"name": "Create Embedding Endpoint - TEI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"TEI Embedding\",\n    \"Model\": \"BAAI/bge-small-en-v1.5\",\n    \"Endpoint\": \"{{teiEndpoint}}\",\n    \"ApiFormat\": \"TEI\",\n    \"ApiKey\": null,\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create a Hugging Face Text Embeddings Inference endpoint. The server hosts one model, so Model is informational. ApiKey is only needed when the server runs with --api-key. TEI is embedding only."
+					}
+				},
+				{
+					"name": "Create Embedding Endpoint - VoyageAI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"VoyageAI Embedding\",\n    \"Model\": \"voyage-3.5\",\n    \"ApiFormat\": \"VoyageAI\",\n    \"ApiKey\": \"{{voyageApiKey}}\",\n    \"ProviderSettings\": {\n        \"VoyageAI\": {\n            \"InputType\": \"document\",\n            \"OutputDimension\": 1024\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create a VoyageAI embedding endpoint. ApiKey is required; Endpoint defaults to https://api.voyageai.com. VoyageAI is embedding only and is health-checked with the PolyPrompt connectivity probe."
+					}
+				},
+				{
 					"name": "Read Embedding Endpoint",
 					"event": [
 						{
@@ -1888,7 +2273,41 @@
 								"{{endpointId}}"
 							]
 						},
-						"description": "Read an embedding endpoint by ID."
+						"description": "Read an embedding endpoint by ID. ApiKey and secret ProviderSettings fields are masked (**** plus the last four characters); use the Reveal request to read them."
+					}
+				},
+				{
+					"name": "Reveal Embedding Endpoint Secrets",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding/{{endpointId}}/reveal",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding",
+								"{{endpointId}}",
+								"reveal"
+							]
+						},
+						"description": "Read the endpoint with ApiKey and secret ProviderSettings fields (Bedrock SecretAccessKey and SessionToken, Vertex AI ServiceAccountJson) unmasked. Every other endpoint response masks them as **** plus the last four characters. Admin only; each call is logged."
 					}
 				},
 				{
@@ -2312,6 +2731,231 @@
 					}
 				},
 				{
+					"name": "Create Completion Endpoint - Azure OpenAI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Azure OpenAI Inference\",\n    \"Model\": \"gpt-4o-mini\",\n    \"Endpoint\": \"{{azureEndpoint}}\",\n    \"ApiFormat\": \"AzureOpenAI\",\n    \"ApiKey\": \"{{azureApiKey}}\",\n    \"ProviderSettings\": {\n        \"AzureOpenAI\": {\n            \"ApiVersion\": \"2024-10-21\",\n            \"AuthMode\": \"ApiKey\"\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create an Azure OpenAI completion endpoint. Model is the Azure deployment name. Endpoint is the resource URL. Set AuthMode to BearerToken to send ApiKey as an Entra ID access token."
+					}
+				},
+				{
+					"name": "Create Completion Endpoint - Anthropic",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Anthropic Inference\",\n    \"Model\": \"claude-opus-4-8\",\n    \"ApiFormat\": \"Anthropic\",\n    \"ApiKey\": \"{{anthropicApiKey}}\",\n    \"ProviderSettings\": {\n        \"Anthropic\": {\n            \"AnthropicVersion\": \"2023-06-01\",\n            \"WorkspaceId\": null\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create an Anthropic completion endpoint. ApiKey is required (sent as x-api-key with anthropic-version); Endpoint defaults to https://api.anthropic.com. Anthropic is completion only."
+					}
+				},
+				{
+					"name": "Create Completion Endpoint - Cohere",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Cohere Inference\",\n    \"Model\": \"command-a-03-2025\",\n    \"ApiFormat\": \"Cohere\",\n    \"ApiKey\": \"{{cohereApiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create a Cohere completion endpoint (v2 Chat API). ApiKey is required; Endpoint defaults to https://api.cohere.com."
+					}
+				},
+				{
+					"name": "Create Completion Endpoint - Bedrock",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Bedrock Inference\",\n    \"Model\": \"anthropic.claude-3-5-sonnet-20240620-v1:0\",\n    \"ApiFormat\": \"Bedrock\",\n    \"ProviderSettings\": {\n        \"Bedrock\": {\n            \"Region\": \"{{awsRegion}}\",\n            \"CredentialSource\": \"Static\",\n            \"AccessKeyId\": \"{{awsAccessKeyId}}\",\n            \"SecretAccessKey\": \"{{awsSecretAccessKey}}\",\n            \"SessionToken\": null\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create an AWS Bedrock completion endpoint (Converse API). Endpoint is omitted and derived from the region (https://bedrock-runtime.{Region}.amazonaws.com). Requests are signed with AWS Signature V4. Use CredentialSource Environment to read AWS_* variables from the Partio server instead of storing keys. SecretAccessKey is masked in responses. Health checks use the PolyPrompt connectivity probe (60s interval). Bedrock endpoints cannot be proxied."
+					}
+				},
+				{
+					"name": "Create Completion Endpoint - Vertex AI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Vertex AI Inference\",\n    \"Model\": \"gemini-2.5-flash\",\n    \"ApiFormat\": \"VertexAI\",\n    \"ProviderSettings\": {\n        \"VertexAI\": {\n            \"ProjectId\": \"{{gcpProjectId}}\",\n            \"Region\": \"{{gcpRegion}}\",\n            \"CredentialSource\": \"ServiceAccountJson\",\n            \"ServiceAccountJson\": \"{{gcpServiceAccountJson}}\"\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create a Google Vertex AI completion endpoint. Endpoint is omitted and derived from the region (https://{Region}-aiplatform.googleapis.com). ServiceAccountJson must be the full key JSON as a string; it is masked in responses. CredentialSource can also be ApplicationDefault or AccessToken (token in ApiKey). Health checks use the PolyPrompt connectivity probe (60s interval). Vertex AI endpoints cannot be proxied."
+					}
+				},
+				{
 					"name": "Read Completion Endpoint",
 					"request": {
 						"method": "GET",
@@ -2328,7 +2972,41 @@
 								"{{completionEndpointId}}"
 							]
 						},
-						"description": "Read a completion endpoint by ID."
+						"description": "Read a completion endpoint by ID. ApiKey and secret ProviderSettings fields are masked (**** plus the last four characters); use the Reveal request to read them."
+					}
+				},
+				{
+					"name": "Reveal Completion Endpoint Secrets",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion/{{completionEndpointId}}/reveal",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion",
+								"{{completionEndpointId}}",
+								"reveal"
+							]
+						},
+						"description": "Read the endpoint with ApiKey and secret ProviderSettings fields (Bedrock SecretAccessKey and SessionToken, Vertex AI ServiceAccountJson) unmasked. Every other endpoint response masks them as **** plus the last four characters. Admin only; each call is logged."
 					}
 				},
 				{

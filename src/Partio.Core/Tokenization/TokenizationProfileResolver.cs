@@ -297,6 +297,18 @@ namespace Partio.Core.Tokenization
                     return _Settings.TokenizationDefaults.Gemini;
                 case ApiFormatEnum.xAI:
                     return _Settings.TokenizationDefaults.xAI;
+                case ApiFormatEnum.AzureOpenAI:
+                    return _Settings.TokenizationDefaults.AzureOpenAI;
+                case ApiFormatEnum.Cohere:
+                    return _Settings.TokenizationDefaults.Cohere;
+                case ApiFormatEnum.Bedrock:
+                    return _Settings.TokenizationDefaults.Bedrock;
+                case ApiFormatEnum.VertexAI:
+                    return _Settings.TokenizationDefaults.VertexAI;
+                case ApiFormatEnum.TEI:
+                    return _Settings.TokenizationDefaults.TEI;
+                case ApiFormatEnum.VoyageAI:
+                    return _Settings.TokenizationDefaults.VoyageAI;
                 case ApiFormatEnum.Ollama:
                 case ApiFormatEnum.OllamaCloud:
                     if (IsBertLikeModel(model, capabilities))

@@ -6,8 +6,8 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>CS1591</NoWarn>
-    <Version>0.5.1</Version>
-    <PackageVersion>0.5.1</PackageVersion>
+    <Version>0.5.2</Version>
+    <PackageVersion>0.5.2</PackageVersion>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PackageId>Partio.Sdk</PackageId>

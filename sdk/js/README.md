@@ -10,8 +10,8 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Tenant CRUD (`createTenant`, `getTenant`, `updateTenant`, `deleteTenant`, `tenantExists`, `enumerateTenants`)
 - User CRUD (`createUser`, `getUser`, `updateUser`, `deleteUser`, `userExists`, `enumerateUsers`)
 - Credential CRUD (`createCredential`, `getCredential`, `updateCredential`, `deleteCredential`, `credentialExists`, `enumerateCredentials`)
-- Embedding Endpoint CRUD (`createEndpoint`, `getEndpoint`, `updateEndpoint`, `deleteEndpoint`, `endpointExists`, `enumerateEndpoints`)
-- Completion Endpoint CRUD (`createCompletionEndpoint`, `getCompletionEndpoint`, `updateCompletionEndpoint`, `deleteCompletionEndpoint`, `completionEndpointExists`, `enumerateCompletionEndpoints`)
+- Embedding Endpoint CRUD (`createEndpoint`, `getEndpoint`, `revealEndpoint`, `updateEndpoint`, `deleteEndpoint`, `endpointExists`, `enumerateEndpoints`)
+- Completion Endpoint CRUD (`createCompletionEndpoint`, `getCompletionEndpoint`, `revealCompletionEndpoint`, `updateCompletionEndpoint`, `deleteCompletionEndpoint`, `completionEndpointExists`, `enumerateCompletionEndpoints`)
 - Model loading and warming (`loadEndpoint`, `loadCompletionEndpoint`)
 - Embedding & Completion Endpoint Health (`getEndpointHealth`, `getAllEndpointHealth`, `getCompletionEndpointHealth`, `getAllCompletionEndpointHealth`)
 - Semantic cell processing (`process`, `processBatch`)
@@ -19,12 +19,56 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Transparent completion proxy (`proxy`, `proxyPost`, `proxyGet`) — relay a native provider request through an endpoint and get the upstream response (`{statusCode, headers, body}`) verbatim; a non-2xx upstream status is returned, not thrown
 - Request history (`getRequestHistory`, `getRequestHistoryDetail`, `deleteRequestHistory`, `enumerateRequestHistory`)
 
-Embedding and completion endpoint payloads accept `ApiFormat` values `Ollama`, `OllamaCloud`, `OpenAI`, `Gemini`, `vLLM`, and `xAI`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
+Embedding and completion endpoint payloads accept `ApiFormat` values `Ollama`, `OllamaCloud`, `OpenAI`, `Gemini`, `vLLM`, `xAI`, `AzureOpenAI`, `Anthropic`, `Cohere`, `Bedrock`, `VertexAI`, `TEI`, and `VoyageAI`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
 Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
 Use `MaximumTimeoutMs` and `MaxConcurrentRequests` on embedding or completion endpoints to cap upstream provider calls per endpoint. Process routes that hit the timeout cap raise `PartioError` with status code `504`; concurrency-limit rejections raise `PartioError` with status code `429`. Set `MaxQueueDepth` (default `0`) to let further requests wait for a concurrency slot once `MaxConcurrentRequests` is reached; a queued request that waits past `MaximumTimeoutMs` raises `PartioError` with status code `504`, and when the queue is full the request raises `PartioError` with status code `429`.
-Model loading reports provider-specific semantics: Ollama can return `Loaded`; Ollama Cloud, OpenAI, Gemini, vLLM, and xAI return `Warmed` because those APIs do not expose a general remote model-residency operation.
+Model loading reports provider-specific semantics: Ollama can return `Loaded`; every other provider returns `Warmed` because those APIs do not expose a general remote model-residency operation.
 
 `OllamaCloud` and `xAI` endpoints require `ApiKey` (the server returns 400 without one). `OllamaCloud` always targets `https://ollama.com`, whatever `Endpoint` is sent. `xAI` uses `https://api.x.ai` (a trailing `/v1` is accepted and dropped), serves completions through xAI's native Responses API, and relays `v1/responses` through the proxy.
+
+### Providers and `ProviderSettings`
+
+Most providers are configured by `Endpoint`, `ApiKey`, and `Model` alone. Azure OpenAI, Anthropic, Bedrock, Vertex AI, Cohere, and VoyageAI also accept an optional `ProviderSettings` object; the server keeps only the section that matches `ApiFormat`.
+
+| ApiFormat | Kinds | Required | `ProviderSettings` section |
+|---|---|---|---|
+| `AzureOpenAI` | completion, embedding | `Endpoint` (resource URL), `ApiKey`, `Model` = deployment name | `AzureOpenAI`: `ApiVersion` (default `2024-10-21`), `AuthMode` (`ApiKey` or `BearerToken` for an Entra ID token in `ApiKey`) |
+| `Anthropic` | completion | `ApiKey` | `Anthropic`: `AnthropicVersion` (default `2023-06-01`), `WorkspaceId` |
+| `Cohere` | completion, embedding | `ApiKey` | `Cohere`: `InputType` (embeddings) |
+| `Bedrock` | completion, embedding | `ProviderSettings.Bedrock.Region`; `AccessKeyId` + `SecretAccessKey` when `CredentialSource` is `Static` | `Bedrock`: `Region`, `CredentialSource` (`Static` or `Environment`), `AccessKeyId`, `SecretAccessKey`, `SessionToken` |
+| `VertexAI` | completion, embedding | `ProviderSettings.VertexAI.ProjectId` and `Region`; `ServiceAccountJson` when `CredentialSource` is `ServiceAccountJson`; `ApiKey` (token) when it is `AccessToken` | `VertexAI`: `ProjectId`, `Region`, `CredentialSource` (`ServiceAccountJson`, `ApplicationDefault`, or `AccessToken`), `ServiceAccountJson` |
+| `TEI` | embedding | `Endpoint` | none (`ApiKey` optional) |
+| `VoyageAI` | embedding | `ApiKey` | `VoyageAI`: `InputType`, `OutputDimension` |
+
+Hosted providers default `Endpoint` to their public API root when it is omitted, and Bedrock and Vertex AI derive it from the region. A trailing version segment (`/v1`, `/openai`) is dropped. The server returns 400 when a required value is missing, or when a provider is used for an endpoint kind it does not support (for example `TEI` or `VoyageAI` as a completion endpoint, or `Anthropic` as an embedding endpoint). Bedrock and Vertex AI endpoints cannot be used through the transparent proxy.
+
+### Secret masking and reveal
+
+Every endpoint response (read, enumerate, create, and update) masks secrets: `ApiKey`, `ProviderSettings.Bedrock.SecretAccessKey`, and `ProviderSettings.Bedrock.SessionToken` are returned as `****` plus the last four characters (or `****` alone for values shorter than twelve characters), and `ProviderSettings.VertexAI.ServiceAccountJson` is returned as `****`. Sending a masked value back on update keeps the stored secret, so a read-modify-write round trip is safe; sending a new value replaces it, and `null` clears it. To read the unmasked endpoint, call the admin-only reveal API (`GET /v1.0/endpoints/embedding/{id}/reveal` and `GET /v1.0/endpoints/completion/{id}/reveal`).
+
+```javascript
+import { ApiFormats, PartioClient } from './partio-sdk.js';
+
+const azure = await client.createCompletionEndpoint({
+  TenantId: 'default',
+  Model: 'gpt-4o-mini',                         // deployment name
+  Endpoint: 'https://my-resource.openai.azure.com',
+  ApiFormat: ApiFormats.AzureOpenAI,
+  ApiKey: 'your-azure-key',
+  ProviderSettings: { AzureOpenAI: { ApiVersion: '2024-10-21', AuthMode: 'ApiKey' } },
+});
+
+const vertex = await client.createEndpoint({
+  TenantId: 'default',
+  Model: 'text-embedding-005',
+  ApiFormat: ApiFormats.VertexAI,               // Endpoint derived from the region
+  ProviderSettings: { VertexAI: { ProjectId: 'my-project', Region: 'us-central1', CredentialSource: 'ServiceAccountJson', ServiceAccountJson: saJson } },
+});
+
+console.log(azure.ApiKey);                                        // ****-key (masked)
+const revealed = await client.revealCompletionEndpoint(azure.Id);
+const revealedVertex = await client.revealEndpoint(vertex.Id);
+```
 
 ## Prerequisites
 

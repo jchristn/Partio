@@ -88,7 +88,7 @@ namespace Test.Automated
             Console.WriteLine("  --db-user <user>   --db-pass <pass>   --db-schema <schema>   --db-instance <instance>");
             Console.WriteLine("  --embedding-endpoint <url>   --embedding-model <model>");
             Console.WriteLine("  --inference-endpoint <url>   --inference-model <model>");
-            Console.WriteLine("  --upstream-format <Ollama|OllamaCloud|OpenAI|vLLM|Gemini|xAI>   --upstream-bearer <token>");
+            Console.WriteLine("  --upstream-format <Ollama|OllamaCloud|OpenAI|vLLM|Gemini|xAI|AzureOpenAI|Anthropic|Cohere|TEI|VoyageAI>   --upstream-bearer <token>");
             Console.WriteLine("  --sdk-harnesses   (with real endpoints) also run the SDK harnesses against the configured server");
             Console.WriteLine("");
             Console.WriteLine("Flags accept both '--flag value' and '--flag=value'.");

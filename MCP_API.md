@@ -56,7 +56,7 @@ A `tools/call` result carries **structured content** — the tool's return value
       { "type": "text", "text": "{ ...structured result rendered as text... }" }
     ],
     "structuredContent": {
-      "McpServerVersion": "0.5.1",
+      "McpServerVersion": "0.5.2",
       "PartioServerHealthy": true,
       "ProtocolVersion": "2025-11-25",
       "Tools": ["partio_capabilities", "partio_enumerate_completion_endpoints", "..."]
@@ -165,6 +165,10 @@ Tools are invoked only through `tools/call`; calling a tool name as a bare JSON-
 | `partio_proxy` | Relay a native provider request through a completion endpoint's transparent proxy (`endpointId`, `subpath`, optional `method`/`body`/`contentType`); returns the provider's response verbatim as `{ StatusCode, ContentType, Body, Headers }`. No translation; a non-2xx upstream status is returned, not raised. | Yes |
 
 The create and update tools — for both completion and embedding endpoints — accept the **full endpoint definition**. That includes the concurrency controls: **`MaxConcurrentRequests`** (clamped `>= 1`, default `2`) caps how many upstream provider calls run at once, and **`MaxQueueDepth`** (clamped `>= 0`, default `0`) sets how many further requests may wait for a slot before the endpoint sheds load with `429`.
+
+The definition also carries `ApiFormat`, which takes any of Partio's 13 provider values: `Ollama`, `OllamaCloud`, `OpenAI`, `vLLM`, `Gemini`, `xAI`, `AzureOpenAI`, `Anthropic` (completion only), `Cohere`, `Bedrock`, `VertexAI`, `TEI` (embedding only), and `VoyageAI` (embedding only). It also carries an optional `ProviderSettings` object, which `Bedrock` and `VertexAI` require. See [REST_API.md](REST_API.md#providers) for the required fields per provider.
+
+**Secrets are always masked.** Every endpoint returned by the get, enumerate, create, and update tools shows `ApiKey` and secret `ProviderSettings` fields as `****` plus the last four characters. Passing a masked value back to an update tool keeps the stored secret. The MCP server deliberately has no reveal tool, so an agent can set or rotate a secret but never read one back. Use the REST reveal APIs for that.
 
 ## Client configuration
 

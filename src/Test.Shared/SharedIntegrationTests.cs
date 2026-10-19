@@ -2319,6 +2319,15 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Create vLLM Completion Endpoint", async () => await TestCreateVllmCompletionEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Ollama Cloud and xAI Endpoints Require ApiKey (400)", async () => await TestCloudProviderEndpointsRequireApiKeyAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Create Ollama Cloud Endpoints", async () => await TestCreateOllamaCloudEndpointsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Provider Settings Validation (400)", async () => await TestProviderSettingsValidationAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Provider Endpoint Normalization", async () => await TestProviderEndpointNormalizationAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Endpoint Secrets Masked and Revealed", async () => await TestEndpointSecretsMaskedAndRevealedAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Reveal Requires Admin", async () => await TestRevealRequiresAdminAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Anthropic Completion and Proxy", async () => await TestAnthropicCompletionAndProxyAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Azure OpenAI Proxy Appends api-version", async () => await TestAzureOpenAiProxyAppendsApiVersionAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Bedrock Completion Signed and Not Proxied", async () => await TestBedrockCompletionSignedAndNotProxiedAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","TEI and Cohere Embeddings", async () => await TestEmbeddingOnlyProvidersEmbedAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Connectivity Probe Health Check (VoyageAI)", async () => await TestConnectivityProbeHealthCheckAsync()));
 
             // Model Loading
             tests.Add(TestCaseFactory.Async("Integration","Load Ollama Completion Endpoint Model", async () => await TestLoadOllamaCompletionEndpointAsync()));

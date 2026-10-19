@@ -19,7 +19,7 @@ Health status (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.5.1" }
+{ "Status": "Healthy", "Version": "0.5.2" }
 ```
 
 ### GET /v1.0/health
@@ -27,7 +27,7 @@ Health status JSON (no auth required).
 
 **Response**: `200 OK`
 ```json
-{ "Status": "Healthy", "Version": "0.5.1" }
+{ "Status": "Healthy", "Version": "0.5.2" }
 ```
 
 ---
@@ -568,12 +568,12 @@ summarization engine as `/v1.0/process`.
 The proxy is a **transparent passthrough** to a completion endpoint's upstream provider. You send the
 provider's **native** request and Partio relays the provider's response **verbatim** — it performs no
 request/response translation. This is the recommended way to use an off-the-shelf provider SDK (OpenAI,
-Ollama, Ollama Cloud, Gemini, vLLM, xAI) against a Partio-managed endpoint: point the SDK's base URL at
+Ollama, Ollama Cloud, Gemini, vLLM, xAI, Azure OpenAI, Anthropic, Cohere) against a Partio-managed endpoint: point the SDK's base URL at
 `{baseUrl}/v1.0/proxy/{endpointId}` and the SDK appends its own native sub-path.
 
 For each proxied request Partio: authenticates the caller (tenant bearer), resolves the endpoint (tenant
 scope + `Active` + healthy), verifies the sub-path is valid for that endpoint's `ApiFormat`, **injects the
-upstream API key** (so the caller never holds the provider credential), enforces the endpoint's
+upstream credential headers** (so the caller never holds the provider credential), enforces the endpoint's
 `MaxConcurrentRequests` / `MaxQueueDepth` / `MaximumTimeoutMs`, and records request history.
 
 Two behaviors differ from the rest of the API on purpose, for native-SDK compatibility:
@@ -590,7 +590,7 @@ sub-paths are relayed. A request for another provider's path is rejected, never 
 ### {GET,POST} /v1.0/proxy/{endpointId}/{native-subpath}
 
 Relay a native provider request to the endpoint's upstream. The request body and headers are forwarded as
-sent (with hop-by-hop and the inbound `Authorization` header stripped; Partio injects the upstream key).
+sent (with hop-by-hop and the inbound `Authorization` header stripped; Partio injects the upstream credential: Bearer, `x-goog-api-key` for Gemini, `x-api-key` plus `anthropic-version` for Anthropic, and `api-key` (or Bearer) for Azure OpenAI). A caller-supplied `anthropic-version` header is kept.
 
 **Path parameters**:
 - `endpointId` — target completion endpoint ID (`cep_...`).
@@ -601,6 +601,10 @@ sent (with hop-by-hop and the inbound `Authorization` header stripped; Partio in
 - **Ollama / Ollama Cloud**: `api/chat`, `api/generate`, `api/embed`, `api/embeddings`, `api/tags`, `api/show`, `api/ps`, `api/version`
 - **Gemini**: `v1beta/models`, `v1beta/models/{model}:{method}`
 - **xAI**: `v1/responses`, `v1/chat/completions`, `v1/embeddings`, `v1/models`, `v1/models/{model}`, `v1/language-models`, `v1/embedding-models`
+- **Azure OpenAI**: `openai/deployments/{deployment}/chat/completions`, `openai/deployments/{deployment}/completions`, `openai/deployments/{deployment}/embeddings`, `openai/models`, `openai/v1/chat/completions`, `openai/v1/embeddings`, `openai/v1/responses`, `openai/v1/models`. When the query string has no `api-version`, Partio appends the endpoint's `ProviderSettings.AzureOpenAI.ApiVersion` (default `2024-10-21`).
+- **Anthropic**: `v1/messages`, `v1/messages/count_tokens`, `v1/models`, `v1/models/{model}`
+- **Cohere**: `v2/chat`, `v2/embed`, `v1/models`, `v1/models/{model}`
+- **Bedrock / Vertex AI**: not proxied. Every request must be signed by Partio, so any proxy request returns `404` with a message pointing to `POST /v1.0/completion`.
 
 **Example** (OpenAI-dialect endpoint):
 
@@ -610,6 +614,26 @@ Authorization: Bearer {partio-token}
 Content-Type: application/json
 
 { "model": "gpt-4.1-mini", "messages": [ { "role": "user", "content": "Say hello in one word." } ] }
+```
+
+**Example** (Anthropic endpoint; Partio adds `x-api-key` and `anthropic-version`):
+
+```
+POST /v1.0/proxy/cep_abc123/v1/messages
+Authorization: Bearer {partio-token}
+Content-Type: application/json
+
+{ "model": "claude-opus-4-8", "max_tokens": 64, "messages": [ { "role": "user", "content": "Say hello in one word." } ] }
+```
+
+**Example** (Azure OpenAI endpoint; Partio adds `api-key` and `api-version`):
+
+```
+POST /v1.0/proxy/cep_abc123/openai/deployments/gpt-4o-mini/chat/completions
+Authorization: Bearer {partio-token}
+Content-Type: application/json
+
+{ "messages": [ { "role": "user", "content": "Say hello in one word." } ] }
 ```
 
 **Response**: the upstream provider's response, verbatim (status code, `Content-Type`, and body). Partio adds
@@ -742,6 +766,13 @@ Provider semantics:
 | Gemini | Minimal `generateContent` warm request | Minimal `embedContent` warm request | `Warmed` |
 | Ollama Cloud | Minimal chat warm request (hosted models are already resident) | Minimal embedding warm request | `Warmed` |
 | xAI | Minimal Responses API (`/v1/responses`) warm request | Minimal embedding warm request | `Warmed` |
+| Azure OpenAI | Minimal chat completion warm request on the deployment | Minimal embedding warm request | `Warmed` |
+| Anthropic | Minimal Messages API warm request | — (completion only) | `Warmed` |
+| Cohere | Minimal v2 chat warm request | Minimal v2 embed warm request | `Warmed` |
+| Bedrock | Minimal Converse warm request (signed) | Minimal InvokeModel embedding warm request (signed) | `Warmed` |
+| Vertex AI | Minimal `generateContent` warm request | Minimal embedding warm request | `Warmed` |
+| TEI | — (embedding only) | Minimal `/embed` warm request | `Warmed` |
+| VoyageAI | — (embedding only) | Minimal embedding warm request | `Warmed` |
 
 ### POST /v1.0/endpoints/embedding/{id}/load
 Load or warm a configured embedding endpoint model.
@@ -806,7 +837,7 @@ Errors:
 | Invalid request body or `KeepAlive` unload value such as `0` | `400` |
 | Unauthenticated or non-admin caller | `401` |
 | Endpoint not found | `404` |
-| Native load required for Ollama Cloud, OpenAI, Gemini, vLLM, or xAI | `409` |
+| Native load required for any provider other than Ollama | `409` |
 | Endpoint concurrency limit reached | `429` |
 | Upstream provider failure | `502` |
 | Upstream provider timeout | `504` |
@@ -958,6 +989,166 @@ List credentials with pagination.
 
 ---
 
+## Providers
+
+Embedding and completion endpoints share one provider model. `ApiFormat` selects the PolyPrompt client
+Partio uses. `Endpoint`, `ApiKey`, and `Model` carry the common connection values, and the optional
+`ProviderSettings` object carries anything else a provider needs. Existing payloads that omit
+`ProviderSettings` behave exactly as before.
+
+### Supported `ApiFormat` values
+
+| `ApiFormat` | Provider | Completion | Embedding | `Endpoint` (default when omitted) | `ApiKey` | `ProviderSettings` |
+| --- | --- | :-: | :-: | --- | --- | --- |
+| `Ollama` | Local or self-hosted Ollama | ✓ | ✓ | Required (for example `http://localhost:11434`) | Optional (Bearer) | — |
+| `OllamaCloud` | Ollama Cloud (native Ollama API) | ✓ | ✓ | Always stored as `https://ollama.com` | Required | — |
+| `OpenAI` | OpenAI and OpenAI-compatible APIs | ✓ | ✓ | `https://api.openai.com` | Usually required (Bearer) | — |
+| `vLLM` | vLLM (OpenAI-compatible) | ✓ | ✓ | Required | Deployment-dependent (Bearer) | — |
+| `Gemini` | Google Gemini API | ✓ | ✓ | `https://generativelanguage.googleapis.com` | Required in practice (`x-goog-api-key`) | — |
+| `xAI` | xAI Grok; completions use the native Responses API | ✓ | ✓ | `https://api.x.ai` (trailing `/v1` dropped) | Required | — |
+| `AzureOpenAI` | Azure OpenAI | ✓ | ✓ | **Required**: the resource URL, for example `https://my-resource.openai.azure.com` (trailing `/openai` dropped) | Required: `api-key`, or an Entra ID token when `AuthMode` is `BearerToken` | Optional `AzureOpenAI` |
+| `Anthropic` | Anthropic Claude Messages API | ✓ | — | `https://api.anthropic.com` (trailing `/v1` dropped) | Required (`x-api-key` + `anthropic-version`) | Optional `Anthropic` |
+| `Cohere` | Cohere v2 API | ✓ | ✓ | `https://api.cohere.com` (trailing `/v1` or `/v2` dropped) | Required (Bearer) | Optional `Cohere` |
+| `Bedrock` | AWS Bedrock (Converse, InvokeModel) | ✓ | ✓ | `https://bedrock-runtime.{Region}.amazonaws.com` | Not used; requests are signed with AWS Signature V4 | **Required** `Bedrock` |
+| `VertexAI` | Google Vertex AI | ✓ | ✓ | `https://{Region}-aiplatform.googleapis.com` | Only for `CredentialSource: AccessToken` (the token) | **Required** `VertexAI` |
+| `TEI` | Hugging Face Text Embeddings Inference (self-hosted) | — | ✓ | Required (for example `http://localhost:8080`) | Optional (Bearer, only when the server uses `--api-key`) | — |
+| `VoyageAI` | VoyageAI embeddings | — | ✓ | `https://api.voyageai.com` (trailing `/v1` dropped) | Required (Bearer) | Optional `VoyageAI` |
+
+Per-provider meaning of the common fields:
+
+- **Azure OpenAI**: `Model` is the **deployment name**.
+- **Bedrock**: `Model` is the Bedrock model ID, for example `anthropic.claude-3-5-sonnet-20240620-v1:0` or `amazon.titan-embed-text-v2:0`.
+- **Vertex AI**: `Model` is the Vertex model, for example `gemini-2.5-flash` or `text-embedding-005`.
+- **TEI**: the server hosts exactly one model, so `Model` is informational (it is still required).
+
+`Endpoint` may be omitted to use the default above. An empty string (`""`) is rejected, as before.
+
+### `ProviderSettings`
+
+Only the section that matches `ApiFormat` is kept. Other sections are dropped on save, and blank strings
+are stored as `null`.
+
+| Section | Field | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `AzureOpenAI` | `ApiVersion` | string? | `null` (`2024-10-21`) | Azure `api-version` query value |
+| `AzureOpenAI` | `AuthMode` | `ApiKey` \| `BearerToken` | `ApiKey` | Send `ApiKey` as the `api-key` header, or as an Entra ID bearer token (static tokens expire) |
+| `Anthropic` | `AnthropicVersion` | string? | `null` (`2023-06-01`) | `anthropic-version` header |
+| `Anthropic` | `WorkspaceId` | string? | `null` | `anthropic-workspace-id` header (identity-linked keys) |
+| `Bedrock` | `Region` | string | — (required) | AWS region, for example `us-east-1`. Selects the host and signing region |
+| `Bedrock` | `CredentialSource` | `Static` \| `Environment` | `Static` | `Static` uses the keys below. `Environment` reads `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` from the Partio server |
+| `Bedrock` | `AccessKeyId` | string? | `null` | Required for `Static` |
+| `Bedrock` | `SecretAccessKey` | string? | `null` | Required for `Static`. **Secret** |
+| `Bedrock` | `SessionToken` | string? | `null` | Optional temporary-credential token. **Secret** |
+| `VertexAI` | `ProjectId` | string | — (required) | Google Cloud project ID |
+| `VertexAI` | `Region` | string | — (required) | Vertex region, for example `us-central1` |
+| `VertexAI` | `CredentialSource` | `ServiceAccountJson` \| `ApplicationDefault` \| `AccessToken` | `ServiceAccountJson` | Service-account key JSON stored on the endpoint, the server's Application Default Credentials, or a static token in `ApiKey` (tokens expire) |
+| `VertexAI` | `ServiceAccountJson` | string? | `null` | Full service-account key JSON (needs `client_email` and `private_key`). Required for `ServiceAccountJson`. **Secret** |
+| `Cohere` | `InputType` | string? | `null` (`search_document`) | Embedding `input_type` |
+| `VoyageAI` | `InputType` | string? | `null` | Embedding `input_type` (`document` or `query`) |
+| `VoyageAI` | `OutputDimension` | int? | `null` | Matryoshka output dimension (256, 512, 1024, 2048). Must be `>= 1` |
+
+Service-account and ADC credentials mint OAuth tokens that Partio caches and refreshes ahead of expiry.
+
+Examples (only the provider fields are shown; every other endpoint field works as documented below):
+
+```json
+{ "ApiFormat": "AzureOpenAI", "Endpoint": "https://my-resource.openai.azure.com", "Model": "gpt-4o-mini",
+  "ApiKey": "azure-key", "ProviderSettings": { "AzureOpenAI": { "ApiVersion": "2024-10-21", "AuthMode": "ApiKey" } } }
+
+{ "ApiFormat": "Anthropic", "Model": "claude-opus-4-8", "ApiKey": "sk-ant-...",
+  "ProviderSettings": { "Anthropic": { "AnthropicVersion": "2023-06-01" } } }
+
+{ "ApiFormat": "Bedrock", "Model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+  "ProviderSettings": { "Bedrock": { "Region": "us-east-1", "CredentialSource": "Static",
+    "AccessKeyId": "AKIA...", "SecretAccessKey": "...", "SessionToken": null } } }
+
+{ "ApiFormat": "Bedrock", "Model": "amazon.titan-embed-text-v2:0",
+  "ProviderSettings": { "Bedrock": { "Region": "us-west-2", "CredentialSource": "Environment" } } }
+
+{ "ApiFormat": "VertexAI", "Model": "gemini-2.5-flash",
+  "ProviderSettings": { "VertexAI": { "ProjectId": "my-project", "Region": "us-central1",
+    "CredentialSource": "ServiceAccountJson", "ServiceAccountJson": "{\"type\":\"service_account\",\"client_email\":\"...\",\"private_key\":\"...\"}" } } }
+
+{ "ApiFormat": "VertexAI", "Model": "text-embedding-005",
+  "ProviderSettings": { "VertexAI": { "ProjectId": "my-project", "Region": "us-central1", "CredentialSource": "ApplicationDefault" } } }
+
+{ "ApiFormat": "VertexAI", "Model": "gemini-2.5-flash", "ApiKey": "ya29....",
+  "ProviderSettings": { "VertexAI": { "ProjectId": "my-project", "Region": "us-central1", "CredentialSource": "AccessToken" } } }
+
+{ "ApiFormat": "Cohere", "Model": "embed-v4.0", "ApiKey": "cohere-key",
+  "ProviderSettings": { "Cohere": { "InputType": "search_document" } } }
+
+{ "ApiFormat": "VoyageAI", "Model": "voyage-3.5", "ApiKey": "pa-...",
+  "ProviderSettings": { "VoyageAI": { "InputType": "document", "OutputDimension": 1024 } } }
+
+{ "ApiFormat": "TEI", "Endpoint": "http://localhost:8080", "Model": "BAAI/bge-small-en-v1.5", "ApiKey": null }
+```
+
+### Validation
+
+Create and update return `400 Bad Request` when:
+
+- the provider does not support the endpoint kind: `TEI` and `VoyageAI` completion endpoints, or `Anthropic` embedding endpoints;
+- `ApiKey` is missing for `OllamaCloud`, `xAI`, `AzureOpenAI`, `Anthropic`, `Cohere`, or `VoyageAI`;
+- an `AzureOpenAI` endpoint has no `Endpoint`;
+- a `Bedrock` endpoint lacks `ProviderSettings.Bedrock` or `Region`, or, for `Static` credentials, `AccessKeyId` or `SecretAccessKey`;
+- a `VertexAI` endpoint lacks `ProviderSettings.VertexAI`, `ProjectId`, or `Region`; for `ServiceAccountJson`, the JSON is missing, invalid, or lacks `client_email` and `private_key`; for `AccessToken`, `ApiKey` is missing.
+
+The error message names the missing field, for example `Bedrock endpoints require ProviderSettings.Bedrock.Region.`
+
+### Health check defaults
+
+Defaults are applied on create and update when a field is unset or zero.
+
+| `ApiFormat` | Health check | Interval / timeout | Auth |
+| --- | --- | --- | --- |
+| `Ollama` | `GET {Endpoint}/api/tags` | 5s / 2s | Off |
+| `OllamaCloud` | `GET https://ollama.com/api/tags` | 15s / 5s | On when `ApiKey` is set |
+| `OpenAI`, `vLLM`, `xAI`, `Anthropic`, `Cohere` | `GET {Endpoint}/v1/models` | 15s / 5s | On when `ApiKey` is set |
+| `Gemini` | `GET {Endpoint}/v1beta/models` | 15s / 5s | On when `ApiKey` is set |
+| `AzureOpenAI` | `GET {Endpoint}/openai/models?api-version={ApiVersion}` | 15s / 5s | On when `ApiKey` is set |
+| `TEI` | `GET {Endpoint}/health` | 15s / 5s | On when `ApiKey` is set |
+| `Bedrock`, `VertexAI`, `VoyageAI` | PolyPrompt connectivity probe (no `HealthCheckUrl`) | 60s / 10s | Endpoint credentials |
+
+Health-check auth uses each provider's real header. Gemini uses `x-goog-api-key`. Anthropic uses `x-api-key`
+with `anthropic-version` (and `anthropic-workspace-id` when set). Azure OpenAI uses `api-key`, or Bearer when
+`AuthMode` is `BearerToken`. Every other provider uses `Authorization: Bearer`.
+
+Bedrock and Vertex AI requests must be signed per request, and VoyageAI has no model-listing API, so their
+health checks run PolyPrompt's connectivity probe with the endpoint's own credentials and model:
+
+| Provider | Probe |
+| --- | --- |
+| Bedrock | `GET /foundation-models` on the control plane (needs `bedrock:ListFoundationModels`) |
+| Vertex AI (completion) | `countTokens` on the model |
+| Vertex AI (embedding) | a one-word embedding |
+| VoyageAI | a one-word embedding |
+
+The embedding probes are billable, which is why these defaults are a longer 60s interval and 10s timeout.
+
+### Secrets: masking and reveal
+
+`ApiKey`, `ProviderSettings.Bedrock.SecretAccessKey`, `ProviderSettings.Bedrock.SessionToken`, and
+`ProviderSettings.VertexAI.ServiceAccountJson` are **masked** in every endpoint response: read,
+enumerate, create, and update. A secret of 12 or more characters is shown as `****` plus its last four
+characters (for example `****9f2c`). Shorter secrets, and service-account JSON, are shown as `****`.
+
+On update:
+
+- sending back the masked value unchanged keeps the stored secret, so read-modify-write works;
+- sending a new value replaces the secret;
+- sending `null` clears it.
+
+To read the stored secrets, use the reveal APIs. They are admin only, and each call is logged with the caller.
+
+- `GET /v1.0/endpoints/embedding/{id}/reveal`
+- `GET /v1.0/endpoints/completion/{id}/reveal`
+
+**Response**: `200 OK`. The endpoint is returned with every secret unmasked, or `404` if it is not found.
+
+The MCP server deliberately exposes no reveal tool. MCP clients always receive masked secrets.
+
+---
 ## Embedding Endpoints (Admin)
 
 ### PUT /v1.0/endpoints/embedding
@@ -1024,7 +1215,8 @@ Create an embedding endpoint.
 | `HealthCheckExpectedStatusCode` | int | `200` | Expected HTTP status code for a healthy response |
 | `HealthyThreshold` | int | `3` | Consecutive successes required to transition to healthy |
 | `UnhealthyThreshold` | int | `3` | Consecutive failures required to transition to unhealthy |
-| `HealthCheckUseAuth` | bool | `false` | Include the endpoint's API key in health checks (Bearer for OpenAI/vLLM/Ollama Cloud/xAI, `x-goog-api-key` for Gemini) |
+| `HealthCheckUseAuth` | bool | `false` | Include the endpoint's credential in health checks, using the provider's header (see [Health check defaults](#health-check-defaults)) |
+| `ProviderSettings` | object? | `null` | Provider-specific settings (see [`ProviderSettings`](#providersettings)); required for `Bedrock` and `VertexAI` |
 
 #### Tokenization Properties
 
@@ -1043,34 +1235,22 @@ When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs 
 If the embedding provider call itself exceeds `MaximumTimeoutMs`, process routes return `504 Gateway Timeout`.
 If the endpoint already has `MaxConcurrentRequests` upstream calls in flight, Partio queues up to `MaxQueueDepth` further requests to wait for a slot. A queued request that waits past `MaximumTimeoutMs` returns `504 Gateway Timeout`, and when the queue is full Partio returns `429 Too Many Requests`. With the default `MaxQueueDepth` of `0`, requests over the concurrency limit are rejected immediately with `429 Too Many Requests`.
 
-Supported `ApiFormat` values (embedding and completion endpoints):
-
-| `ApiFormat` | Provider | `Endpoint` | `ApiKey` |
-| --- | --- | --- | --- |
-| `Ollama` | Local or self-hosted Ollama | Required (for example `http://localhost:11434`) | Optional (sent as Bearer) |
-| `OllamaCloud` | Ollama Cloud (native Ollama API) | Always stored as `https://ollama.com`, whatever value is sent | Required (`400` without one) |
-| `OpenAI` | OpenAI and OpenAI-compatible APIs | Required | Usually required |
-| `vLLM` | vLLM (OpenAI-compatible) | Required | Deployment-dependent |
-| `Gemini` | Google Gemini | Required (`https://generativelanguage.googleapis.com`) | Required (sent as `x-goog-api-key`) |
-| `xAI` | xAI Grok; completions use the native Responses API | `https://api.x.ai` (a trailing `/v1` is accepted and dropped) | Required (`400` without one) |
-
-Health check defaults are applied automatically based on `ApiFormat` when creating or updating an endpoint:
-- **Ollama**: URL defaults to `{Endpoint}/api/tags`, 5s interval, 2s timeout, no auth
-- **Ollama Cloud**: URL defaults to `https://ollama.com/api/tags`, 15s interval, 5s timeout, auth enabled
-- **OpenAI**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
-- **vLLM**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
-- **Gemini**: URL defaults to `{Endpoint}/v1beta/models`, 15s interval, 5s timeout, auth enabled
-- **xAI**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
+See [Providers](#providers) for the supported `ApiFormat` values, `ProviderSettings`, validation rules, health check defaults, and secret masking.
 
 **Response**: `201 Created` â€” `EmbeddingEndpoint`
 
 ### GET /v1.0/endpoints/embedding/{id}
 Read an embedding endpoint.
 
-**Response**: `200 OK` â€” `EmbeddingEndpoint`
+**Response**: `200 OK` â€” `EmbeddingEndpoint` with secrets masked
+
+### GET /v1.0/endpoints/embedding/{id}/reveal
+Read an embedding endpoint with `ApiKey` and secret `ProviderSettings` fields unmasked. Admin only; each call is logged. See [Secrets: masking and reveal](#secrets-masking-and-reveal).
+
+**Response**: `200 OK` â€” `EmbeddingEndpoint` (unmasked)
 
 ### PUT /v1.0/endpoints/embedding/{id}
-Update an embedding endpoint.
+Update an embedding endpoint. Secrets sent back in their masked form keep the stored value; `null` clears them.
 
 **Response**: `200 OK` â€” `EmbeddingEndpoint`
 
@@ -1161,6 +1341,8 @@ Create a completion endpoint.
 }
 ```
 
+Completion endpoints accept every `ApiFormat` except `TEI` and `VoyageAI` (embedding only). See [Providers](#providers).
+
 **Response**: `201 Created` â€” `CompletionEndpoint`
 
 #### Completion Endpoint Metadata Properties
@@ -1180,22 +1362,28 @@ Create a completion endpoint.
 | `HealthCheckEnabled` | bool | `true` | Enable background health checking for this endpoint |
 | `HealthCheckUrl` | string? | `null` | Custom URL to check (defaults from `ApiFormat` when omitted) |
 | `HealthCheckMethod` | string | `"GET"` | HTTP method for health checks (`GET` or `HEAD`) |
-| `HealthCheckIntervalMs` | int | `5000` or `15000` | Milliseconds between health checks, depending on `ApiFormat` |
-| `HealthCheckTimeoutMs` | int | `2000` or `5000` | Timeout per health check request in milliseconds, depending on `ApiFormat` |
+| `HealthCheckIntervalMs` | int | `5000`, `15000`, or `60000` | Milliseconds between health checks, depending on `ApiFormat` |
+| `HealthCheckTimeoutMs` | int | `2000`, `5000`, or `10000` | Timeout per health check request in milliseconds, depending on `ApiFormat` |
 | `HealthCheckExpectedStatusCode` | int | `200` | Expected HTTP status code for a healthy response |
 | `HealthyThreshold` | int | `2` | Consecutive successes required to transition to healthy |
 | `UnhealthyThreshold` | int | `2` | Consecutive failures required to transition to unhealthy |
 | `HealthCheckUseAuth` | bool | `false` or `true` | Include the endpoint API key when the health probe requires authentication |
+| `ProviderSettings` | object? | `null` | Provider-specific settings (see [`ProviderSettings`](#providersettings)); required for `Bedrock` and `VertexAI` |
 
 Completion explorer and summarization calls never exceed `MaximumTimeoutMs`, even if the caller requests a larger `TimeoutMs`. When the inference provider exceeds this ceiling, process routes return `504 Gateway Timeout`. If the endpoint is already servicing `MaxConcurrentRequests` upstream calls, Partio queues up to `MaxQueueDepth` further requests to wait for a slot. A queued request that waits past `MaximumTimeoutMs` returns `504 Gateway Timeout`, and when the queue is full Partio returns `429 Too Many Requests`. With the default `MaxQueueDepth` of `0`, requests over the concurrency limit are rejected immediately with `429 Too Many Requests`.
 
 ### GET /v1.0/endpoints/completion/{id}
 Read a completion endpoint.
 
-**Response**: `200 OK` â€” `CompletionEndpoint`
+**Response**: `200 OK` â€” `CompletionEndpoint` with secrets masked
+
+### GET /v1.0/endpoints/completion/{id}/reveal
+Read a completion endpoint with `ApiKey` and secret `ProviderSettings` fields unmasked. Admin only; each call is logged. See [Secrets: masking and reveal](#secrets-masking-and-reveal).
+
+**Response**: `200 OK` â€” `CompletionEndpoint` (unmasked)
 
 ### PUT /v1.0/endpoints/completion/{id}
-Update a completion endpoint.
+Update a completion endpoint. Secrets sent back in their masked form keep the stored value; `null` clears them.
 
 **Response**: `200 OK` â€” `CompletionEndpoint`
 

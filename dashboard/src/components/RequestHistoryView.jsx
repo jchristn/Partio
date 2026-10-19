@@ -112,6 +112,15 @@ function buildFullEndpointUrl(endpoint) {
     case 'OpenAI': return base + '/v1/embeddings';
     case 'vLLM': return base + '/v1/embeddings';
     case 'Gemini': return base + '/v1beta/models/' + encodeURIComponent(endpoint.Model || 'gemini-embedding-001') + ':embedContent';
+    case 'AzureOpenAI': return base + '/openai/deployments/' + encodeURIComponent(endpoint.Model || '') + '/embeddings';
+    case 'Cohere': return base + '/v2/embed';
+    case 'VoyageAI': return base + '/v1/embeddings';
+    case 'TEI': return base + '/embed';
+    case 'Bedrock': return base + '/model/' + encodeURIComponent(endpoint.Model || '') + '/invoke';
+    case 'VertexAI': {
+      const v = endpoint.ProviderSettings?.VertexAI || {};
+      return base + '/v1/projects/' + (v.ProjectId || 'PROJECT') + '/locations/' + (v.Region || 'REGION') + '/publishers/google/models/' + encodeURIComponent(endpoint.Model || '') + ':predict';
+    }
     default: return base;
   }
 }

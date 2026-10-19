@@ -5,6 +5,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import CopyableId from './CopyableId';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
+import { getProvider, providerLabel } from '../utils/providers';
 import './EndpointExplorerView.css';
 
 function formatHeaders(headers) {
@@ -139,6 +140,9 @@ function defaultProxySubpath(apiFormat, model) {
     case 'ollamacloud': return 'api/chat';
     case 'gemini': return `v1beta/models/${m}:generateContent`;
     case 'xai': return 'v1/responses';
+    case 'anthropic': return 'v1/messages';
+    case 'cohere': return 'v2/chat';
+    case 'azureopenai': return `openai/deployments/${m}/chat/completions`;
     default: return 'v1/chat/completions'; // openai, vllm
   }
 }
@@ -153,6 +157,10 @@ function defaultProxyBody(apiFormat, model) {
       return JSON.stringify({ model: m, input: 'Hello from the Partio proxy' }, null, 2);
     case 'gemini':
       return JSON.stringify({ contents: [{ parts: [{ text: 'Hello from the Partio proxy' }] }] }, null, 2);
+    case 'anthropic':
+      return JSON.stringify({ model: m, max_tokens: 256, messages: [{ role: 'user', content: 'Hello from the Partio proxy' }] }, null, 2);
+    case 'azureopenai':
+      return JSON.stringify({ messages: [{ role: 'user', content: 'Hello from the Partio proxy' }] }, null, 2);
     default:
       return JSON.stringify({ model: m, messages: [{ role: 'user', content: 'Hello from the Partio proxy' }] }, null, 2);
   }
@@ -236,6 +244,8 @@ export default function EndpointExplorerView() {
         if (cancelled) return;
         const emb = (embRes?.Data || []).filter(endpoint => endpoint.Active !== false);
         const comp = (compRes?.Data || []).filter(endpoint => endpoint.Active !== false);
+        // Bedrock and Vertex AI are signed per request and cannot be relayed by the proxy.
+        const proxyable = comp.filter(endpoint => getProvider(endpoint.ApiFormat).proxy);
         setEmbeddingEndpoints(emb);
         setCompletionEndpoints(comp);
         setEmbeddingForm(prev => ({
@@ -248,9 +258,9 @@ export default function EndpointExplorerView() {
         }));
         setProxyForm(prev => ({
           ...prev,
-          EndpointId: prev.EndpointId || comp[0]?.Id || '',
-          Subpath: prev.Subpath || defaultProxySubpath(comp[0]?.ApiFormat, comp[0]?.Model),
-          Body: prev.Body || defaultProxyBody(comp[0]?.ApiFormat, comp[0]?.Model)
+          EndpointId: prev.EndpointId || proxyable[0]?.Id || '',
+          Subpath: prev.Subpath || defaultProxySubpath(proxyable[0]?.ApiFormat, proxyable[0]?.Model),
+          Body: prev.Body || defaultProxyBody(proxyable[0]?.ApiFormat, proxyable[0]?.Model)
         }));
       } catch (err) {
         if (!cancelled) {
@@ -345,7 +355,7 @@ export default function EndpointExplorerView() {
                     <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
                     {embeddingEndpoints.map(endpoint => (
                       <option key={endpoint.Id} value={endpoint.Id}>
-                        {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
+                        {endpoint.Name || endpoint.Model} ({providerLabel(endpoint.ApiFormat)})
                       </option>
                     ))}
                   </select>
@@ -354,7 +364,7 @@ export default function EndpointExplorerView() {
               {activeEmbedding && (
                 <div className="explorer-endpoint-meta">
                   <div><span>Model</span><strong>{activeEmbedding.Model}</strong></div>
-                  <div><span>Provider</span><strong>{activeEmbedding.ApiFormat}</strong></div>
+                  <div><span>Provider</span><strong>{providerLabel(activeEmbedding.ApiFormat)}</strong></div>
                   <div><span>Base URL</span><code>{activeEmbedding.Endpoint}</code></div>
                 </div>
               )}
@@ -396,7 +406,7 @@ export default function EndpointExplorerView() {
                     <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
                     {completionEndpoints.map(endpoint => (
                       <option key={endpoint.Id} value={endpoint.Id}>
-                        {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
+                        {endpoint.Name || endpoint.Model} ({providerLabel(endpoint.ApiFormat)})
                       </option>
                     ))}
                   </select>
@@ -405,7 +415,7 @@ export default function EndpointExplorerView() {
               {activeCompletion && (
                 <div className="explorer-endpoint-meta">
                   <div><span>Model</span><strong>{activeCompletion.Model}</strong></div>
-                  <div><span>Provider</span><strong>{activeCompletion.ApiFormat}</strong></div>
+                  <div><span>Provider</span><strong>{providerLabel(activeCompletion.ApiFormat)}</strong></div>
                   <div><span>Base URL</span><code>{activeCompletion.Endpoint}</code></div>
                 </div>
               )}
@@ -479,9 +489,9 @@ export default function EndpointExplorerView() {
                     disabled={loadingEndpoints}
                   >
                     <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
-                    {completionEndpoints.map(endpoint => (
+                    {completionEndpoints.filter(endpoint => getProvider(endpoint.ApiFormat).proxy).map(endpoint => (
                       <option key={endpoint.Id} value={endpoint.Id}>
-                        {endpoint.Name || endpoint.Model} ({endpoint.ApiFormat})
+                        {endpoint.Name || endpoint.Model} ({providerLabel(endpoint.ApiFormat)})
                       </option>
                     ))}
                   </select>
@@ -490,7 +500,7 @@ export default function EndpointExplorerView() {
               {activeProxy && (
                 <div className="explorer-endpoint-meta">
                   <div><span>Model</span><strong>{activeProxy.Model}</strong></div>
-                  <div><span>Provider</span><strong>{activeProxy.ApiFormat}</strong></div>
+                  <div><span>Provider</span><strong>{providerLabel(activeProxy.ApiFormat)}</strong></div>
                   <div><span>Base URL</span><code>{activeProxy.Endpoint}</code></div>
                 </div>
               )}

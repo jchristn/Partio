@@ -81,6 +81,10 @@ namespace Partio.Core.Database.Sqlite
             catch { /* column already exists */ }
             try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddTagsJson, false, token).ConfigureAwait(false); }
             catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterEmbeddingEndpointsAddProviderSettingsJson, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
+            try { await ExecuteQueryAsync(SetupQueries.AlterCompletionEndpointsAddProviderSettingsJson, false, token).ConfigureAwait(false); }
+            catch { /* column already exists */ }
 
             Tenant = new TenantMethods(this, _Logging);
             User = new UserMethods(this, _Logging);

@@ -2,6 +2,15 @@
 
 import requests
 
+# ApiFormat values accepted by the server.
+API_FORMATS = (
+    "Ollama", "OllamaCloud", "OpenAI", "vLLM", "Gemini", "xAI",
+    "AzureOpenAI", "Anthropic", "Cohere", "Bedrock", "VertexAI", "TEI", "VoyageAI",
+)
+
+# Prefix of masked secrets in endpoint read responses.
+SECRET_MASK_PREFIX = "****"
+
 
 class PartioError(Exception):
     """Exception raised when a Partio API call fails."""
@@ -189,6 +198,10 @@ class PartioClient:
     def get_endpoint(self, endpoint_id):
         return self._request("GET", f"/v1.0/endpoints/embedding/{endpoint_id}")
 
+    def reveal_endpoint(self, endpoint_id):
+        """Read an embedding endpoint with ApiKey and secret ProviderSettings unmasked (admin only)."""
+        return self._request("GET", f"/v1.0/endpoints/embedding/{endpoint_id}/reveal")
+
     def update_endpoint(self, endpoint_id, data):
         return self._request("PUT", f"/v1.0/endpoints/embedding/{endpoint_id}", data)
 
@@ -220,6 +233,10 @@ class PartioClient:
 
     def get_completion_endpoint(self, endpoint_id):
         return self._request("GET", f"/v1.0/endpoints/completion/{endpoint_id}")
+
+    def reveal_completion_endpoint(self, endpoint_id):
+        """Read a completion endpoint with ApiKey and secret ProviderSettings unmasked (admin only)."""
+        return self._request("GET", f"/v1.0/endpoints/completion/{endpoint_id}/reveal")
 
     def update_completion_endpoint(self, endpoint_id, data):
         return self._request("PUT", f"/v1.0/endpoints/completion/{endpoint_id}", data)

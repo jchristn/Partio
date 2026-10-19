@@ -76,6 +76,10 @@ namespace Partio.Sdk.Models
         [JsonPropertyName("Tags")]
         public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
 
+        /// <summary>Provider-specific settings (Azure OpenAI, Anthropic, Bedrock, Vertex AI, Cohere, VoyageAI). Secrets are masked on read.</summary>
+        [JsonPropertyName("ProviderSettings")]
+        public ProviderSettings? ProviderSettings { get; set; }
+
         [JsonPropertyName("CreatedUtc")]
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 

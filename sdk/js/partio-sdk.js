@@ -3,6 +3,26 @@
  * Uses native fetch (no external dependencies).
  */
 
+/** ApiFormat values accepted by the server. */
+export const ApiFormats = Object.freeze({
+  Ollama: 'Ollama',
+  OllamaCloud: 'OllamaCloud',
+  OpenAI: 'OpenAI',
+  vLLM: 'vLLM',
+  Gemini: 'Gemini',
+  xAI: 'xAI',
+  AzureOpenAI: 'AzureOpenAI',
+  Anthropic: 'Anthropic',
+  Cohere: 'Cohere',
+  Bedrock: 'Bedrock',
+  VertexAI: 'VertexAI',
+  TEI: 'TEI',
+  VoyageAI: 'VoyageAI',
+});
+
+/** Prefix of masked secrets in endpoint read responses. */
+export const SECRET_MASK_PREFIX = '****';
+
 export class PartioError extends Error {
   constructor(message, statusCode, response) {
     super(message);
@@ -146,6 +166,8 @@ export class PartioClient {
   // Embedding Endpoints
   async createEndpoint(data) { return this._request('PUT', '/v1.0/endpoints/embedding', data); }
   async getEndpoint(id) { return this._request('GET', `/v1.0/endpoints/embedding/${id}`); }
+  /** Read an embedding endpoint with ApiKey and secret ProviderSettings unmasked (admin only). */
+  async revealEndpoint(id) { return this._request('GET', `/v1.0/endpoints/embedding/${id}/reveal`); }
   async updateEndpoint(id, data) { return this._request('PUT', `/v1.0/endpoints/embedding/${id}`, data); }
   async deleteEndpoint(id) { return this._request('DELETE', `/v1.0/endpoints/embedding/${id}`); }
   async endpointExists(id) {
@@ -167,6 +189,8 @@ export class PartioClient {
   // Completion Endpoints
   async createCompletionEndpoint(data) { return this._request('PUT', '/v1.0/endpoints/completion', data); }
   async getCompletionEndpoint(id) { return this._request('GET', `/v1.0/endpoints/completion/${id}`); }
+  /** Read a completion endpoint with ApiKey and secret ProviderSettings unmasked (admin only). */
+  async revealCompletionEndpoint(id) { return this._request('GET', `/v1.0/endpoints/completion/${id}/reveal`); }
   async updateCompletionEndpoint(id, data) { return this._request('PUT', `/v1.0/endpoints/completion/${id}`, data); }
   async deleteCompletionEndpoint(id) { return this._request('DELETE', `/v1.0/endpoints/completion/${id}`); }
   async completionEndpointExists(id) {

@@ -6,6 +6,7 @@ namespace Partio.Server.Services
     using Partio.Core.Models;
     using Partio.Core.Observability;
     using Partio.Core.Tokenization;
+    using Partio.Core.ThirdParty;
     using SyslogLogging;
 
     /// <summary>
@@ -18,6 +19,7 @@ namespace Partio.Server.Services
         private readonly LoggingModule _Logging;
         private readonly TokenizationProfileResolver? _TokenizationResolver;
         private readonly SharedHealthCheckCoordinator _Coordinator;
+        private readonly Func<EmbeddingEndpoint, Func<CancellationToken, Task<bool>>>? _ProbeFactory;
         private readonly string _Header = "[HealthCheck] ";
         private readonly ConcurrentDictionary<string, EndpointHealthState> _States = new ConcurrentDictionary<string, EndpointHealthState>();
         private static readonly TimeSpan _HistoryRetention = TimeSpan.FromHours(24);
@@ -29,12 +31,15 @@ namespace Partio.Server.Services
         /// <param name="logging">Logging module.</param>
         /// <param name="tokenizationResolver">Optional tokenization resolver for capability cache invalidation on health transitions.</param>
         /// <param name="coordinator">Shared health check coordinator.</param>
+        /// <param name="probeFactory">Builds the connectivity probe for endpoints whose provider cannot be checked with a plain HTTP request (Bedrock, Vertex AI, VoyageAI).</param>
         public EmbeddingHealthCheckService(
             DatabaseDriverBase database,
             LoggingModule logging,
             TokenizationProfileResolver? tokenizationResolver = null,
-            SharedHealthCheckCoordinator? coordinator = null)
+            SharedHealthCheckCoordinator? coordinator = null,
+            Func<EmbeddingEndpoint, Func<CancellationToken, Task<bool>>>? probeFactory = null)
         {
+            _ProbeFactory = probeFactory;
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _TokenizationResolver = tokenizationResolver;
@@ -191,6 +196,8 @@ namespace Partio.Server.Services
                 UseAuth = endpoint.HealthCheckUseAuth,
                 ApiFormat = endpoint.ApiFormat,
                 ApiKey = endpoint.ApiKey,
+                ProviderSettings = endpoint.ProviderSettings,
+                Probe = ProviderDefaults.UsesConnectivityProbe(endpoint.ApiFormat) ? _ProbeFactory?.Invoke(endpoint) : null,
                 Description = "embedding endpoint " + endpoint.Id + " (" + endpoint.Model + ")",
                 Kind = "embedding",
                 UpdateState = (success, errorMessage) =>
@@ -207,8 +214,11 @@ namespace Partio.Server.Services
             _Coordinator.Unregister(BuildSubscriptionId(endpointId));
         }
 
-        private static string BuildMonitorKey(EmbeddingEndpoint endpoint)
+        private string BuildMonitorKey(EmbeddingEndpoint endpoint)
         {
+            if (ProviderDefaults.UsesConnectivityProbe(endpoint.ApiFormat) && _ProbeFactory != null)
+                return SharedHealthCheckCoordinator.BuildProbeMonitorKey("embedding", endpoint.Id, endpoint.ApiFormat);
+
             return SharedHealthCheckCoordinator.BuildMonitorKey(
                 ResolveHealthCheckUrl(endpoint),
                 endpoint.HealthCheckMethod,

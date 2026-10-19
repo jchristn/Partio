@@ -4,7 +4,9 @@ namespace Partio.Server.Services
     using System.Diagnostics;
     using System.Net.Http;
     using Partio.Core.Enums;
+    using Partio.Core.Models;
     using Partio.Core.Observability;
+    using Partio.Core.ThirdParty;
     using SyslogLogging;
 
     /// <summary>
@@ -158,6 +160,15 @@ namespace Partio.Server.Services
         }
 
         /// <summary>
+        /// Build a monitor key for an endpoint checked with a connectivity probe. Probes carry the endpoint's own
+        /// credentials and model, so they are never shared between endpoints.
+        /// </summary>
+        public static string BuildProbeMonitorKey(string kind, string endpointId, ApiFormatEnum apiFormat)
+        {
+            return "PROBE|" + kind + "|" + apiFormat + "|" + endpointId;
+        }
+
+        /// <summary>
         /// Describe the URL portion of a monitor key for logs.
         /// </summary>
         public static string DescribeMonitorKey(string monitorKey)
@@ -248,6 +259,18 @@ namespace Partio.Server.Services
 
         private async Task<bool> PerformCheckAsync(SharedHealthCheckSubscription subscription, CancellationToken token)
         {
+            if (subscription.Probe != null)
+            {
+                _Logging.Debug(_Header + "running connectivity probe for " + subscription.Description);
+                using (CancellationTokenSource probeCts = CancellationTokenSource.CreateLinkedTokenSource(token))
+                {
+                    probeCts.CancelAfter(subscription.TimeoutMs);
+                    bool reachable = await subscription.Probe(probeCts.Token).ConfigureAwait(false);
+                    _Logging.Debug(_Header + "connectivity probe for " + subscription.Description + ", success: " + reachable);
+                    return reachable;
+                }
+            }
+
             HttpMethod method = subscription.Method == HealthCheckMethodEnum.HEAD
                 ? HttpMethod.Head
                 : HttpMethod.Get;
@@ -256,12 +279,10 @@ namespace Partio.Server.Services
 
             HttpRequestMessage request = new HttpRequestMessage(method, subscription.Url);
 
-            if (subscription.UseAuth && !string.IsNullOrEmpty(subscription.ApiKey))
+            if (subscription.UseAuth)
             {
-                if (subscription.ApiFormat == ApiFormatEnum.Gemini)
-                    request.Headers.Add("x-goog-api-key", subscription.ApiKey);
-                else
-                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", subscription.ApiKey);
+                foreach (KeyValuePair<string, string> header in ProviderDefaults.ResolveAuthHeaders(subscription.ApiFormat, subscription.ApiKey, subscription.ProviderSettings))
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             }
 
             using (CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token))
@@ -307,6 +328,8 @@ namespace Partio.Server.Services
         public bool UseAuth { get; set; }
         public ApiFormatEnum ApiFormat { get; set; } = ApiFormatEnum.Ollama;
         public string? ApiKey { get; set; }
+        public ProviderSettings? ProviderSettings { get; set; }
+        public Func<CancellationToken, Task<bool>>? Probe { get; set; }
         public string Description { get; set; } = "endpoint";
         public string Kind { get; set; } = "endpoint";
         public Action<bool, string?> UpdateState { get; set; } = (_, _) => { };

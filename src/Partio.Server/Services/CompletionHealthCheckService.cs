@@ -5,6 +5,7 @@ namespace Partio.Server.Services
     using Partio.Core.Enums;
     using Partio.Core.Models;
     using Partio.Core.Observability;
+    using Partio.Core.ThirdParty;
     using SyslogLogging;
 
     /// <summary>
@@ -16,6 +17,7 @@ namespace Partio.Server.Services
         private readonly DatabaseDriverBase _Database;
         private readonly LoggingModule _Logging;
         private readonly SharedHealthCheckCoordinator _Coordinator;
+        private readonly Func<CompletionEndpoint, Func<CancellationToken, Task<bool>>>? _ProbeFactory;
         private readonly string _Header = "[CompletionHealthCheck] ";
         private readonly ConcurrentDictionary<string, EndpointHealthState> _States = new ConcurrentDictionary<string, EndpointHealthState>();
         private static readonly TimeSpan _HistoryRetention = TimeSpan.FromHours(24);
@@ -26,8 +28,14 @@ namespace Partio.Server.Services
         /// <param name="database">Database driver.</param>
         /// <param name="logging">Logging module.</param>
         /// <param name="coordinator">Shared health check coordinator.</param>
-        public CompletionHealthCheckService(DatabaseDriverBase database, LoggingModule logging, SharedHealthCheckCoordinator? coordinator = null)
+        /// <param name="probeFactory">Builds the connectivity probe for endpoints whose provider cannot be checked with a plain HTTP request (Bedrock, Vertex AI).</param>
+        public CompletionHealthCheckService(
+            DatabaseDriverBase database,
+            LoggingModule logging,
+            SharedHealthCheckCoordinator? coordinator = null,
+            Func<CompletionEndpoint, Func<CancellationToken, Task<bool>>>? probeFactory = null)
         {
+            _ProbeFactory = probeFactory;
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _Coordinator = coordinator ?? new SharedHealthCheckCoordinator(logging);
@@ -180,6 +188,8 @@ namespace Partio.Server.Services
                 UseAuth = endpoint.HealthCheckUseAuth,
                 ApiFormat = endpoint.ApiFormat,
                 ApiKey = endpoint.ApiKey,
+                ProviderSettings = endpoint.ProviderSettings,
+                Probe = ProviderDefaults.UsesConnectivityProbe(endpoint.ApiFormat) ? _ProbeFactory?.Invoke(endpoint) : null,
                 Description = "completion endpoint " + endpoint.Id + " (" + (endpoint.Name ?? endpoint.Model) + ")",
                 Kind = "completion",
                 UpdateState = (success, errorMessage) =>
@@ -196,8 +206,11 @@ namespace Partio.Server.Services
             _Coordinator.Unregister(BuildSubscriptionId(endpointId));
         }
 
-        private static string BuildMonitorKey(CompletionEndpoint endpoint)
+        private string BuildMonitorKey(CompletionEndpoint endpoint)
         {
+            if (ProviderDefaults.UsesConnectivityProbe(endpoint.ApiFormat) && _ProbeFactory != null)
+                return SharedHealthCheckCoordinator.BuildProbeMonitorKey("completion", endpoint.Id, endpoint.ApiFormat);
+
             return SharedHealthCheckCoordinator.BuildMonitorKey(
                 ResolveHealthCheckUrl(endpoint),
                 endpoint.HealthCheckMethod,

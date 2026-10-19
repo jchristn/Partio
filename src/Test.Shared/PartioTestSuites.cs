@@ -26,6 +26,8 @@ namespace Test.Shared
                     SharedSummarizationUnitTests.Suite(),
                     SharedTokenizerUnitTests.Suite(),
                     ProviderClientTests.Suite(),
+                    ProviderRulesTests.Suite(),
+                    ProviderWireTests.Suite(),
                     RequestHistoryDiagnostics.Suite(),
                     EmbeddingBatchLimitDiagnostics.Suite(),
                     SqliteMigrationTests.Suite(),

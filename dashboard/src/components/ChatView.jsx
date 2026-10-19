@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { PartioApi } from '../utils/api';
 import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
+import { getProvider, providerLabel } from '../utils/providers';
 import './ChatView.css';
 
 // Convert a form string to a typed number, or undefined when blank.
@@ -18,11 +19,16 @@ function nsToMs(ns) {
 }
 
 // Chat dialect for an ApiFormat. Ollama Cloud speaks the native Ollama API; xAI is served through its
-// OpenAI-compatible chat completions API, so it shares the openai/vllm path.
+// OpenAI-compatible chat completions API, so it shares the openai/vllm path. Azure OpenAI uses the same
+// body on a deployment-scoped path. Anthropic and Cohere have their own native chat APIs. Bedrock and
+// Vertex AI cannot be proxied, so they are not offered in Chat.
 function chatDialect(apiFormat) {
   const fmt = (apiFormat || '').toLowerCase();
   return fmt === 'ollamacloud' ? 'ollama' : fmt;
 }
+
+// Anthropic requires max_tokens on every request.
+const ANTHROPIC_DEFAULT_MAX_TOKENS = 1024;
 
 // Build the native provider request for a chat turn, based on the endpoint's dialect (ApiFormat) and the
 // configured generation parameters. The request is massaged so the provider returns token usage/timing:
@@ -65,13 +71,37 @@ function buildChatRequest(apiFormat, model, messages, systemPrompt, params) {
     return { subpath: `v1beta/models/${model}:${op}`, body, canStream: true };
   }
 
-  // openai, vllm, xai
+  if (fmt === 'anthropic') {
+    const body = { model, messages, max_tokens: maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS, stream };
+    if (systemPrompt && systemPrompt.trim()) body.system = systemPrompt;
+    if (temperature !== undefined) body.temperature = temperature;
+    if (topP !== undefined) body.top_p = topP;
+    return { subpath: 'v1/messages', body, canStream: true };
+  }
+
+  if (fmt === 'cohere') {
+    const body = { model, messages: withSystem(messages), stream };
+    if (temperature !== undefined) body.temperature = temperature;
+    if (topP !== undefined) body.p = topP;
+    if (maxTokens !== undefined) body.max_tokens = maxTokens;
+    return { subpath: 'v2/chat', body, canStream: true };
+  }
+
+  // openai, vllm, xai, azureopenai
   const body = { model, messages: withSystem(messages), stream };
   if (temperature !== undefined) body.temperature = temperature;
   if (topP !== undefined) body.top_p = topP;
   if (maxTokens !== undefined) body.max_tokens = maxTokens;
   if (stream) body.stream_options = { include_usage: true };
-  return { subpath: 'v1/chat/completions', body, canStream: true };
+  const subpath = fmt === 'azureopenai'
+    ? `openai/deployments/${encodeURIComponent(model)}/chat/completions`
+    : 'v1/chat/completions';
+  return { subpath, body, canStream: true };
+}
+
+// Join the text blocks of an Anthropic or Cohere content array.
+function joinTextBlocks(blocks) {
+  return Array.isArray(blocks) ? blocks.filter(b => b?.type === 'text').map(b => b.text ?? '').join('') : '';
 }
 
 // Assistant reply text from a buffered native provider response.
@@ -82,6 +112,8 @@ function parseChatReply(apiFormat, json) {
     const parts = json?.candidates?.[0]?.content?.parts;
     return Array.isArray(parts) ? parts.map(p => p?.text ?? '').join('') : '';
   }
+  if (fmt === 'anthropic') return joinTextBlocks(json?.content);
+  if (fmt === 'cohere') return joinTextBlocks(json?.message?.content);
   return json?.choices?.[0]?.message?.content ?? '';
 }
 
@@ -106,6 +138,18 @@ function extractMetrics(apiFormat, json) {
       totalTokens: u?.totalTokenCount,
       cachedTokens: u?.cachedContentTokenCount
     };
+  }
+  if (fmt === 'anthropic') {
+    const u = json?.usage;
+    return {
+      promptTokens: u?.input_tokens,
+      outputTokens: u?.output_tokens,
+      cachedTokens: u?.cache_read_input_tokens
+    };
+  }
+  if (fmt === 'cohere') {
+    const u = json?.usage?.tokens || json?.usage?.billed_units;
+    return { promptTokens: u?.input_tokens, outputTokens: u?.output_tokens };
   }
   const u = json?.usage;
   return {
@@ -156,6 +200,30 @@ function createStreamParser(apiFormat) {
             metrics.outputTokens = j.usageMetadata.candidatesTokenCount;
             metrics.totalTokens = j.usageMetadata.totalTokenCount;
             metrics.cachedTokens = j.usageMetadata.cachedContentTokenCount;
+          }
+        } catch { /* partial line */ }
+      } else if (fmt === 'anthropic') {
+        // Anthropic SSE: event/data pairs; text arrives in content_block_delta events.
+        if (!line.startsWith('data:')) continue;
+        try {
+          const j = JSON.parse(line.slice(5).trim());
+          if (j?.type === 'content_block_delta' && j.delta?.type === 'text_delta') out += j.delta.text ?? '';
+          if (j?.type === 'message_start') {
+            metrics.promptTokens = j.message?.usage?.input_tokens;
+            metrics.cachedTokens = j.message?.usage?.cache_read_input_tokens;
+          }
+          if (j?.type === 'message_delta' && j.usage) metrics.outputTokens = j.usage.output_tokens;
+        } catch { /* partial line */ }
+      } else if (fmt === 'cohere') {
+        // Cohere v2 SSE: content-delta events carry text; message-end carries usage.
+        if (!line.startsWith('data:')) continue;
+        try {
+          const j = JSON.parse(line.slice(5).trim());
+          if (j?.type === 'content-delta') out += j.delta?.message?.content?.text ?? '';
+          if (j?.type === 'message-end') {
+            const u = j.delta?.usage?.tokens || j.delta?.usage?.billed_units;
+            metrics.promptTokens = u?.input_tokens;
+            metrics.outputTokens = u?.output_tokens;
           }
         } catch { /* partial line */ }
       } else {
@@ -232,7 +300,8 @@ export default function ChatView() {
       try {
         const res = await api.enumerateCompletionEndpoints({ MaxResults: 1000 });
         if (cancelled) return;
-        const list = (res?.Data || []).filter(e => e.Active !== false);
+        // Bedrock and Vertex AI requests are signed per request and cannot be relayed by the proxy Chat uses.
+        const list = (res?.Data || []).filter(e => e.Active !== false && getProvider(e.ApiFormat).proxy);
         setEndpoints(list);
         setEndpointId(prev => prev || list[0]?.Id || '');
       } catch (err) {
@@ -377,14 +446,14 @@ export default function ChatView() {
             <select value={endpointId} onChange={e => setEndpointId(e.target.value)} disabled={loadingEndpoints}>
               <option value="">{loadingEndpoints ? 'Loading...' : '-- Select endpoint --'}</option>
               {endpoints.map(e => (
-                <option key={e.Id} value={e.Id}>{(e.Name || e.Model)} ({e.ApiFormat})</option>
+                <option key={e.Id} value={e.Id}>{(e.Name || e.Model)} ({providerLabel(e.ApiFormat)})</option>
               ))}
             </select>
           </div>
           {activeEndpoint && (
             <div className="chat-endpoint-summary">
               <div><span>Model</span><strong>{activeEndpoint.Model}</strong></div>
-              <div><span>Provider</span><strong>{activeEndpoint.ApiFormat}</strong></div>
+              <div><span>Provider</span><strong>{providerLabel(activeEndpoint.ApiFormat)}</strong></div>
               <div><span>Base URL</span><code>{activeEndpoint.Endpoint}</code></div>
             </div>
           )}

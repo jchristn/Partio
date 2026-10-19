@@ -69,7 +69,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 model VARCHAR(256) NOT NULL,
                 endpoint VARCHAR(512) NOT NULL,
                 api_format VARCHAR(32) NOT NULL,
-                api_key VARCHAR(512) NULL,
+                api_key TEXT NULL,
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 enable_request_history TINYINT(1) NOT NULL DEFAULT 0,
                 health_check_enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -86,6 +86,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 unhealthy_threshold INT NOT NULL DEFAULT 2,
                 health_check_use_auth TINYINT(1) NOT NULL DEFAULT 0,
                 tokenization_json TEXT NULL,
+                provider_settings_json TEXT NULL,
                 labels_json TEXT NULL,
                 tags_json TEXT NULL,
                 created_utc TEXT NOT NULL,
@@ -103,7 +104,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 name VARCHAR(256) NULL,
                 endpoint VARCHAR(512) NOT NULL,
                 api_format VARCHAR(32) NOT NULL,
-                api_key VARCHAR(512) NULL,
+                api_key TEXT NULL,
                 model VARCHAR(256) NOT NULL,
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 enable_request_history TINYINT(1) NOT NULL DEFAULT 1,
@@ -120,6 +121,7 @@ namespace Partio.Core.Database.Mysql.Queries
                 healthy_threshold INT NOT NULL DEFAULT 2,
                 unhealthy_threshold INT NOT NULL DEFAULT 2,
                 health_check_use_auth TINYINT(1) NOT NULL DEFAULT 0,
+                provider_settings_json TEXT NULL,
                 labels_json TEXT NULL,
                 tags_json TEXT NULL,
                 created_utc TEXT NOT NULL,
@@ -231,6 +233,30 @@ namespace Partio.Core.Database.Mysql.Queries
         /// </summary>
         public static readonly string AlterCompletionEndpointsAddTagsJson =
             @"ALTER TABLE completion_endpoints ADD COLUMN tags_json TEXT NULL AFTER labels_json;";
+
+        /// <summary>
+        /// Migration: add provider_settings_json column to embedding_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsAddProviderSettingsJson =
+            @"ALTER TABLE embedding_endpoints ADD COLUMN provider_settings_json TEXT NULL;";
+
+        /// <summary>
+        /// Migration: widen embedding_endpoints.api_key so long bearer tokens (for example Entra ID access tokens) fit.
+        /// </summary>
+        public static readonly string AlterEmbeddingEndpointsWidenApiKey =
+            @"ALTER TABLE embedding_endpoints MODIFY api_key TEXT NULL;";
+
+        /// <summary>
+        /// Migration: add provider_settings_json column to completion_endpoints for existing databases.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsAddProviderSettingsJson =
+            @"ALTER TABLE completion_endpoints ADD COLUMN provider_settings_json TEXT NULL;";
+
+        /// <summary>
+        /// Migration: widen completion_endpoints.api_key so long bearer tokens (for example Entra ID access tokens) fit.
+        /// </summary>
+        public static readonly string AlterCompletionEndpointsWidenApiKey =
+            @"ALTER TABLE completion_endpoints MODIFY api_key TEXT NULL;";
 
         /// <summary>
         /// All table creation queries in dependency order.

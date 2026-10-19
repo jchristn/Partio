@@ -58,6 +58,7 @@ export class PartioApi {
   // Embedding Endpoints
   createEndpoint(data) { return this.request('PUT', '/v1.0/endpoints/embedding', data); }
   getEndpoint(id) { return this.request('GET', `/v1.0/endpoints/embedding/${id}`); }
+  revealEndpoint(id) { return this.request('GET', `/v1.0/endpoints/embedding/${id}/reveal`); }
   updateEndpoint(id, data) { return this.request('PUT', `/v1.0/endpoints/embedding/${id}`, data); }
   deleteEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/embedding/${id}`); }
   enumerateEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/embedding/enumerate', req); }
@@ -70,6 +71,7 @@ export class PartioApi {
   // Completion Endpoints
   createCompletionEndpoint(data) { return this.request('PUT', '/v1.0/endpoints/completion', data); }
   getCompletionEndpoint(id) { return this.request('GET', `/v1.0/endpoints/completion/${id}`); }
+  revealCompletionEndpoint(id) { return this.request('GET', `/v1.0/endpoints/completion/${id}/reveal`); }
   updateCompletionEndpoint(id, data) { return this.request('PUT', `/v1.0/endpoints/completion/${id}`, data); }
   deleteCompletionEndpoint(id) { return this.request('DELETE', `/v1.0/endpoints/completion/${id}`); }
   enumerateCompletionEndpoints(req = {}) { return this.request('POST', '/v1.0/endpoints/completion/enumerate', req); }

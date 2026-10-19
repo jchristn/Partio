@@ -369,6 +369,186 @@ namespace Partio.Sdk.TestHarness
                     }
                 });
 
+                // Provider-specific endpoints, secret masking, and reveal
+                const string azureKey = "azure-test-key-1234567890";
+                const string anthropicKey = "sk-ant-test-key-abcdef1234";
+                const string bedrockSecret = "bedrock-secret-abcdefgh";
+                const string bedrockSession = "short";
+                const string voyageKey = "pa-voyage-test-key-9876";
+                string serviceAccountJson = "{\"type\":\"service_account\",\"project_id\":\"partio-test\",\"client_email\":\"partio@partio-test.iam.gserviceaccount.com\",\"private_key\":\"-----BEGIN PRIVATE KEY-----\\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\\n-----END PRIVATE KEY-----\\n\"}";
+                string azureCepId = "";
+                string anthropicCepId = "";
+                string bedrockEpId = "";
+                string vertexEpId = "";
+                string teiEpId = "";
+                string voyageEpId = "";
+
+                await RunTest("Create Provider-Specific Endpoints", async () =>
+                {
+                    CompletionEndpoint? azure = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                    {
+                        TenantId = testTenantId, Name = "Azure Inference", Model = "gpt-4o-mini", Endpoint = "https://partio-test.openai.azure.com/openai",
+                        ApiFormat = ApiFormats.AzureOpenAI, ApiKey = azureKey, HealthCheckEnabled = false,
+                        ProviderSettings = new ProviderSettings { AzureOpenAI = new AzureOpenAiProviderSettings { ApiVersion = "2024-10-21", AuthMode = AzureAuthModes.ApiKey } }
+                    });
+                    if (azure == null || string.IsNullOrEmpty(azure.Id)) throw new Exception("No Azure response");
+                    azureCepId = azure.Id;
+                    if (azure.Endpoint != "https://partio-test.openai.azure.com") throw new Exception("Expected the /openai suffix to be dropped, got " + azure.Endpoint);
+                    if (azure.ApiKey != "****7890") throw new Exception("Expected masked Azure ApiKey, got " + azure.ApiKey);
+                    if (azure.ProviderSettings?.AzureOpenAI?.ApiVersion != "2024-10-21") throw new Exception("Azure ApiVersion mismatch");
+
+                    CompletionEndpoint? anthropic = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                    {
+                        TenantId = testTenantId, Name = "Anthropic Inference", Model = "claude-opus-4-8", Endpoint = "https://api.anthropic.com/v1",
+                        ApiFormat = ApiFormats.Anthropic, ApiKey = anthropicKey, HealthCheckEnabled = false
+                    });
+                    if (anthropic == null || string.IsNullOrEmpty(anthropic.Id)) throw new Exception("No Anthropic response");
+                    anthropicCepId = anthropic.Id;
+                    if (anthropic.Endpoint != "https://api.anthropic.com") throw new Exception("Expected the /v1 suffix to be dropped, got " + anthropic.Endpoint);
+
+                    EmbeddingEndpoint? bedrock = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                    {
+                        TenantId = testTenantId, Name = "Bedrock Embedding", Model = "amazon.titan-embed-text-v2:0", Endpoint = "https://bedrock-runtime.us-east-1.amazonaws.com/",
+                        ApiFormat = ApiFormats.Bedrock, HealthCheckEnabled = false,
+                        ProviderSettings = new ProviderSettings { Bedrock = new BedrockProviderSettings { Region = "us-east-1", CredentialSource = AwsCredentialSources.Static, AccessKeyId = "AKIAPARTIOTEST", SecretAccessKey = bedrockSecret, SessionToken = bedrockSession } }
+                    });
+                    if (bedrock == null || string.IsNullOrEmpty(bedrock.Id)) throw new Exception("No Bedrock response");
+                    bedrockEpId = bedrock.Id;
+                    if (bedrock.Endpoint != "https://bedrock-runtime.us-east-1.amazonaws.com") throw new Exception("Expected the trailing slash to be dropped, got " + bedrock.Endpoint);
+
+                    EmbeddingEndpoint? vertex = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                    {
+                        TenantId = testTenantId, Name = "Vertex Embedding", Model = "text-embedding-005", Endpoint = "https://us-central1-aiplatform.googleapis.com/",
+                        ApiFormat = ApiFormats.VertexAI, HealthCheckEnabled = false,
+                        ProviderSettings = new ProviderSettings { VertexAI = new VertexAiProviderSettings { ProjectId = "partio-test", Region = "us-central1", CredentialSource = GcpCredentialSources.ServiceAccountJson, ServiceAccountJson = serviceAccountJson } }
+                    });
+                    if (vertex == null || string.IsNullOrEmpty(vertex.Id)) throw new Exception("No Vertex response");
+                    vertexEpId = vertex.Id;
+                    if (vertex.Endpoint != "https://us-central1-aiplatform.googleapis.com") throw new Exception("Expected the trailing slash to be dropped, got " + vertex.Endpoint);
+
+                    EmbeddingEndpoint? tei = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                    {
+                        TenantId = testTenantId, Name = "TEI Embedding", Model = "BAAI/bge-small-en-v1.5", Endpoint = "http://localhost:8080",
+                        ApiFormat = ApiFormats.TEI, HealthCheckEnabled = false
+                    });
+                    if (tei == null || string.IsNullOrEmpty(tei.Id)) throw new Exception("No TEI response");
+                    teiEpId = tei.Id;
+
+                    EmbeddingEndpoint? voyage = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                    {
+                        TenantId = testTenantId, Name = "Voyage Embedding", Model = "voyage-3.5", Endpoint = "https://api.voyageai.com/v1",
+                        ApiFormat = ApiFormats.VoyageAI, ApiKey = voyageKey, HealthCheckEnabled = false,
+                        ProviderSettings = new ProviderSettings { VoyageAI = new VoyageAiProviderSettings { InputType = "document", OutputDimension = 1024 } }
+                    });
+                    if (voyage == null || string.IsNullOrEmpty(voyage.Id)) throw new Exception("No Voyage response");
+                    voyageEpId = voyage.Id;
+                    if (voyage.ProviderSettings?.VoyageAI?.OutputDimension != 1024) throw new Exception("Voyage OutputDimension mismatch");
+                });
+
+                await RunTest("Read Masks Endpoint Secrets", async () =>
+                {
+                    CompletionEndpoint? azure = await admin.GetCompletionEndpointAsync(azureCepId);
+                    if (azure?.ApiKey != "****7890") throw new Exception("Expected masked Azure ApiKey, got " + azure?.ApiKey);
+                    EmbeddingEndpoint? bedrock = await admin.GetEndpointAsync(bedrockEpId);
+                    BedrockProviderSettings? aws = bedrock?.ProviderSettings?.Bedrock;
+                    if (aws == null) throw new Exception("Expected Bedrock settings");
+                    if (aws.SecretAccessKey != "****efgh") throw new Exception("Expected masked SecretAccessKey, got " + aws.SecretAccessKey);
+                    if (aws.SessionToken != "****") throw new Exception("Expected masked SessionToken, got " + aws.SessionToken);
+                    if (aws.AccessKeyId != "AKIAPARTIOTEST") throw new Exception("AccessKeyId should not be masked");
+                    EmbeddingEndpoint? vertex = await admin.GetEndpointAsync(vertexEpId);
+                    if (vertex?.ProviderSettings?.VertexAI?.ServiceAccountJson != "****") throw new Exception("Expected masked ServiceAccountJson");
+                    EnumerationResult<CompletionEndpoint>? list = await admin.EnumerateCompletionEndpointsAsync();
+                    if (list == null) throw new Exception("No enumeration response");
+                    foreach (CompletionEndpoint listed in list.Data)
+                        if (!string.IsNullOrEmpty(listed.ApiKey) && !listed.ApiKey.StartsWith("****")) throw new Exception("Enumeration returned an unmasked ApiKey for " + listed.Id);
+                    if ((await admin.GetCompletionEndpointAsync(anthropicCepId))?.ApiKey != "****1234") throw new Exception("Expected masked Anthropic ApiKey");
+                });
+
+                await RunTest("Reveal Endpoint Secrets", async () =>
+                {
+                    CompletionEndpoint? azure = await admin.RevealCompletionEndpointAsync(azureCepId);
+                    if (azure?.ApiKey != azureKey) throw new Exception("Reveal did not return the Azure ApiKey");
+                    EmbeddingEndpoint? bedrock = await admin.RevealEndpointAsync(bedrockEpId);
+                    if (bedrock?.ProviderSettings?.Bedrock?.SecretAccessKey != bedrockSecret) throw new Exception("Reveal did not return the SecretAccessKey");
+                    if (bedrock.ProviderSettings.Bedrock.SessionToken != bedrockSession) throw new Exception("Reveal did not return the SessionToken");
+                    EmbeddingEndpoint? vertex = await admin.RevealEndpointAsync(vertexEpId);
+                    if (vertex?.ProviderSettings?.VertexAI?.ServiceAccountJson != serviceAccountJson) throw new Exception("Reveal did not return the ServiceAccountJson");
+                    using (PartioClient badClient = new PartioClient(_Endpoint, "invalid-token"))
+                    {
+                        try
+                        {
+                            await badClient.RevealEndpointAsync(bedrockEpId);
+                            throw new Exception("Expected unauthenticated reveal to fail");
+                        }
+                        catch (PartioException ex) when (ex.StatusCode == 401)
+                        {
+                        }
+                    }
+                });
+
+                await RunTest("Update Echoing Masked Secrets Keeps Them", async () =>
+                {
+                    CompletionEndpoint? azure = await admin.GetCompletionEndpointAsync(azureCepId);
+                    if (azure == null) throw new Exception("Azure endpoint not found");
+                    azure.Name = "Azure Inference Renamed";
+                    CompletionEndpoint? updatedAzure = await admin.UpdateCompletionEndpointAsync(azureCepId, azure);
+                    if (updatedAzure?.Name != "Azure Inference Renamed") throw new Exception("Azure rename failed");
+                    if ((await admin.RevealCompletionEndpointAsync(azureCepId))?.ApiKey != azureKey) throw new Exception("Azure ApiKey was overwritten by the masked value");
+
+                    EmbeddingEndpoint? bedrock = await admin.GetEndpointAsync(bedrockEpId);
+                    if (bedrock == null) throw new Exception("Bedrock endpoint not found");
+                    bedrock.Name = "Bedrock Embedding Renamed";
+                    await admin.UpdateEndpointAsync(bedrockEpId, bedrock);
+                    EmbeddingEndpoint? revealedBedrock = await admin.RevealEndpointAsync(bedrockEpId);
+                    if (revealedBedrock?.ProviderSettings?.Bedrock?.SecretAccessKey != bedrockSecret) throw new Exception("SecretAccessKey was overwritten by the masked value");
+                    if (revealedBedrock.ProviderSettings.Bedrock.SessionToken != bedrockSession) throw new Exception("SessionToken was overwritten by the masked value");
+
+                    EmbeddingEndpoint? vertex = await admin.GetEndpointAsync(vertexEpId);
+                    if (vertex == null) throw new Exception("Vertex endpoint not found");
+                    await admin.UpdateEndpointAsync(vertexEpId, vertex);
+                    if ((await admin.RevealEndpointAsync(vertexEpId))?.ProviderSettings?.VertexAI?.ServiceAccountJson != serviceAccountJson) throw new Exception("ServiceAccountJson was overwritten by the masked value");
+
+                    EmbeddingEndpoint? voyage = await admin.GetEndpointAsync(voyageEpId);
+                    if (voyage == null) throw new Exception("Voyage endpoint not found");
+                    voyage.ApiKey = "pa-voyage-rotated-key-0000";
+                    await admin.UpdateEndpointAsync(voyageEpId, voyage);
+                    if ((await admin.RevealEndpointAsync(voyageEpId))?.ApiKey != "pa-voyage-rotated-key-0000") throw new Exception("A new ApiKey should replace the stored one");
+                });
+
+                await RunTest("Provider Validation Errors (400)", async () =>
+                {
+                    async Task Expect400(Func<Task> call, string label)
+                    {
+                        try
+                        {
+                            await call();
+                            throw new Exception("Expected 400 for " + label);
+                        }
+                        catch (PartioException ex) when (ex.StatusCode == 400)
+                        {
+                        }
+                    }
+
+                    await Expect400(() => admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "TEI Inference", Model = "bge", Endpoint = "http://localhost:8080", ApiFormat = ApiFormats.TEI, HealthCheckEnabled = false }), "TEI completion");
+                    await Expect400(() => admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "Anthropic Embedding", Model = "claude", Endpoint = "https://api.anthropic.com", ApiFormat = ApiFormats.Anthropic, ApiKey = anthropicKey, HealthCheckEnabled = false }), "Anthropic embedding");
+                    await Expect400(() => admin.CreateEndpointAsync(new EmbeddingEndpoint
+                    {
+                        TenantId = testTenantId, Name = "Bedrock No Region", Model = "amazon.titan-embed-text-v2:0", Endpoint = "https://bedrock-runtime.us-east-1.amazonaws.com",
+                        ApiFormat = ApiFormats.Bedrock, HealthCheckEnabled = false,
+                        ProviderSettings = new ProviderSettings { Bedrock = new BedrockProviderSettings { AccessKeyId = "AKIAPARTIOTEST", SecretAccessKey = bedrockSecret } }
+                    }), "Bedrock without Region");
+                    await Expect400(() => admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Azure No Key", Model = "gpt-4o-mini", Endpoint = "https://partio-test.openai.azure.com", ApiFormat = ApiFormats.AzureOpenAI, HealthCheckEnabled = false }), "Azure without ApiKey");
+                });
+
+                await RunTest("Delete Provider-Specific Endpoints", async () =>
+                {
+                    foreach (string id in new[] { azureCepId, anthropicCepId })
+                        if (!string.IsNullOrEmpty(id)) await admin.DeleteCompletionEndpointAsync(id);
+                    foreach (string id in new[] { bedrockEpId, vertexEpId, teiEpId, voyageEpId })
+                        if (!string.IsNullOrEmpty(id)) await admin.DeleteEndpointAsync(id);
+                    if (!string.IsNullOrEmpty(bedrockEpId) && await admin.EndpointExistsAsync(bedrockEpId)) throw new Exception("Bedrock endpoint still exists");
+                });
+
                 await RunTest("Load Completion Endpoint", async () =>
                 {
                     SkipIfProviderUnavailable();

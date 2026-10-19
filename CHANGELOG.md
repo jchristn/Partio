@@ -1,5 +1,90 @@
 # Changelog
 
+## v0.5.2 - 2026-10-19
+
+### Added
+- **Every PolyPrompt provider.** `ApiFormat` accepts seven new values on embedding and completion endpoints:
+  `AzureOpenAI`, `Anthropic` (completion only), `Cohere`, `Bedrock`, `VertexAI`, `TEI` (embedding only), and
+  `VoyageAI` (embedding only). Each is backed by its PolyPrompt 3.4 client.
+- **`ProviderSettings`** is a new optional object on both endpoint models. It holds one section per provider,
+  and only the section that matches `ApiFormat` is stored:
+  - `AzureOpenAI`: `ApiVersion` and `AuthMode` (API key or Entra ID bearer token).
+  - `Anthropic`: `AnthropicVersion` and `WorkspaceId`.
+  - `Bedrock`: `Region` plus static access keys (with an optional session token) or the server environment.
+  - `VertexAI`: `ProjectId`, `Region`, and a service-account JSON, Application Default Credentials, or an access token.
+  - `Cohere`: `InputType`.
+  - `VoyageAI`: `InputType` and `OutputDimension`.
+  Existing fields keep their names and shapes; `Model` is the Azure deployment name and the Bedrock model ID.
+  Settings are stored in a new `provider_settings_json` column, added automatically on all four databases.
+  `api_key` is widened so Entra ID tokens fit.
+- **Validation.** Create and update return `400` when:
+  - an endpoint kind is unsupported, such as TEI used for completion or Anthropic for embeddings;
+  - a required API key, resource URL, region, project, or credential is missing;
+  - a service-account JSON is malformed.
+- **Endpoint defaults.**
+  - **Hosted providers** (OpenAI, Gemini, Anthropic, Cohere, VoyageAI, xAI) default to their public API root.
+  - **Bedrock and Vertex AI** derive the regional URL from `ProviderSettings`.
+  - **Trimming:** trailing version segments (`/v1`, `/v2`, `/openai`) are removed.
+  - **Empty endpoints:** `"Endpoint": ""` now means "use the default"; it previously caused a 500. Providers
+    without a default (Ollama, vLLM, TEI, Azure OpenAI) still require an endpoint, and an empty value
+    returns 400.
+- **Secret masking and reveal APIs.**
+  - **Masking:** every endpoint read, enumeration, create, and update response masks `ApiKey`,
+    `Bedrock.SecretAccessKey`, `Bedrock.SessionToken` (`****` plus the last four characters), and
+    `VertexAI.ServiceAccountJson` (`****`).
+  - **Updates:** sending back a masked value keeps the stored secret, and `null` clears it.
+  - **Reveal:** new `GET /v1.0/endpoints/embedding/{id}/reveal` and `GET /v1.0/endpoints/completion/{id}/reveal`
+    return the unmasked endpoint. They are admin only, and each call is logged.
+  - **SDKs:** the C#, JS, and Python SDKs add `RevealEndpointAsync` / `RevealCompletionEndpointAsync`
+    (and the language equivalents).
+  - **MCP:** the server deliberately has no reveal tool.
+- **Health checks per provider.**
+  - **HTTP checks:**
+    - Azure OpenAI uses `/openai/models?api-version=…` with `api-key`.
+    - Anthropic uses `/v1/models` with `x-api-key` and `anthropic-version`.
+    - Cohere uses `/v1/models`.
+    - TEI uses `/health`.
+  - **Connectivity probe:** Bedrock, Vertex AI, and VoyageAI can't be checked with a plain HTTP request, so
+    they use PolyPrompt's connectivity probe, with defaults of a 60 s interval and a 10 s timeout.
+  - **Credential caching:** Vertex AI service-account and ADC tokens are cached and refreshed instead of being
+    exchanged on every request.
+- **Proxy.**
+  - **New allow-lists:**
+    - Azure OpenAI: `openai/deployments/{deployment}/…` and `openai/v1/…`, with the configured `api-version`
+      appended when absent.
+    - Anthropic: `v1/messages`, `v1/messages/count_tokens`, and `v1/models`.
+    - Cohere: `v2/chat`, `v2/embed`, and `v1/models`.
+  - **Signed providers:** Bedrock and Vertex AI requests are signed per request, so the proxy refuses them with
+    an explanatory 404.
+- **Tokenization defaults** for `AzureOpenAI` (8192), `Cohere` (512), `Bedrock` (8192), `VertexAI` (2048), `TEI`
+  (512), and `VoyageAI` (32000). Telemetry `service` labels add `azureopenai`, `anthropic`, `cohere`,
+  `bedrock`, `vertexai`, `tei`, and `voyageai`.
+
+### Changed
+- **Dashboard endpoint forms redesigned.** Creating and editing embedding and inference endpoints now starts with
+  a provider picker: grouped cards showing what each provider serves, how it authenticates, and whether it is
+  health-checked by probe. Only providers that can serve the endpoint kind are offered.
+  - **Connection section:** built from the chosen provider, so each one shows only what it needs. For example,
+    Azure shows a deployment name, resource URL, API version, and API key or Entra token; Bedrock shows a
+    region, access keys or the server environment, and the derived endpoint with an override; Vertex AI shows
+    a project, region, and service-account JSON (paste or load a file), ADC, or an access token.
+  - **Validation and secrets:** fields are validated inline before saving. Stored secrets appear masked, with
+    Reveal and Replace actions.
+  - **Provider changes:** switching providers on an existing endpoint asks for confirmation.
+  - **Health Checks section:** for probe providers, it explains the probe instead of asking for a URL.
+  - **Chat and API Explorer:** both support the Azure OpenAI, Anthropic, and Cohere dialects. Endpoints that
+    can't be proxied are hidden from Chat and from the proxy explorer.
+
+### Tests
+- **Test.Automated:** 332 passed, up from 282.
+  - New `ProviderRules` and `ProviderWire` suites cover validation, normalization, auth headers, proxy
+    policy, masking, and wire-level tests of every new client against a scripted fake provider, including
+    SigV4 signing and the service-account token exchange.
+  - New integration cases cover validation, normalization, masking and reveal, admin-only reveal,
+    Anthropic, Azure, and Bedrock traffic, TEI and Cohere embeddings, and probe-based health checks.
+- **SDK harnesses:** each adds provider, masking, reveal, and validation tests.
+- **Dashboard:** 45 tests, up from 19.
+
 ## v0.5.1 - 2026-10-18
 
 ### Added

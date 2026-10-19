@@ -24,6 +24,7 @@ namespace Partio.Core.ThirdParty
         /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
         /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
         /// <param name="maxQueueDepth">Maximum number of requests allowed to wait for a concurrency slot.</param>
+        /// <param name="transport">Optional HTTP message handler for upstream requests. The caller owns it.</param>
         public OpenAiCompletionClient(
             string endpoint,
             string? apiKey,
@@ -31,8 +32,9 @@ namespace Partio.Core.ThirdParty
             int maximumTimeoutMs,
             string? concurrencyKey = null,
             int maxConcurrentRequests = 2,
-            int maxQueueDepth = 0)
-            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth)
+            int maxQueueDepth = 0,
+            HttpMessageHandler? transport = null)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth, transport)
         {
             _Header = "[OpenAiCompletion] ";
         }
@@ -115,6 +117,17 @@ namespace Partio.Core.ThirdParty
         protected virtual PolyPromptCompletionClientBase CreateProviderClient()
         {
             return new PolyPromptOpenAiCompletionClient(_Endpoint, _ApiKey, _Logging);
+        }
+
+        /// <inheritdoc />
+        public override async Task<bool> ValidateConnectivityAsync(string model, int timeoutMs, CancellationToken token = default)
+        {
+            using (PolyPromptCompletionClientBase client = CreateConfiguredClient(model, ClampTimeoutMs(timeoutMs)))
+            {
+                bool reachable = await client.ValidateConnectivityAsync(token).ConfigureAwait(false);
+                AppendCallDetails(client.CallDetails);
+                return reachable;
+            }
         }
 
         private PolyPromptCompletionClientBase CreateConfiguredClient(string model, int timeoutMs)

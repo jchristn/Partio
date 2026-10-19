@@ -1,5 +1,6 @@
 """Partio Python SDK Test Harness."""
 
+import json
 import os
 import sys
 import time
@@ -326,6 +327,161 @@ def main():
             except PartioError as e:
                 assert e.status_code == 400
         run_test("Create Ollama Cloud and xAI Endpoints", test_create_cloud_provider_endpoints)
+
+        # Provider-specific endpoints, secret masking, and reveal
+        azure_key = "azure-test-key-1234567890"
+        anthropic_key = "sk-ant-test-key-abcdef1234"
+        bedrock_secret = "bedrock-secret-abcdefgh"
+        bedrock_session = "short"
+        voyage_key = "pa-voyage-test-key-9876"
+        service_account_json = json.dumps({
+            "type": "service_account",
+            "project_id": "partio-test",
+            "client_email": "partio@partio-test.iam.gserviceaccount.com",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\n-----END PRIVATE KEY-----\n",
+        })
+        provider_ids = {}
+
+        def expect_400(fn, label):
+            try:
+                fn()
+            except PartioError as e:
+                assert e.status_code == 400, f"Expected 400 for {label}, got {e.status_code}"
+                return
+            raise AssertionError("Expected 400 for " + label)
+
+        def test_create_provider_endpoints():
+            azure = client.create_completion_endpoint({
+                "TenantId": test_tenant_id, "Name": "Azure Inference", "Model": "gpt-4o-mini", "Endpoint": "https://partio-test.openai.azure.com/openai",
+                "ApiFormat": "AzureOpenAI", "ApiKey": azure_key, "HealthCheckEnabled": False,
+                "ProviderSettings": {"AzureOpenAI": {"ApiVersion": "2024-10-21", "AuthMode": "ApiKey"}},
+            })
+            assert azure and "Id" in azure, "No Azure response"
+            provider_ids["azure"] = azure["Id"]
+            assert azure["Endpoint"] == "https://partio-test.openai.azure.com", "Expected the /openai suffix to be dropped, got " + str(azure.get("Endpoint"))
+            assert azure["ApiKey"] == "****7890", "Expected masked Azure ApiKey, got " + str(azure.get("ApiKey"))
+            assert azure["ProviderSettings"]["AzureOpenAI"]["ApiVersion"] == "2024-10-21", "Azure ApiVersion mismatch"
+
+            anthropic = client.create_completion_endpoint({
+                "TenantId": test_tenant_id, "Name": "Anthropic Inference", "Model": "claude-opus-4-8",
+                "ApiFormat": "Anthropic", "ApiKey": anthropic_key, "HealthCheckEnabled": False,
+            })
+            assert anthropic and "Id" in anthropic, "No Anthropic response"
+            provider_ids["anthropic"] = anthropic["Id"]
+            assert anthropic["Endpoint"] == "https://api.anthropic.com", "Expected the default Anthropic endpoint, got " + str(anthropic.get("Endpoint"))
+
+            bedrock = client.create_endpoint({
+                "TenantId": test_tenant_id, "Name": "Bedrock Embedding", "Model": "amazon.titan-embed-text-v2:0",
+                "ApiFormat": "Bedrock", "HealthCheckEnabled": False,
+                "ProviderSettings": {"Bedrock": {"Region": "us-east-1", "CredentialSource": "Static", "AccessKeyId": "AKIAPARTIOTEST", "SecretAccessKey": bedrock_secret, "SessionToken": bedrock_session}},
+            })
+            assert bedrock and "Id" in bedrock, "No Bedrock response"
+            provider_ids["bedrock"] = bedrock["Id"]
+            assert bedrock["Endpoint"] == "https://bedrock-runtime.us-east-1.amazonaws.com", "Expected the region-derived Bedrock endpoint, got " + str(bedrock.get("Endpoint"))
+
+            vertex = client.create_endpoint({
+                "TenantId": test_tenant_id, "Name": "Vertex Embedding", "Model": "text-embedding-005",
+                "ApiFormat": "VertexAI", "HealthCheckEnabled": False,
+                "ProviderSettings": {"VertexAI": {"ProjectId": "partio-test", "Region": "us-central1", "CredentialSource": "ServiceAccountJson", "ServiceAccountJson": service_account_json}},
+            })
+            assert vertex and "Id" in vertex, "No Vertex response"
+            provider_ids["vertex"] = vertex["Id"]
+            assert vertex["Endpoint"] == "https://us-central1-aiplatform.googleapis.com", "Expected the region-derived Vertex endpoint, got " + str(vertex.get("Endpoint"))
+
+            tei = client.create_endpoint({
+                "TenantId": test_tenant_id, "Name": "TEI Embedding", "Model": "BAAI/bge-small-en-v1.5", "Endpoint": "http://localhost:8080",
+                "ApiFormat": "TEI", "HealthCheckEnabled": False,
+            })
+            assert tei and "Id" in tei, "No TEI response"
+            provider_ids["tei"] = tei["Id"]
+
+            voyage = client.create_endpoint({
+                "TenantId": test_tenant_id, "Name": "Voyage Embedding", "Model": "voyage-3.5",
+                "ApiFormat": "VoyageAI", "ApiKey": voyage_key, "HealthCheckEnabled": False,
+                "ProviderSettings": {"VoyageAI": {"InputType": "document", "OutputDimension": 1024}},
+            })
+            assert voyage and "Id" in voyage, "No Voyage response"
+            provider_ids["voyage"] = voyage["Id"]
+            assert voyage["ProviderSettings"]["VoyageAI"]["OutputDimension"] == 1024, "Voyage OutputDimension mismatch"
+        run_test("Create Provider-Specific Endpoints", test_create_provider_endpoints)
+
+        def test_read_masks_secrets():
+            azure = client.get_completion_endpoint(provider_ids["azure"])
+            assert azure["ApiKey"] == "****7890", "Expected masked Azure ApiKey, got " + str(azure.get("ApiKey"))
+            aws = client.get_endpoint(provider_ids["bedrock"])["ProviderSettings"]["Bedrock"]
+            assert aws["SecretAccessKey"] == "****efgh", "Expected masked SecretAccessKey, got " + str(aws.get("SecretAccessKey"))
+            assert aws["SessionToken"] == "****", "Expected masked SessionToken, got " + str(aws.get("SessionToken"))
+            assert aws["AccessKeyId"] == "AKIAPARTIOTEST", "AccessKeyId should not be masked"
+            vertex = client.get_endpoint(provider_ids["vertex"])
+            assert vertex["ProviderSettings"]["VertexAI"]["ServiceAccountJson"] == "****", "Expected masked ServiceAccountJson"
+            listed = client.enumerate_completion_endpoints() or {}
+            for item in listed.get("Data") or []:
+                key = item.get("ApiKey")
+                assert not key or key.startswith("****"), "Enumeration returned an unmasked ApiKey for " + str(item.get("Id"))
+            assert client.get_completion_endpoint(provider_ids["anthropic"])["ApiKey"] == "****1234", "Expected masked Anthropic ApiKey"
+        run_test("Read Masks Endpoint Secrets", test_read_masks_secrets)
+
+        def test_reveal_secrets():
+            assert client.reveal_completion_endpoint(provider_ids["azure"])["ApiKey"] == azure_key, "Reveal did not return the Azure ApiKey"
+            aws = client.reveal_endpoint(provider_ids["bedrock"])["ProviderSettings"]["Bedrock"]
+            assert aws["SecretAccessKey"] == bedrock_secret, "Reveal did not return the SecretAccessKey"
+            assert aws["SessionToken"] == bedrock_session, "Reveal did not return the SessionToken"
+            vertex = client.reveal_endpoint(provider_ids["vertex"])
+            assert vertex["ProviderSettings"]["VertexAI"]["ServiceAccountJson"] == service_account_json, "Reveal did not return the ServiceAccountJson"
+            with PartioClient(endpoint, "invalid-token") as bad_client:
+                try:
+                    bad_client.reveal_endpoint(provider_ids["bedrock"])
+                    raise AssertionError("Expected unauthenticated reveal to fail")
+                except PartioError as e:
+                    assert e.status_code == 401, f"Expected 401, got {e.status_code}"
+        run_test("Reveal Endpoint Secrets", test_reveal_secrets)
+
+        def test_update_keeps_masked_secrets():
+            azure = client.get_completion_endpoint(provider_ids["azure"])
+            azure["Name"] = "Azure Inference Renamed"
+            updated = client.update_completion_endpoint(provider_ids["azure"], azure)
+            assert updated["Name"] == "Azure Inference Renamed", "Azure rename failed"
+            assert client.reveal_completion_endpoint(provider_ids["azure"])["ApiKey"] == azure_key, "Azure ApiKey was overwritten by the masked value"
+
+            bedrock = client.get_endpoint(provider_ids["bedrock"])
+            bedrock["Name"] = "Bedrock Embedding Renamed"
+            client.update_endpoint(provider_ids["bedrock"], bedrock)
+            aws = client.reveal_endpoint(provider_ids["bedrock"])["ProviderSettings"]["Bedrock"]
+            assert aws["SecretAccessKey"] == bedrock_secret, "SecretAccessKey was overwritten by the masked value"
+            assert aws["SessionToken"] == bedrock_session, "SessionToken was overwritten by the masked value"
+
+            vertex = client.get_endpoint(provider_ids["vertex"])
+            client.update_endpoint(provider_ids["vertex"], vertex)
+            revealed = client.reveal_endpoint(provider_ids["vertex"])
+            assert revealed["ProviderSettings"]["VertexAI"]["ServiceAccountJson"] == service_account_json, "ServiceAccountJson was overwritten by the masked value"
+
+            voyage = client.get_endpoint(provider_ids["voyage"])
+            voyage["ApiKey"] = "pa-voyage-rotated-key-0000"
+            client.update_endpoint(provider_ids["voyage"], voyage)
+            assert client.reveal_endpoint(provider_ids["voyage"])["ApiKey"] == "pa-voyage-rotated-key-0000", "A new ApiKey should replace the stored one"
+        run_test("Update Echoing Masked Secrets Keeps Them", test_update_keeps_masked_secrets)
+
+        def test_provider_validation_errors():
+            expect_400(lambda: client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "TEI Inference", "Model": "bge", "Endpoint": "http://localhost:8080", "ApiFormat": "TEI", "HealthCheckEnabled": False}), "TEI completion")
+            expect_400(lambda: client.create_endpoint({"TenantId": test_tenant_id, "Name": "Anthropic Embedding", "Model": "claude", "ApiFormat": "Anthropic", "ApiKey": anthropic_key, "HealthCheckEnabled": False}), "Anthropic embedding")
+            expect_400(lambda: client.create_endpoint({
+                "TenantId": test_tenant_id, "Name": "Bedrock No Region", "Model": "amazon.titan-embed-text-v2:0", "Endpoint": "https://bedrock-runtime.us-east-1.amazonaws.com",
+                "ApiFormat": "Bedrock", "HealthCheckEnabled": False,
+                "ProviderSettings": {"Bedrock": {"AccessKeyId": "AKIAPARTIOTEST", "SecretAccessKey": bedrock_secret}},
+            }), "Bedrock without Region")
+            expect_400(lambda: client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Azure No Key", "Model": "gpt-4o-mini", "Endpoint": "https://partio-test.openai.azure.com", "ApiFormat": "AzureOpenAI", "HealthCheckEnabled": False}), "Azure without ApiKey")
+        run_test("Provider Validation Errors (400)", test_provider_validation_errors)
+
+        def test_delete_provider_endpoints():
+            for key in ("azure", "anthropic"):
+                if provider_ids.get(key):
+                    client.delete_completion_endpoint(provider_ids[key])
+            for key in ("bedrock", "vertex", "tei", "voyage"):
+                if provider_ids.get(key):
+                    client.delete_endpoint(provider_ids[key])
+            if provider_ids.get("bedrock"):
+                assert not client.endpoint_exists(provider_ids["bedrock"]), "Bedrock endpoint still exists"
+        run_test("Delete Provider-Specific Endpoints", test_delete_provider_endpoints)
 
         def test_load_completion_endpoint():
             skip_if_provider_unavailable()

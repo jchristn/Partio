@@ -74,7 +74,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_get_completion_endpoint",
-                "Fetch a single completion endpoint by id, including MaxConcurrentRequests and MaxQueueDepth.",
+                "Fetch a single completion endpoint by id, including MaxConcurrentRequests, MaxQueueDepth, and ProviderSettings. ApiKey and secret ProviderSettings fields are returned masked; this server cannot reveal them.",
                 SchemaId(),
                 async (parameters, token) =>
                 {
@@ -86,7 +86,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_create_completion_endpoint",
-                "Create a completion endpoint. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth (integer, default 0, clamped >= 0).",
+                "Create a completion endpoint. Accepts the full endpoint definition including ApiFormat, ProviderSettings, MaxConcurrentRequests, and MaxQueueDepth (integer, default 0, clamped >= 0). Secrets in the result are masked.",
                 SchemaEndpoint(false),
                 async (parameters, token) =>
                 {
@@ -97,7 +97,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_update_completion_endpoint",
-                "Update an existing completion endpoint by id. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth.",
+                "Update an existing completion endpoint by id. Accepts the full endpoint definition including ApiFormat, ProviderSettings, MaxConcurrentRequests, and MaxQueueDepth. Masked secrets sent back unchanged keep the stored values. Secrets in the result are masked.",
                 SchemaEndpoint(true),
                 async (parameters, token) =>
                 {
@@ -143,7 +143,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_get_embedding_endpoint",
-                "Fetch a single embedding endpoint by id, including MaxConcurrentRequests and MaxQueueDepth.",
+                "Fetch a single embedding endpoint by id, including MaxConcurrentRequests, MaxQueueDepth, and ProviderSettings. ApiKey and secret ProviderSettings fields are returned masked; this server cannot reveal them.",
                 SchemaId(),
                 async (parameters, token) =>
                 {
@@ -155,7 +155,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_create_embedding_endpoint",
-                "Create an embedding endpoint. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth (integer, default 0, clamped >= 0).",
+                "Create an embedding endpoint. Accepts the full endpoint definition including ApiFormat, ProviderSettings, MaxConcurrentRequests, and MaxQueueDepth (integer, default 0, clamped >= 0). Secrets in the result are masked.",
                 SchemaEndpoint(false),
                 async (parameters, token) =>
                 {
@@ -166,7 +166,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_update_embedding_endpoint",
-                "Update an existing embedding endpoint by id. Accepts the full endpoint definition including MaxConcurrentRequests and MaxQueueDepth.",
+                "Update an existing embedding endpoint by id. Accepts the full endpoint definition including ApiFormat, ProviderSettings, MaxConcurrentRequests, and MaxQueueDepth. Masked secrets sent back unchanged keep the stored values. Secrets in the result are masked.",
                 SchemaEndpoint(true),
                 async (parameters, token) =>
                 {
@@ -228,7 +228,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_proxy",
-                "Relay a native provider request through a completion endpoint's transparent proxy. Partio injects the upstream API key, enforces per-endpoint concurrency/timeout, and returns the provider's response verbatim as { StatusCode, ContentType, Body, Headers }. 'subpath' must be the endpoint dialect's native path (for example v1/chat/completions for an OpenAI endpoint, api/chat for an Ollama or OllamaCloud endpoint, or v1/responses for an xAI endpoint); 'body' is the raw request body sent verbatim (no translation). A non-2xx upstream status is returned, not raised.",
+                "Relay a native provider request through a completion endpoint's transparent proxy. Partio injects the upstream credential headers, enforces per-endpoint concurrency/timeout, and returns the provider's response verbatim as { StatusCode, ContentType, Body, Headers }. 'subpath' must be the endpoint dialect's native path (for example v1/chat/completions for an OpenAI endpoint, api/chat for an Ollama or OllamaCloud endpoint, or v1/responses for an xAI endpoint); 'body' is the raw request body sent verbatim (no translation). A non-2xx upstream status is returned, not raised.",
                 SchemaProxy(),
                 async (parameters, token) =>
                 {
@@ -419,7 +419,7 @@ namespace Partio.McpServer.Mcp
                 properties = new
                 {
                     endpointId = new { type = "string", description = "Target completion endpoint id." },
-                    subpath = new { type = "string", description = "Native provider sub-path, for example 'v1/chat/completions' (OpenAI/vLLM), 'api/chat' (Ollama/OllamaCloud), 'v1/responses' (xAI), or 'v1beta/models/{model}:generateContent' (Gemini)." },
+                    subpath = new { type = "string", description = "Native provider sub-path, for example 'v1/chat/completions' (OpenAI/vLLM), 'api/chat' (Ollama/OllamaCloud), 'v1/responses' (xAI), 'v1beta/models/{model}:generateContent' (Gemini), 'v1/messages' (Anthropic), 'openai/deployments/{deployment}/chat/completions' (AzureOpenAI), or 'v2/chat' (Cohere). Bedrock and VertexAI endpoints cannot be proxied." },
                     method = new { type = "string", description = "HTTP method (default POST). Use GET for discovery paths such as v1/models or api/tags." },
                     body = new { type = "string", description = "Raw request body, sent verbatim to the upstream provider. Omit for GET." },
                     contentType = new { type = "string", description = "Content type of the body (default application/json)." }
@@ -433,10 +433,11 @@ namespace Partio.McpServer.Mcp
             Dictionary<string, object> properties = new Dictionary<string, object>
             {
                 ["Name"] = new { type = "string" },
-                ["Endpoint"] = new { type = "string", description = "Upstream provider base URL." },
-                ["ApiFormat"] = new { type = "string", description = "Ollama, OllamaCloud, OpenAI, vLLM, Gemini, or xAI. OllamaCloud always targets https://ollama.com; xAI defaults to https://api.x.ai. OllamaCloud and xAI require ApiKey." },
-                ["ApiKey"] = new { type = "string" },
-                ["Model"] = new { type = "string" },
+                ["Endpoint"] = new { type = "string", description = "Upstream provider base URL. AzureOpenAI: the resource URL. Bedrock and VertexAI: the regional URL derived from ProviderSettings Region (https://bedrock-runtime.{Region}.amazonaws.com or https://{Region}-aiplatform.googleapis.com). Hosted providers use their public API root, for example https://api.anthropic.com. Optional when the provider has a default (hosted providers, Bedrock, VertexAI); required for Ollama, vLLM, TEI, and AzureOpenAI." },
+                ["ApiFormat"] = new { type = "string", description = "Ollama, OllamaCloud, OpenAI, vLLM, Gemini, xAI, AzureOpenAI, Anthropic (completion only), Cohere, Bedrock, VertexAI, TEI (embedding only), or VoyageAI (embedding only). OllamaCloud always targets https://ollama.com. OllamaCloud, xAI, AzureOpenAI, Anthropic, Cohere, and VoyageAI require ApiKey. Bedrock and VertexAI require ProviderSettings." },
+                ["ProviderSettings"] = new { type = "object", description = "Optional provider-specific settings; only the section matching ApiFormat is kept. AzureOpenAI { ApiVersion, AuthMode: ApiKey|BearerToken }; Anthropic { AnthropicVersion, WorkspaceId }; Bedrock { Region (required), CredentialSource: Static|Environment, AccessKeyId, SecretAccessKey, SessionToken }; VertexAI { ProjectId, Region (required), CredentialSource: ServiceAccountJson|ApplicationDefault|AccessToken, ServiceAccountJson }; Cohere { InputType }; VoyageAI { InputType, OutputDimension }. Secret fields are returned masked." },
+                ["ApiKey"] = new { type = "string", description = "Upstream credential. Returned masked as **** plus the last four characters; sending the masked value back on update keeps the stored key, null clears it." },
+                ["Model"] = new { type = "string", description = "Model name. AzureOpenAI: the deployment name. Bedrock: the model ID (for example amazon.titan-embed-text-v2:0)." },
                 ["Active"] = new { type = "boolean" },
                 ["MaximumTimeoutMs"] = new { type = "integer" },
                 ["MaxConcurrentRequests"] = new { type = "integer", description = "Maximum concurrent upstream requests (>= 1)." },
@@ -444,7 +445,7 @@ namespace Partio.McpServer.Mcp
                 ["ContextSize"] = new { type = "integer", description = "Context window size (maximum tokens) for the model. Default 0 (unspecified). Clamped >= 0." }
             };
 
-            List<string> required = new List<string> { "Endpoint", "Model" };
+            List<string> required = new List<string> { "Model" };
             if (includeId)
             {
                 properties["id"] = new { type = "string", description = "Identifier of the endpoint to update." };

@@ -2,7 +2,7 @@
  * Partio JavaScript SDK Test Harness.
  */
 
-import { PartioClient, PartioError } from './partio-sdk.js';
+import { ApiFormats, PartioClient, PartioError } from './partio-sdk.js';
 
 const endpoint = process.argv[2] || 'http://localhost:8400';
 const adminKey = process.argv[3] || 'partioadmin';
@@ -330,6 +330,159 @@ await runTest('Create Ollama Cloud and xAI Endpoints', async () => {
   } catch (ex) {
     if (!(ex instanceof PartioError) || ex.statusCode !== 400) throw ex;
   }
+});
+
+// Provider-specific endpoints, secret masking, and reveal
+const azureKey = 'azure-test-key-1234567890';
+const anthropicKey = 'sk-ant-test-key-abcdef1234';
+const bedrockSecret = 'bedrock-secret-abcdefgh';
+const bedrockSession = 'short';
+const voyageKey = 'pa-voyage-test-key-9876';
+const serviceAccountJson = JSON.stringify({
+  type: 'service_account',
+  project_id: 'partio-test',
+  client_email: 'partio@partio-test.iam.gserviceaccount.com',
+  private_key: '-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\n-----END PRIVATE KEY-----\n',
+});
+const providerIds = { azure: null, anthropic: null, bedrock: null, vertex: null, tei: null, voyage: null };
+
+async function expect400(fn, label) {
+  try {
+    await fn();
+  } catch (ex) {
+    if (ex instanceof PartioError && ex.statusCode === 400) return;
+    throw ex;
+  }
+  throw new Error('Expected 400 for ' + label);
+}
+
+await runTest('Create Provider-Specific Endpoints', async () => {
+  const azure = await client.createCompletionEndpoint({
+    TenantId: testTenantId, Name: 'Azure Inference', Model: 'gpt-4o-mini', Endpoint: 'https://partio-test.openai.azure.com/openai',
+    ApiFormat: ApiFormats.AzureOpenAI, ApiKey: azureKey, HealthCheckEnabled: false,
+    ProviderSettings: { AzureOpenAI: { ApiVersion: '2024-10-21', AuthMode: 'ApiKey' } },
+  });
+  if (!azure || !azure.Id) throw new Error('No Azure response');
+  providerIds.azure = azure.Id;
+  if (azure.Endpoint !== 'https://partio-test.openai.azure.com') throw new Error('Expected the /openai suffix to be dropped, got ' + azure.Endpoint);
+  if (azure.ApiKey !== '****7890') throw new Error('Expected masked Azure ApiKey, got ' + azure.ApiKey);
+  if (azure.ProviderSettings?.AzureOpenAI?.ApiVersion !== '2024-10-21') throw new Error('Azure ApiVersion mismatch');
+
+  const anthropic = await client.createCompletionEndpoint({
+    TenantId: testTenantId, Name: 'Anthropic Inference', Model: 'claude-opus-4-8',
+    ApiFormat: ApiFormats.Anthropic, ApiKey: anthropicKey, HealthCheckEnabled: false,
+  });
+  if (!anthropic || !anthropic.Id) throw new Error('No Anthropic response');
+  providerIds.anthropic = anthropic.Id;
+  if (anthropic.Endpoint !== 'https://api.anthropic.com') throw new Error('Expected the default Anthropic endpoint, got ' + anthropic.Endpoint);
+
+  const bedrock = await client.createEndpoint({
+    TenantId: testTenantId, Name: 'Bedrock Embedding', Model: 'amazon.titan-embed-text-v2:0',
+    ApiFormat: ApiFormats.Bedrock, HealthCheckEnabled: false,
+    ProviderSettings: { Bedrock: { Region: 'us-east-1', CredentialSource: 'Static', AccessKeyId: 'AKIAPARTIOTEST', SecretAccessKey: bedrockSecret, SessionToken: bedrockSession } },
+  });
+  if (!bedrock || !bedrock.Id) throw new Error('No Bedrock response');
+  providerIds.bedrock = bedrock.Id;
+  if (bedrock.Endpoint !== 'https://bedrock-runtime.us-east-1.amazonaws.com') throw new Error('Expected the region-derived Bedrock endpoint, got ' + bedrock.Endpoint);
+
+  const vertex = await client.createEndpoint({
+    TenantId: testTenantId, Name: 'Vertex Embedding', Model: 'text-embedding-005',
+    ApiFormat: ApiFormats.VertexAI, HealthCheckEnabled: false,
+    ProviderSettings: { VertexAI: { ProjectId: 'partio-test', Region: 'us-central1', CredentialSource: 'ServiceAccountJson', ServiceAccountJson: serviceAccountJson } },
+  });
+  if (!vertex || !vertex.Id) throw new Error('No Vertex response');
+  providerIds.vertex = vertex.Id;
+  if (vertex.Endpoint !== 'https://us-central1-aiplatform.googleapis.com') throw new Error('Expected the region-derived Vertex endpoint, got ' + vertex.Endpoint);
+
+  const tei = await client.createEndpoint({
+    TenantId: testTenantId, Name: 'TEI Embedding', Model: 'BAAI/bge-small-en-v1.5', Endpoint: 'http://localhost:8080',
+    ApiFormat: ApiFormats.TEI, HealthCheckEnabled: false,
+  });
+  if (!tei || !tei.Id) throw new Error('No TEI response');
+  providerIds.tei = tei.Id;
+
+  const voyage = await client.createEndpoint({
+    TenantId: testTenantId, Name: 'Voyage Embedding', Model: 'voyage-3.5',
+    ApiFormat: ApiFormats.VoyageAI, ApiKey: voyageKey, HealthCheckEnabled: false,
+    ProviderSettings: { VoyageAI: { InputType: 'document', OutputDimension: 1024 } },
+  });
+  if (!voyage || !voyage.Id) throw new Error('No Voyage response');
+  providerIds.voyage = voyage.Id;
+  if (voyage.ProviderSettings?.VoyageAI?.OutputDimension !== 1024) throw new Error('Voyage OutputDimension mismatch');
+});
+
+await runTest('Read Masks Endpoint Secrets', async () => {
+  const azure = await client.getCompletionEndpoint(providerIds.azure);
+  if (azure?.ApiKey !== '****7890') throw new Error('Expected masked Azure ApiKey, got ' + azure?.ApiKey);
+  const aws = (await client.getEndpoint(providerIds.bedrock))?.ProviderSettings?.Bedrock;
+  if (!aws) throw new Error('Expected Bedrock settings');
+  if (aws.SecretAccessKey !== '****efgh') throw new Error('Expected masked SecretAccessKey, got ' + aws.SecretAccessKey);
+  if (aws.SessionToken !== '****') throw new Error('Expected masked SessionToken, got ' + aws.SessionToken);
+  if (aws.AccessKeyId !== 'AKIAPARTIOTEST') throw new Error('AccessKeyId should not be masked');
+  const vertex = await client.getEndpoint(providerIds.vertex);
+  if (vertex?.ProviderSettings?.VertexAI?.ServiceAccountJson !== '****') throw new Error('Expected masked ServiceAccountJson');
+  const list = await client.enumerateCompletionEndpoints();
+  for (const listed of list?.Data || []) {
+    if (listed.ApiKey && !listed.ApiKey.startsWith('****')) throw new Error('Enumeration returned an unmasked ApiKey for ' + listed.Id);
+  }
+  if ((await client.getCompletionEndpoint(providerIds.anthropic))?.ApiKey !== '****1234') throw new Error('Expected masked Anthropic ApiKey');
+});
+
+await runTest('Reveal Endpoint Secrets', async () => {
+  if ((await client.revealCompletionEndpoint(providerIds.azure))?.ApiKey !== azureKey) throw new Error('Reveal did not return the Azure ApiKey');
+  const aws = (await client.revealEndpoint(providerIds.bedrock))?.ProviderSettings?.Bedrock;
+  if (aws?.SecretAccessKey !== bedrockSecret) throw new Error('Reveal did not return the SecretAccessKey');
+  if (aws.SessionToken !== bedrockSession) throw new Error('Reveal did not return the SessionToken');
+  const vertex = await client.revealEndpoint(providerIds.vertex);
+  if (vertex?.ProviderSettings?.VertexAI?.ServiceAccountJson !== serviceAccountJson) throw new Error('Reveal did not return the ServiceAccountJson');
+  const badClient = new PartioClient(endpoint, 'invalid-token');
+  try {
+    await badClient.revealEndpoint(providerIds.bedrock);
+    throw new Error('Expected unauthenticated reveal to fail');
+  } catch (ex) {
+    if (!(ex instanceof PartioError) || ex.statusCode !== 401) throw ex;
+  }
+});
+
+await runTest('Update Echoing Masked Secrets Keeps Them', async () => {
+  const azure = await client.getCompletionEndpoint(providerIds.azure);
+  azure.Name = 'Azure Inference Renamed';
+  const updatedAzure = await client.updateCompletionEndpoint(providerIds.azure, azure);
+  if (updatedAzure?.Name !== 'Azure Inference Renamed') throw new Error('Azure rename failed');
+  if ((await client.revealCompletionEndpoint(providerIds.azure))?.ApiKey !== azureKey) throw new Error('Azure ApiKey was overwritten by the masked value');
+
+  const bedrock = await client.getEndpoint(providerIds.bedrock);
+  bedrock.Name = 'Bedrock Embedding Renamed';
+  await client.updateEndpoint(providerIds.bedrock, bedrock);
+  const aws = (await client.revealEndpoint(providerIds.bedrock))?.ProviderSettings?.Bedrock;
+  if (aws?.SecretAccessKey !== bedrockSecret) throw new Error('SecretAccessKey was overwritten by the masked value');
+  if (aws.SessionToken !== bedrockSession) throw new Error('SessionToken was overwritten by the masked value');
+
+  const vertex = await client.getEndpoint(providerIds.vertex);
+  await client.updateEndpoint(providerIds.vertex, vertex);
+  if ((await client.revealEndpoint(providerIds.vertex))?.ProviderSettings?.VertexAI?.ServiceAccountJson !== serviceAccountJson) throw new Error('ServiceAccountJson was overwritten by the masked value');
+
+  const voyage = await client.getEndpoint(providerIds.voyage);
+  voyage.ApiKey = 'pa-voyage-rotated-key-0000';
+  await client.updateEndpoint(providerIds.voyage, voyage);
+  if ((await client.revealEndpoint(providerIds.voyage))?.ApiKey !== 'pa-voyage-rotated-key-0000') throw new Error('A new ApiKey should replace the stored one');
+});
+
+await runTest('Provider Validation Errors (400)', async () => {
+  await expect400(() => client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'TEI Inference', Model: 'bge', Endpoint: 'http://localhost:8080', ApiFormat: ApiFormats.TEI, HealthCheckEnabled: false }), 'TEI completion');
+  await expect400(() => client.createEndpoint({ TenantId: testTenantId, Name: 'Anthropic Embedding', Model: 'claude', ApiFormat: ApiFormats.Anthropic, ApiKey: anthropicKey, HealthCheckEnabled: false }), 'Anthropic embedding');
+  await expect400(() => client.createEndpoint({
+    TenantId: testTenantId, Name: 'Bedrock No Region', Model: 'amazon.titan-embed-text-v2:0', Endpoint: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+    ApiFormat: ApiFormats.Bedrock, HealthCheckEnabled: false,
+    ProviderSettings: { Bedrock: { AccessKeyId: 'AKIAPARTIOTEST', SecretAccessKey: bedrockSecret } },
+  }), 'Bedrock without Region');
+  await expect400(() => client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Azure No Key', Model: 'gpt-4o-mini', Endpoint: 'https://partio-test.openai.azure.com', ApiFormat: ApiFormats.AzureOpenAI, HealthCheckEnabled: false }), 'Azure without ApiKey');
+});
+
+await runTest('Delete Provider-Specific Endpoints', async () => {
+  for (const id of [providerIds.azure, providerIds.anthropic]) if (id) await client.deleteCompletionEndpoint(id);
+  for (const id of [providerIds.bedrock, providerIds.vertex, providerIds.tei, providerIds.voyage]) if (id) await client.deleteEndpoint(id);
+  if (providerIds.bedrock && await client.endpointExists(providerIds.bedrock)) throw new Error('Bedrock endpoint still exists');
 });
 
 await runTest('Load Completion Endpoint', async () => {

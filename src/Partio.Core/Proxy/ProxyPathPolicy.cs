@@ -2,6 +2,8 @@ namespace Partio.Core.Proxy
 {
     using System;
     using Partio.Core.Enums;
+    using Partio.Core.Models;
+    using Partio.Core.ThirdParty;
 
     /// <summary>
     /// Policy helpers for the transparent completion proxy (<c>/v1.0/proxy/{endpointId}/...</c>).
@@ -73,7 +75,30 @@ namespace Partio.Core.Proxy
                     // (for example v1beta/models/gemini-1.5-flash:generateContent), so match by prefix.
                     return p == "v1beta/models" || p.StartsWith("v1beta/models/", StringComparison.Ordinal);
 
+                case ApiFormatEnum.AzureOpenAI:
+                    // Deployment-scoped routes (openai/deployments/{deployment}/...) and the v1 GA routes.
+                    return IsAzureDeploymentPath(p)
+                        || p == "openai/models"
+                        || p == "openai/v1/chat/completions"
+                        || p == "openai/v1/embeddings"
+                        || p == "openai/v1/responses"
+                        || p == "openai/v1/models";
+
+                case ApiFormatEnum.Anthropic:
+                    return p == "v1/messages"
+                        || p == "v1/messages/count_tokens"
+                        || p == "v1/models"
+                        || p.StartsWith("v1/models/", StringComparison.Ordinal);
+
+                case ApiFormatEnum.Cohere:
+                    return p == "v2/chat"
+                        || p == "v2/embed"
+                        || p == "v1/models"
+                        || p.StartsWith("v1/models/", StringComparison.Ordinal);
+
                 default:
+                    // Bedrock and Vertex AI requests must be signed per request, so they are never relayed.
+                    // TEI and VoyageAI are embedding-only and cannot back a completion endpoint.
                     return false;
             }
         }
@@ -98,6 +123,12 @@ namespace Partio.Core.Proxy
                     return "v1beta/models, v1beta/models/{model}:{method}";
                 case ApiFormatEnum.xAI:
                     return "v1/responses, v1/chat/completions, v1/embeddings, v1/models, v1/models/{model}, v1/language-models, v1/embedding-models";
+                case ApiFormatEnum.AzureOpenAI:
+                    return "openai/deployments/{deployment}/chat/completions, openai/deployments/{deployment}/completions, openai/deployments/{deployment}/embeddings, openai/models, openai/v1/chat/completions, openai/v1/embeddings, openai/v1/responses, openai/v1/models";
+                case ApiFormatEnum.Anthropic:
+                    return "v1/messages, v1/messages/count_tokens, v1/models, v1/models/{model}";
+                case ApiFormatEnum.Cohere:
+                    return "v2/chat, v2/embed, v1/models, v1/models/{model}";
                 default:
                     return string.Empty;
             }
@@ -124,18 +155,64 @@ namespace Partio.Core.Proxy
         }
 
         /// <summary>
-        /// Resolve the upstream authentication header Partio injects on the caller's behalf, based on the
-        /// provider dialect. OpenAI, vLLM, Ollama, Ollama Cloud, and xAI use <c>Authorization: Bearer</c>; Gemini uses
-        /// <c>x-goog-api-key</c>. Returns null when the endpoint has no API key configured.
+        /// Resolve the primary upstream authentication header Partio injects on the caller's behalf, based on the
+        /// provider dialect. Gemini uses <c>x-goog-api-key</c>, Anthropic uses <c>x-api-key</c>, Azure OpenAI uses
+        /// <c>api-key</c>, and other providers use <c>Authorization: Bearer</c>. Returns null when the endpoint has
+        /// no API key configured. Use <see cref="ResolveAuthHeaders"/> for the full header set.
         /// </summary>
         /// <param name="format">The endpoint's provider dialect.</param>
         /// <param name="apiKey">The endpoint's configured upstream API key, if any.</param>
         /// <returns>The header name and value to inject, or null when no key is configured.</returns>
         public static ProxyAuthHeader? ResolveAuthHeader(ApiFormatEnum format, string? apiKey)
         {
-            if (string.IsNullOrEmpty(apiKey)) return null;
-            if (format == ApiFormatEnum.Gemini) return new ProxyAuthHeader("x-goog-api-key", apiKey);
-            return new ProxyAuthHeader("Authorization", "Bearer " + apiKey);
+            List<ProxyAuthHeader> headers = ResolveAuthHeaders(format, apiKey, null);
+            return headers.Count > 0 ? headers[0] : null;
+        }
+
+        /// <summary>
+        /// Resolve every upstream authentication header Partio injects for an endpoint, including provider
+        /// companions such as <c>anthropic-version</c>. Returns an empty list when no credential applies.
+        /// </summary>
+        /// <param name="format">The endpoint's provider dialect.</param>
+        /// <param name="apiKey">The endpoint's configured upstream API key, if any.</param>
+        /// <param name="settings">The endpoint's provider settings, if any.</param>
+        /// <returns>The headers to inject.</returns>
+        public static List<ProxyAuthHeader> ResolveAuthHeaders(ApiFormatEnum format, string? apiKey, ProviderSettings? settings)
+        {
+            List<ProxyAuthHeader> headers = new List<ProxyAuthHeader>();
+            foreach (KeyValuePair<string, string> header in ProviderDefaults.ResolveAuthHeaders(format, apiKey, settings))
+                headers.Add(new ProxyAuthHeader(header.Key, header.Value));
+            return headers;
+        }
+
+        /// <summary>
+        /// Append the endpoint's Azure OpenAI api-version to a query string that does not already carry one.
+        /// Other dialects return the query string unchanged.
+        /// </summary>
+        /// <param name="format">The endpoint's provider dialect.</param>
+        /// <param name="queryString">Original query string, with or without a leading '?'. May be null/empty.</param>
+        /// <param name="settings">The endpoint's provider settings, if any.</param>
+        /// <returns>The query string to forward.</returns>
+        public static string? ApplyRequiredQuery(ApiFormatEnum format, string? queryString, ProviderSettings? settings)
+        {
+            if (format != ApiFormatEnum.AzureOpenAI) return queryString;
+            if (!string.IsNullOrEmpty(queryString) && queryString.IndexOf("api-version=", StringComparison.OrdinalIgnoreCase) >= 0)
+                return queryString;
+
+            string apiVersion = "api-version=" + Uri.EscapeDataString(settings?.AzureOpenAI?.ApiVersion ?? ProviderDefaults.AzureOpenAiApiVersion);
+            if (string.IsNullOrEmpty(queryString) || queryString == "?") return "?" + apiVersion;
+            return (queryString.StartsWith("?", StringComparison.Ordinal) ? queryString : "?" + queryString) + "&" + apiVersion;
+        }
+
+        private static bool IsAzureDeploymentPath(string p)
+        {
+            const string prefix = "openai/deployments/";
+            if (!p.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            string rest = p.Substring(prefix.Length);
+            int slash = rest.IndexOf('/');
+            if (slash <= 0) return false;
+            string operation = rest.Substring(slash + 1);
+            return operation == "chat/completions" || operation == "completions" || operation == "embeddings";
         }
     }
 

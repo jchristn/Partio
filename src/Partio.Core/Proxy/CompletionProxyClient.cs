@@ -90,7 +90,10 @@ namespace Partio.Core.Proxy
         {
             if (endpoint == null) throw new ArgumentNullException(nameof(endpoint));
 
-            string url = ProxyPathPolicy.BuildUpstreamUrl(endpoint.Endpoint, subpath, queryString);
+            string url = ProxyPathPolicy.BuildUpstreamUrl(
+                endpoint.Endpoint,
+                subpath,
+                ProxyPathPolicy.ApplyRequiredQuery(endpoint.ApiFormat, queryString, endpoint.ProviderSettings));
             int effectiveTimeoutMs = timeoutMs > 0 ? timeoutMs : endpoint.MaximumTimeoutMs;
             if (effectiveTimeoutMs <= 0) effectiveTimeoutMs = 60000;
 
@@ -136,13 +139,15 @@ namespace Partio.Core.Proxy
                     request.Headers.TryAddWithoutValidation(header.Key, header.Value);
                 }
 
-                // Inject the upstream API key (replacing any inbound Authorization), so the caller never
-                // needs the provider credential and cannot override it.
-                ProxyAuthHeader? auth = ProxyPathPolicy.ResolveAuthHeader(endpoint.ApiFormat, endpoint.ApiKey);
-                if (auth != null)
+                // Inject the upstream credential headers (replacing any inbound values), so the caller never
+                // needs the provider credential and cannot override it. A caller-supplied anthropic-version is
+                // kept because it selects API behavior rather than carrying a credential.
+                foreach (ProxyAuthHeader auth in ProxyPathPolicy.ResolveAuthHeaders(endpoint.ApiFormat, endpoint.ApiKey, endpoint.ProviderSettings))
                 {
-                    request.Headers.Remove(auth.Value.Name);
-                    request.Headers.TryAddWithoutValidation(auth.Value.Name, auth.Value.Value);
+                    if (auth.Name.Equals("anthropic-version", StringComparison.OrdinalIgnoreCase) && request.Headers.Contains(auth.Name))
+                        continue;
+                    request.Headers.Remove(auth.Name);
+                    request.Headers.TryAddWithoutValidation(auth.Name, auth.Value);
                 }
 
                 timeoutCts = new CancellationTokenSource(effectiveTimeoutMs);

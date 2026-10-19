@@ -254,6 +254,10 @@ namespace Partio.Sdk
         public Task<EmbeddingEndpoint?> GetEndpointAsync(string id) =>
             MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Get, $"/v1.0/endpoints/embedding/{id}");
 
+        /// <summary>Read an embedding endpoint with ApiKey and secret ProviderSettings unmasked (admin only).</summary>
+        public Task<EmbeddingEndpoint?> RevealEndpointAsync(string id) =>
+            MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Get, $"/v1.0/endpoints/embedding/{id}/reveal");
+
         public Task<EmbeddingEndpoint?> UpdateEndpointAsync(string id, EmbeddingEndpoint endpoint) =>
             MakeRequestAsync<EmbeddingEndpoint>(HttpMethod.Put, $"/v1.0/endpoints/embedding/{id}", endpoint);
 
@@ -291,6 +295,10 @@ namespace Partio.Sdk
 
         public Task<CompletionEndpoint?> GetCompletionEndpointAsync(string id) =>
             MakeRequestAsync<CompletionEndpoint>(HttpMethod.Get, $"/v1.0/endpoints/completion/{id}");
+
+        /// <summary>Read a completion endpoint with ApiKey and secret ProviderSettings unmasked (admin only).</summary>
+        public Task<CompletionEndpoint?> RevealCompletionEndpointAsync(string id) =>
+            MakeRequestAsync<CompletionEndpoint>(HttpMethod.Get, $"/v1.0/endpoints/completion/{id}/reveal");
 
         public Task<CompletionEndpoint?> UpdateCompletionEndpointAsync(string id, CompletionEndpoint endpoint) =>
             MakeRequestAsync<CompletionEndpoint>(HttpMethod.Put, $"/v1.0/endpoints/completion/{id}", endpoint);

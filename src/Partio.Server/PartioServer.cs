@@ -101,9 +101,9 @@ namespace Partio.Server
 
             // 6b. Health check services
             _SharedHealthCheckCoordinator = new SharedHealthCheckCoordinator(_Logging);
-            _HealthCheckService = new EmbeddingHealthCheckService(_Database, _Logging, _TokenizationResolver, _SharedHealthCheckCoordinator);
+            _HealthCheckService = new EmbeddingHealthCheckService(_Database, _Logging, _TokenizationResolver, _SharedHealthCheckCoordinator, BuildEmbeddingConnectivityProbe);
             await _HealthCheckService.StartAsync().ConfigureAwait(false);
-            _CompletionHealthCheckService = new CompletionHealthCheckService(_Database, _Logging, _SharedHealthCheckCoordinator);
+            _CompletionHealthCheckService = new CompletionHealthCheckService(_Database, _Logging, _SharedHealthCheckCoordinator, BuildCompletionConnectivityProbe);
             await _CompletionHealthCheckService.StartAsync().ConfigureAwait(false);
             _ModelLoadService = new ModelLoadService(_Logging, CreateEmbeddingClient, CreateCompletionClient);
 
@@ -504,6 +504,21 @@ namespace Partio.Server
                 (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/responses"),
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/language-models"),
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/embedding-models"),
+                // Azure OpenAI (deployment-scoped and v1 GA routes; api-version is appended when absent)
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/chat/completions"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/completions"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/embeddings"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/openai/models"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/v1/chat/completions"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/v1/embeddings"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/v1/responses"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/openai/v1/models"),
+                // Anthropic (model listing shares the v1/models routes above)
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/messages"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/messages/count_tokens"),
+                // Cohere v2 (model listing shares the v1/models routes above)
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v2/chat"),
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v2/embed"),
                 // Gemini (the model segment carries the operation, e.g. gemini-1.5-flash:generateContent)
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models"),
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models/{model}"),
@@ -647,6 +662,15 @@ namespace Partio.Server
                     .WithResponse(200, OpenApiResponseMetadata.Json("Endpoint health status", null))
                     .WithResponse(404, OpenApiResponseMetadata.NotFound());
             }, auth: true);
+            server.Get("/v1.0/endpoints/embedding/{id}/reveal", RevealEndpoint, api => {
+                api.Summary = "Read an embedding endpoint with secrets unmasked";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Embedding Endpoints")
+                    .WithDescription("Returns the embedding endpoint with ApiKey and secret ProviderSettings fields unmasked. Other reads mask secrets as **** plus the last four characters. Admin only; each call is logged.")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Endpoint details with secrets", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
             server.Put<EmbeddingEndpoint>("/v1.0/endpoints/embedding/{id}", UpdateEndpoint, auth: true);
             server.Delete("/v1.0/endpoints/embedding/{id}", DeleteEndpoint, auth: true);
             server.Head("/v1.0/endpoints/embedding/{id}", HeadEndpoint, auth: true);
@@ -675,7 +699,7 @@ namespace Partio.Server
                 api.Summary = "Load or warm a completion endpoint model";
                 api.Security = new List<string> { "Bearer" };
                 api.WithTag("Model Loading")
-                    .WithDescription("Requests that the configured inference provider load or warm the endpoint model. Ollama uses native keep-alive behavior; Ollama Cloud, OpenAI, vLLM, Gemini, and xAI use a minimal warm completion request.")
+                    .WithDescription("Requests that the configured inference provider load or warm the endpoint model. Ollama uses native keep-alive behavior; every other provider uses a minimal warm completion request.")
                     .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
                     .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Model load request", false))
                     .WithResponse(200, OpenApiResponseMetadata.Json("Model load result", null))
@@ -701,6 +725,15 @@ namespace Partio.Server
                 api.WithTag("Completion Endpoints")
                     .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
                     .WithResponse(200, OpenApiResponseMetadata.Json("Completion endpoint health status", null))
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound());
+            }, auth: true);
+            server.Get("/v1.0/endpoints/completion/{id}/reveal", RevealCompletionEndpoint, api => {
+                api.Summary = "Read a completion endpoint with secrets unmasked";
+                api.Security = new List<string> { "Bearer" };
+                api.WithTag("Completion Endpoints")
+                    .WithDescription("Returns the completion endpoint with ApiKey and secret ProviderSettings fields unmasked. Other reads mask secrets as **** plus the last four characters. Admin only; each call is logged.")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json("Completion endpoint details with secrets", null))
                     .WithResponse(404, OpenApiResponseMetadata.NotFound());
             }, auth: true);
             server.Put<CompletionEndpoint>("/v1.0/endpoints/completion/{id}", UpdateCompletionEndpoint, auth: true);
@@ -1522,6 +1555,10 @@ namespace Partio.Server
                 if (string.IsNullOrWhiteSpace(subpath)) throw new ArgumentException("Proxy sub-path is required.");
 
                 endpoint = await ResolveCompletionEndpointFromBody(endpointId, auth, token).ConfigureAwait(false);
+
+                if (!ProviderDefaults.SupportsProxy(endpoint.ApiFormat))
+                    throw new KeyNotFoundException(ProviderDefaults.DisplayName(endpoint.ApiFormat)
+                        + " endpoints cannot be proxied because every request must be signed by Partio; use POST /v1.0/completion instead.");
 
                 if (!ProxyPathPolicy.IsAllowed(endpoint.ApiFormat, subpath))
                     throw new KeyNotFoundException("Proxy sub-path '/" + ProxyPathPolicy.Normalize(subpath)
@@ -3377,6 +3414,24 @@ namespace Partio.Server
                 case ApiFormatEnum.xAI:
                     client = new XAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
+                case ApiFormatEnum.AzureOpenAI:
+                    client = new AzureOpenAiEmbeddingClient(endpoint.Endpoint, endpoint.Model, endpoint.ApiKey ?? string.Empty, endpoint.ProviderSettings?.AzureOpenAI, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.Cohere:
+                    client = new CohereEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, endpoint.ProviderSettings?.Cohere, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.Bedrock:
+                    client = new BedrockEmbeddingClient(endpoint.Endpoint, RequireSettings(endpoint.ProviderSettings?.Bedrock, endpoint.ApiFormat), _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.VertexAI:
+                    client = new VertexAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, RequireSettings(endpoint.ProviderSettings?.VertexAI, endpoint.ApiFormat), _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.TEI:
+                    client = new TeiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.VoyageAI:
+                    client = new VoyageAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, endpoint.ProviderSettings?.VoyageAI, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -3405,6 +3460,21 @@ namespace Partio.Server
                 case ApiFormatEnum.xAI:
                     client = new XAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
+                case ApiFormatEnum.AzureOpenAI:
+                    client = new AzureOpenAiCompletionClient(endpoint.Endpoint, endpoint.Model, endpoint.ApiKey ?? string.Empty, endpoint.ProviderSettings?.AzureOpenAI, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.Anthropic:
+                    client = new AnthropicCompletionClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, endpoint.ProviderSettings?.Anthropic, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.Cohere:
+                    client = new CohereCompletionClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, endpoint.ProviderSettings?.Cohere, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.Bedrock:
+                    client = new BedrockCompletionClient(endpoint.Endpoint, RequireSettings(endpoint.ProviderSettings?.Bedrock, endpoint.ApiFormat), _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.VertexAI:
+                    client = new VertexAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, RequireSettings(endpoint.ProviderSettings?.VertexAI, endpoint.ApiFormat), _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -3412,7 +3482,30 @@ namespace Partio.Server
             return client;
         }
 
-        /// <summary>Low-cardinality provider service label for telemetry (ollama, ollamacloud, openai, gemini, vllm, xai).</summary>
+        private static Func<CancellationToken, Task<bool>> BuildEmbeddingConnectivityProbe(EmbeddingEndpoint endpoint)
+        {
+            return async token =>
+            {
+                using EmbeddingClientBase client = CreateEmbeddingClient(endpoint);
+                return await client.ValidateConnectivityAsync(endpoint.Model, endpoint.HealthCheckTimeoutMs, token).ConfigureAwait(false);
+            };
+        }
+
+        private static Func<CancellationToken, Task<bool>> BuildCompletionConnectivityProbe(CompletionEndpoint endpoint)
+        {
+            return async token =>
+            {
+                using CompletionClientBase client = CreateCompletionClient(endpoint);
+                return await client.ValidateConnectivityAsync(endpoint.Model, endpoint.HealthCheckTimeoutMs, token).ConfigureAwait(false);
+            };
+        }
+
+        private static T RequireSettings<T>(T? settings, ApiFormatEnum format) where T : class
+        {
+            return settings ?? throw new ArgumentException(ProviderDefaults.DisplayName(format) + " endpoints require ProviderSettings." + format + ".");
+        }
+
+        /// <summary>Low-cardinality provider service label for telemetry (see <see cref="ProviderDefaults.ServiceLabel"/>).</summary>
         private static string ServiceLabelFor(ApiFormatEnum format)
         {
             return ProviderDefaults.ServiceLabel(format);
@@ -3688,14 +3781,14 @@ namespace Partio.Server
             RequireAdmin(req);
             EmbeddingEndpoint? ep = req.GetData<EmbeddingEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
-            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.CreatedUtc = ep.LastUpdateUtc = DateTime.UtcNow;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
+            ProviderDefaults.Validate(ep.ApiFormat, EndpointTypeEnum.Embedding, ep.Endpoint, ep.ApiKey, ep.ProviderSettings);
             EmbeddingEndpoint created = await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
             _TokenizationResolver?.Invalidate(created.Id);
             _HealthCheckService?.OnEndpointCreated(created);
             req.Http.Response.StatusCode = 201;
-            return created;
+            return created.Redacted();
         }
 
         private static async Task<object> ReadEndpoint(ApiRequest req)
@@ -3704,6 +3797,16 @@ namespace Partio.Server
             string id = req.Parameters["id"];
             EmbeddingEndpoint? ep = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
             if (ep == null) throw new KeyNotFoundException("Embedding endpoint not found: " + id);
+            return ep.Redacted();
+        }
+
+        private static async Task<object> RevealEndpoint(ApiRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+            EmbeddingEndpoint? ep = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
+            if (ep == null) throw new KeyNotFoundException("Embedding endpoint not found: " + id);
+            _Logging.Info(_Header + "revealed secrets for embedding endpoint " + id + " to " + DescribeCaller(req));
             return ep;
         }
 
@@ -3715,14 +3818,17 @@ namespace Partio.Server
             if (ep == null) throw new ArgumentException("Request body is required.");
             EmbeddingEndpoint existing = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException("Embedding endpoint not found: " + id);
-            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.Id = id;
             ep.CreatedUtc = existing.CreatedUtc;
+            // A client that read the endpoint and sends it back unchanged echoes masked secrets; keep the stored values.
+            ep.ApiKey = EndpointSecrets.Resolve(ep.ApiKey, existing.ApiKey);
+            EndpointSecrets.Restore(ep.ProviderSettings, existing.ProviderSettings);
             EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
+            ProviderDefaults.Validate(ep.ApiFormat, EndpointTypeEnum.Embedding, ep.Endpoint, ep.ApiKey, ep.ProviderSettings);
             EmbeddingEndpoint updated = await _Database.EmbeddingEndpoint.UpdateAsync(ep).ConfigureAwait(false);
             _TokenizationResolver?.Invalidate(updated.Id);
             _HealthCheckService?.OnEndpointUpdated(updated);
-            return updated;
+            return updated.Redacted();
         }
 
         private static async Task<object> DeleteEndpoint(ApiRequest req)
@@ -3753,6 +3859,7 @@ namespace Partio.Server
             if (enumReq == null) enumReq = new EnumerationRequest();
             string tenantId = auth.TenantId ?? "default";
             EnumerationResult<EmbeddingEndpoint> result = await _Database.EmbeddingEndpoint.EnumerateAsync(tenantId, enumReq).ConfigureAwait(false);
+            result.Data = result.Data.Select(e => e.Redacted()).ToList();
             return result;
         }
 
@@ -3803,13 +3910,13 @@ namespace Partio.Server
             RequireAdmin(req);
             CompletionEndpoint? ep = req.GetData<CompletionEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
-            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.CreatedUtc = ep.LastUpdateUtc = DateTime.UtcNow;
             CompletionEndpoint.ApplyHealthCheckDefaults(ep);
+            ProviderDefaults.Validate(ep.ApiFormat, EndpointTypeEnum.Completion, ep.Endpoint, ep.ApiKey, ep.ProviderSettings);
             CompletionEndpoint created = await _Database.CompletionEndpoint.CreateAsync(ep).ConfigureAwait(false);
             _CompletionHealthCheckService?.OnEndpointCreated(created);
             req.Http.Response.StatusCode = 201;
-            return created;
+            return created.Redacted();
         }
 
         private static async Task<object> ReadCompletionEndpoint(ApiRequest req)
@@ -3818,6 +3925,16 @@ namespace Partio.Server
             string id = req.Parameters["id"];
             CompletionEndpoint? ep = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
             if (ep == null) throw new KeyNotFoundException("Completion endpoint not found: " + id);
+            return ep.Redacted();
+        }
+
+        private static async Task<object> RevealCompletionEndpoint(ApiRequest req)
+        {
+            RequireAdmin(req);
+            string id = req.Parameters["id"];
+            CompletionEndpoint? ep = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false);
+            if (ep == null) throw new KeyNotFoundException("Completion endpoint not found: " + id);
+            _Logging.Info(_Header + "revealed secrets for completion endpoint " + id + " to " + DescribeCaller(req));
             return ep;
         }
 
@@ -3829,13 +3946,16 @@ namespace Partio.Server
             if (ep == null) throw new ArgumentException("Request body is required.");
             CompletionEndpoint existing = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException("Completion endpoint not found: " + id);
-            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.Id = id;
             ep.CreatedUtc = existing.CreatedUtc;
+            // A client that read the endpoint and sends it back unchanged echoes masked secrets; keep the stored values.
+            ep.ApiKey = EndpointSecrets.Resolve(ep.ApiKey, existing.ApiKey);
+            EndpointSecrets.Restore(ep.ProviderSettings, existing.ProviderSettings);
             CompletionEndpoint.ApplyHealthCheckDefaults(ep);
+            ProviderDefaults.Validate(ep.ApiFormat, EndpointTypeEnum.Completion, ep.Endpoint, ep.ApiKey, ep.ProviderSettings);
             CompletionEndpoint updated = await _Database.CompletionEndpoint.UpdateAsync(ep).ConfigureAwait(false);
             _CompletionHealthCheckService?.OnEndpointUpdated(updated);
-            return updated;
+            return updated.Redacted();
         }
 
         private static async Task<object> DeleteCompletionEndpoint(ApiRequest req)
@@ -3865,6 +3985,7 @@ namespace Partio.Server
             if (enumReq == null) enumReq = new EnumerationRequest();
             string tenantId = auth.TenantId ?? "default";
             EnumerationResult<CompletionEndpoint> result = await _Database.CompletionEndpoint.EnumerateAsync(tenantId, enumReq).ConfigureAwait(false);
+            result.Data = result.Data.Select(e => e.Redacted()).ToList();
             return result;
         }
 
@@ -4001,6 +4122,15 @@ namespace Partio.Server
             }
 
             return CancellationToken.None;
+        }
+
+        private static string DescribeCaller(ApiRequest req)
+        {
+            AuthContext? auth = req.Metadata as AuthContext;
+            if (auth == null) return "(unknown caller)";
+            if (!string.IsNullOrEmpty(auth.UserId)) return "user " + auth.UserId;
+            if (!string.IsNullOrEmpty(auth.CredentialId)) return "credential " + auth.CredentialId;
+            return auth.IsGlobalAdmin ? "admin token" : "(unknown caller)";
         }
 
         private static void RequireAdmin(ApiRequest req)
