@@ -74,6 +74,13 @@
   - **Health Checks section:** for probe providers, it explains the probe instead of asking for a URL.
   - **Chat and API Explorer:** both support the Azure OpenAI, Anthropic, and Cohere dialects. Endpoints that
     can't be proxied are hidden from Chat and from the proxy explorer.
+- **Duplicate action.** The row action menus for tenants, users, credentials, embedding endpoints, and inference
+  endpoints have a Duplicate action. It opens the create form prefilled from the selected entry, with "(copy)"
+  added to the name.
+  - **Endpoints:** duplicating reads the source's real secrets through the reveal API, so the copy never stores
+    masked placeholders.
+  - **Users:** the email (which must be unique) and password start blank.
+  - **Credentials:** the duplicate gets a new bearer token from the server.
 
 ### Tests
 - **Test.Automated:** 332 passed, up from 282.
@@ -83,7 +90,7 @@
   - New integration cases cover validation, normalization, masking and reveal, admin-only reveal,
     Anthropic, Azure, and Bedrock traffic, TEI and Cohere embeddings, and probe-based health checks.
 - **SDK harnesses:** each adds provider, masking, reveal, and validation tests.
-- **Dashboard:** 45 tests, up from 19.
+- **Dashboard:** 47 tests, up from 19.
 
 ## v0.5.1 - 2026-10-18
 

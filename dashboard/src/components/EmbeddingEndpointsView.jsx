@@ -28,8 +28,10 @@ import {
   providerSettingsToForm,
   usesConnectivityProbe,
   validateConnection,
+  withoutMaskedSecrets,
 } from '../utils/providers';
 import './EmbeddingEndpointsView.css';
+import { duplicateName } from '../utils/duplicate';
 
 function formatTenantOption(tenant) {
   const id = tenant.Id || '';
@@ -260,6 +262,7 @@ export default function EmbeddingEndpointsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [duplicating, setDuplicating] = useState(false);
   const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
@@ -313,6 +316,7 @@ export default function EmbeddingEndpointsView() {
 
   const openCreate = () => {
     setEditing(null);
+    setDuplicating(false);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     setForm({ TenantId: tenantId, Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm() });
     setHealthFieldsEdited(false);
@@ -320,8 +324,9 @@ export default function EmbeddingEndpointsView() {
     setShowModal(true);
   };
 
-  const openEdit = (item) => {
-    setEditing(item);
+  const openEdit = (item, asDuplicate = false) => {
+    setEditing(asDuplicate ? null : item);
+    setDuplicating(asDuplicate);
     setFormErrors({});
     const providerSettings = providerSettingsToForm(item.ApiFormat, item.ProviderSettings);
     setForm({
@@ -354,6 +359,19 @@ export default function EmbeddingEndpointsView() {
     });
     setHealthFieldsEdited(true);
     setShowModal(true);
+  };
+
+  // Duplicates open the create form with the source's real secrets (read through the reveal API) so the
+  // copy does not store masked placeholders. If reveal fails, masked secrets are cleared for re-entry.
+  const openDuplicate = async (item) => {
+    let source;
+    try {
+      source = await api.revealEndpoint(item.Id);
+    } catch (err) {
+      source = withoutMaskedSecrets(item);
+      setAlertModal({ isOpen: true, message: 'Secrets could not be copied (' + err.message + '). Re-enter them before saving.', type: 'error' });
+    }
+    openEdit({ ...source, Name: duplicateName(source.Name) }, true);
   };
 
   const handleFormatChange = (newFormat) => {
@@ -527,6 +545,7 @@ export default function EmbeddingEndpointsView() {
           { label: 'Validate', onClick: () => setValidateModal({ isOpen: true, endpoint: item }) },
           { label: t('loadModel.action'), onClick: () => openLoadModel(item), disabled: loadingModelId === item.Id },
           { label: 'Edit', onClick: () => openEdit(item) },
+          { label: 'Duplicate', onClick: () => openDuplicate(item) },
           { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
           ...(item.HealthCheckEnabled ? [{ label: 'Health Detail', onClick: () => openHealthDetail(item.Id) }] : []),
           { divider: true },
@@ -553,9 +572,9 @@ export default function EmbeddingEndpointsView() {
           <button className="primary" onClick={openCreate}>Create Endpoint</button>
         </div>
       </div>
-      <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
+      <DataTable data={data} columns={columns} loading={loading} onRowClick={item => openEdit(item)} />
       {showModal && (
-        <Modal title={editing ? 'Edit Endpoint' : 'Create Endpoint'} onClose={() => setShowModal(false)} className="modal-wide">
+        <Modal title={editing ? 'Edit Endpoint' : duplicating ? 'Duplicate Endpoint' : 'Create Endpoint'} onClose={() => setShowModal(false)} className="modal-wide">
           {/* Provider Section */}
           <div className="endpoint-form-section">
             <div className="endpoint-form-section-header">Provider</div>

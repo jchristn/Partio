@@ -592,3 +592,22 @@ export function hasMaskedSecrets(form) {
   const s = form.ProviderSettings || {};
   return ['SecretAccessKey', 'SessionToken', 'ServiceAccountJson'].some(k => isMaskedSecret(s[k]));
 }
+
+/** Copy of a stored endpoint with every masked secret removed (used when secrets cannot be revealed). */
+export function withoutMaskedSecrets(endpoint) {
+  const copy = { ...endpoint };
+  if (isMaskedSecret(copy.ApiKey)) copy.ApiKey = null;
+  if (copy.ProviderSettings) {
+    const settings = {};
+    for (const [section, values] of Object.entries(copy.ProviderSettings)) {
+      if (!values) { settings[section] = values; continue; }
+      const cleaned = { ...values };
+      for (const key of Object.keys(cleaned)) {
+        if (isMaskedSecret(cleaned[key])) cleaned[key] = null;
+      }
+      settings[section] = cleaned;
+    }
+    copy.ProviderSettings = settings;
+  }
+  return copy;
+}

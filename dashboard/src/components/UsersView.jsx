@@ -11,6 +11,7 @@ import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import './UsersView.css';
+import { duplicateName } from '../utils/duplicate';
 
 export default function UsersView() {
   const { serverUrl, bearerToken } = useApp();
@@ -19,6 +20,7 @@ export default function UsersView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [duplicating, setDuplicating] = useState(false);
   const [form, setForm] = useState({ TenantId: 'default', Email: '', Password: '', FirstName: '', LastName: '', IsAdmin: false, Active: true });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
@@ -45,6 +47,7 @@ export default function UsersView() {
 
   const openCreate = () => {
     setEditing(null);
+    setDuplicating(false);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     setForm({ TenantId: tenantId, Email: '', Password: '', FirstName: '', LastName: '', IsAdmin: false, Active: true });
     setShowModal(true);
@@ -52,7 +55,16 @@ export default function UsersView() {
 
   const openEdit = (item) => {
     setEditing(item);
+    setDuplicating(false);
     setForm({ TenantId: item.TenantId, Email: item.Email, Password: '', FirstName: item.FirstName || '', LastName: item.LastName || '', IsAdmin: item.IsAdmin, Active: item.Active !== false });
+    setShowModal(true);
+  };
+
+  // Email must be unique and passwords cannot be read back, so a duplicate starts with both blank.
+  const openDuplicate = (item) => {
+    setEditing(null);
+    setDuplicating(true);
+    setForm({ TenantId: item.TenantId, Email: '', Password: '', FirstName: item.FirstName || '', LastName: item.LastName || '', IsAdmin: item.IsAdmin, Active: item.Active !== false });
     setShowModal(true);
   };
 
@@ -128,6 +140,7 @@ export default function UsersView() {
       render: (item) => (
         <ActionMenu actions={[
           { label: 'Edit', onClick: () => openEdit(item) },
+          { label: 'Duplicate', onClick: () => openDuplicate(item) },
           { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
           { divider: true },
           { label: 'Delete', danger: true, onClick: () => setDeleteModal({ isOpen: true, id: item.Id }) }
@@ -155,7 +168,7 @@ export default function UsersView() {
       </div>
       <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
-        <Modal title={editing ? 'Edit User' : 'Create User'} onClose={() => setShowModal(false)}>
+        <Modal title={editing ? 'Edit User' : duplicating ? 'Duplicate User' : 'Create User'} onClose={() => setShowModal(false)}>
           {!editing && (
             <div className="form-group">
               <FormFieldLabel text="Tenant" tooltip="Tenant that will own this user account. Users are scoped to a single tenant." />

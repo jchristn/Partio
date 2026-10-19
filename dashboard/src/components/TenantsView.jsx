@@ -13,6 +13,7 @@ import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import './TenantsView.css';
+import { duplicateName } from '../utils/duplicate';
 
 export default function TenantsView() {
   const { serverUrl, bearerToken } = useApp();
@@ -21,6 +22,7 @@ export default function TenantsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [duplicating, setDuplicating] = useState(false);
   const [form, setForm] = useState({ Name: '', Labels: [], Tags: {}, Active: true });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
@@ -41,13 +43,22 @@ export default function TenantsView() {
 
   const openCreate = () => {
     setEditing(null);
+    setDuplicating(false);
     setForm({ Name: '', Labels: [], Tags: {}, Active: true });
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditing(item);
+    setDuplicating(false);
     setForm({ Name: item.Name, Labels: item.Labels || [], Tags: item.Tags || {}, Active: item.Active !== false });
+    setShowModal(true);
+  };
+
+  const openDuplicate = (item) => {
+    setEditing(null);
+    setDuplicating(true);
+    setForm({ Name: duplicateName(item.Name), Labels: [...(item.Labels || [])], Tags: { ...(item.Tags || {}) }, Active: item.Active !== false });
     setShowModal(true);
   };
 
@@ -115,6 +126,7 @@ export default function TenantsView() {
       render: (item) => (
         <ActionMenu actions={[
           { label: 'Edit', onClick: () => openEdit(item) },
+          { label: 'Duplicate', onClick: () => openDuplicate(item) },
           { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
           { divider: true },
           { label: 'Delete', danger: true, onClick: () => setDeleteModal({ isOpen: true, id: item.Id }) }
@@ -142,7 +154,7 @@ export default function TenantsView() {
       </div>
       <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
-        <Modal title={editing ? 'Edit Tenant' : 'Create Tenant'} onClose={() => setShowModal(false)}>
+        <Modal title={editing ? 'Edit Tenant' : duplicating ? 'Duplicate Tenant' : 'Create Tenant'} onClose={() => setShowModal(false)}>
           <div className="form-group">
             <FormFieldLabel text="Name" tooltip="Display name for this tenant. Use a short, recognizable workspace name." />
             <Tooltip content="Display name for this tenant. Use a short, recognizable workspace name." block>

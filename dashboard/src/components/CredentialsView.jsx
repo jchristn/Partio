@@ -11,6 +11,7 @@ import AlertModal from './modals/AlertModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import JsonViewModal from './modals/JsonViewModal';
 import './CredentialsView.css';
+import { duplicateName } from '../utils/duplicate';
 
 export default function CredentialsView() {
   const { serverUrl, bearerToken } = useApp();
@@ -19,6 +20,7 @@ export default function CredentialsView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [duplicating, setDuplicating] = useState(false);
   const [form, setForm] = useState({ TenantId: 'default', UserId: 'default', Name: '', Active: true });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
@@ -53,6 +55,7 @@ export default function CredentialsView() {
 
   const openCreate = () => {
     setEditing(null);
+    setDuplicating(false);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
     const tenantUsers = users.filter(u => u.TenantId === tenantId);
     const userId = tenantUsers.length > 0 ? tenantUsers[0].Id : '';
@@ -62,12 +65,21 @@ export default function CredentialsView() {
 
   const openEdit = (item) => {
     setEditing(item);
+    setDuplicating(false);
     setForm({
       TenantId: item.TenantId || '',
       UserId: item.UserId || '',
       Name: item.Name || '',
       Active: item.Active !== false
     });
+    setShowModal(true);
+  };
+
+  // The server issues a new bearer token for the duplicate.
+  const openDuplicate = (item) => {
+    setEditing(null);
+    setDuplicating(true);
+    setForm({ TenantId: item.TenantId || '', UserId: item.UserId || '', Name: duplicateName(item.Name), Active: item.Active !== false });
     setShowModal(true);
   };
 
@@ -141,6 +153,7 @@ export default function CredentialsView() {
       render: (item) => (
         <ActionMenu actions={[
           { label: 'Edit', onClick: () => openEdit(item) },
+          { label: 'Duplicate', onClick: () => openDuplicate(item) },
           { label: 'View JSON', onClick: () => setJsonModal({ isOpen: true, data: item }) },
           { divider: true },
           { label: 'Delete', danger: true, onClick: () => setDeleteModal({ isOpen: true, id: item.Id }) }
@@ -168,7 +181,7 @@ export default function CredentialsView() {
       </div>
       <DataTable data={data} columns={columns} loading={loading} onRowClick={openEdit} />
       {showModal && (
-        <Modal title={editing ? 'Edit Credential' : 'Create Credential'} onClose={() => setShowModal(false)}>
+        <Modal title={editing ? 'Edit Credential' : duplicating ? 'Duplicate Credential' : 'Create Credential'} onClose={() => setShowModal(false)}>
           <div className="form-group">
             <FormFieldLabel text="Tenant" tooltip="Tenant that owns this credential. Credentials are scoped to a tenant." />
             <Tooltip content="Tenant that owns this credential. Credentials are scoped to a tenant." block>
