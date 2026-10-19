@@ -64,22 +64,26 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Sync("Core", "SDK models default timestamps to UtcNow, never DateTime.MinValue", () =>
             {
                 DateTime before = DateTime.UtcNow;
-                List<(string Name, object Model, DateTime Created, DateTime Updated)> models = new List<(string, object, DateTime, DateTime)>();
+                List<SdkModelTimestamps> models = new List<SdkModelTimestamps>();
 
                 Partio.Sdk.Models.TenantMetadata tenant = new Partio.Sdk.Models.TenantMetadata();
-                models.Add(("TenantMetadata", tenant, tenant.CreatedUtc, tenant.LastUpdateUtc));
+                models.Add(new SdkModelTimestamps("TenantMetadata", tenant, tenant.CreatedUtc, tenant.LastUpdateUtc));
                 Partio.Sdk.Models.UserMaster user = new Partio.Sdk.Models.UserMaster();
-                models.Add(("UserMaster", user, user.CreatedUtc, user.LastUpdateUtc));
+                models.Add(new SdkModelTimestamps("UserMaster", user, user.CreatedUtc, user.LastUpdateUtc));
                 Partio.Sdk.Models.Credential credential = new Partio.Sdk.Models.Credential();
-                models.Add(("Credential", credential, credential.CreatedUtc, credential.LastUpdateUtc));
+                models.Add(new SdkModelTimestamps("Credential", credential, credential.CreatedUtc, credential.LastUpdateUtc));
                 Partio.Sdk.Models.EmbeddingEndpoint embedding = new Partio.Sdk.Models.EmbeddingEndpoint();
-                models.Add(("EmbeddingEndpoint", embedding, embedding.CreatedUtc, embedding.LastUpdateUtc));
+                models.Add(new SdkModelTimestamps("EmbeddingEndpoint", embedding, embedding.CreatedUtc, embedding.LastUpdateUtc));
                 Partio.Sdk.Models.CompletionEndpoint completion = new Partio.Sdk.Models.CompletionEndpoint();
-                models.Add(("CompletionEndpoint", completion, completion.CreatedUtc, completion.LastUpdateUtc));
+                models.Add(new SdkModelTimestamps("CompletionEndpoint", completion, completion.CreatedUtc, completion.LastUpdateUtc));
 
                 DateTime after = DateTime.UtcNow;
-                foreach ((string name, object model, DateTime created, DateTime updated) in models)
+                foreach (SdkModelTimestamps entry in models)
                 {
+                    string name = entry.Name;
+                    object model = entry.Model;
+                    DateTime created = entry.Created;
+                    DateTime updated = entry.Updated;
                     Check.True(created >= before && created <= after, name + ".CreatedUtc should default to UtcNow but was " + created.ToString("o"));
                     Check.True(updated >= before && updated <= after, name + ".LastUpdateUtc should default to UtcNow but was " + updated.ToString("o"));
                     Check.Equal(DateTimeKind.Utc, created.Kind, name + ".CreatedUtc should be UTC.");
@@ -541,6 +545,22 @@ namespace Test.Shared
             LoggingModule logging = new LoggingModule();
             logging.Settings.EnableConsole = false;
             return logging;
+        }
+
+        private sealed class SdkModelTimestamps
+        {
+            public string Name { get; }
+            public object Model { get; }
+            public DateTime Created { get; }
+            public DateTime Updated { get; }
+
+            public SdkModelTimestamps(string name, object model, DateTime created, DateTime updated)
+            {
+                Name = name;
+                Model = model;
+                Created = created;
+                Updated = updated;
+            }
         }
     }
 }

@@ -151,7 +151,7 @@ namespace Partio.Core.ThirdParty
         /// <returns>A new PolyPrompt embedding client; the caller disposes it.</returns>
         protected virtual PolyPromptEmbeddingClientBase CreateProviderClient()
         {
-            return new PolyPromptOpenAiEmbeddingClient(_Endpoint, _ApiKey, _Logging);
+            return new PolyPromptOpenAiEmbeddingClient(_Endpoint, _ApiKey, _Logging, _HttpClient);
         }
 
         /// <inheritdoc />

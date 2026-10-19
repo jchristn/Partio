@@ -8,6 +8,13 @@ namespace Partio.Sdk.Models
     /// </summary>
     public class ProviderSettings
     {
+        /// <summary>
+        /// Selectable authentication for Ollama, vLLM, TEI, and OpenAI endpoints. Null sends a configured ApiKey as a
+        /// bearer token. Ignored for providers with a fixed authentication scheme.
+        /// </summary>
+        [JsonPropertyName("Auth")]
+        public EndpointAuthSettings? Auth { get; set; }
+
         [JsonPropertyName("AzureOpenAI")]
         public AzureOpenAiProviderSettings? AzureOpenAI { get; set; }
 
@@ -25,6 +32,29 @@ namespace Partio.Sdk.Models
 
         [JsonPropertyName("VoyageAI")]
         public VoyageAiProviderSettings? VoyageAI { get; set; }
+    }
+
+    /// <summary>
+    /// Selectable authentication for Ollama, vLLM, TEI, and OpenAI endpoints. The credential (bearer token, header
+    /// value, query value, or basic password) is the endpoint ApiKey, which is masked on read.
+    /// </summary>
+    public class EndpointAuthSettings
+    {
+        /// <summary>None, Bearer, Header, QueryParameter, or Basic. See <see cref="EndpointAuthModes"/>.</summary>
+        [JsonPropertyName("Mode")]
+        public string Mode { get; set; } = EndpointAuthModes.Bearer;
+
+        /// <summary>Header that carries the ApiKey when Mode is Header, for example X-API-Key.</summary>
+        [JsonPropertyName("HeaderName")]
+        public string? HeaderName { get; set; }
+
+        /// <summary>Query parameter that carries the ApiKey when Mode is QueryParameter, for example api_key.</summary>
+        [JsonPropertyName("QueryParameterName")]
+        public string? QueryParameterName { get; set; }
+
+        /// <summary>User name when Mode is Basic; the ApiKey is the password.</summary>
+        [JsonPropertyName("Username")]
+        public string? Username { get; set; }
     }
 
     /// <summary>Azure OpenAI settings. The endpoint Model is the deployment name.</summary>
@@ -122,6 +152,16 @@ namespace Partio.Sdk.Models
         public const string VertexAI = "VertexAI";
         public const string TEI = "TEI";
         public const string VoyageAI = "VoyageAI";
+    }
+
+    /// <summary>EndpointAuthSettings.Mode values.</summary>
+    public static class EndpointAuthModes
+    {
+        public const string None = "None";
+        public const string Bearer = "Bearer";
+        public const string Header = "Header";
+        public const string QueryParameter = "QueryParameter";
+        public const string Basic = "Basic";
     }
 
     /// <summary>AzureOpenAiProviderSettings.AuthMode values.</summary>

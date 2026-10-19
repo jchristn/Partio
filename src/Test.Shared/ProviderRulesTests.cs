@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Net.Http;
     using Partio.Core.Enums;
     using Partio.Core.Models;
     using Partio.Core.Proxy;
@@ -345,6 +346,113 @@ namespace Test.Shared
                 ProxyAuthHeader? primary = ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.Anthropic, "sk-ant");
                 Check.Equal("x-api-key", primary!.Value.Name);
                 Check.Null(ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.Bedrock, "ignored"));
+            }));
+
+            // ===== Selectable authentication =====
+
+            tests.Add(TestCaseFactory.Sync("ProviderRules", "Selectable auth applies to Ollama, vLLM, TEI, and OpenAI only", () =>
+            {
+                foreach (ApiFormatEnum format in Enum.GetValues<ApiFormatEnum>())
+                {
+                    bool expected = format == ApiFormatEnum.Ollama || format == ApiFormatEnum.vLLM || format == ApiFormatEnum.TEI || format == ApiFormatEnum.OpenAI;
+                    Check.Equal(expected, ProviderDefaults.SupportsSelectableAuth(format), format.ToString());
+                }
+
+                ProviderSettings withAuth = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Header, HeaderName = "X-Key" } };
+                Check.Null(ProviderDefaults.EffectiveAuthMode(ApiFormatEnum.Anthropic, "k", withAuth), "fixed providers have no selectable mode");
+                Check.Null(ProviderDefaults.NormalizeProviderSettings(ApiFormatEnum.Anthropic, withAuth), "Auth is dropped for fixed providers");
+                Check.Equal(EndpointAuthModeEnum.Bearer, ProviderDefaults.EffectiveAuthMode(ApiFormatEnum.Ollama, "k", null), "legacy key means bearer");
+                Check.Equal(EndpointAuthModeEnum.None, ProviderDefaults.EffectiveAuthMode(ApiFormatEnum.Ollama, null, null), "no key means none");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("ProviderRules", "Normalization keeps only the fields the auth mode uses", () =>
+            {
+                ProviderSettings? normalized = ProviderDefaults.NormalizeProviderSettings(ApiFormatEnum.vLLM, new ProviderSettings
+                {
+                    Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Header, HeaderName = " X-Gateway-Key ", QueryParameterName = "q", Username = "u" },
+                    Bedrock = new BedrockProviderSettings { Region = "us-east-1" }
+                });
+                Check.NotNull(normalized);
+                Check.Equal("X-Gateway-Key", normalized!.Auth!.HeaderName);
+                Check.Null(normalized.Auth.QueryParameterName);
+                Check.Null(normalized.Auth.Username);
+                Check.Null(normalized.Bedrock);
+            }));
+
+            tests.Add(TestCaseFactory.Sync("ProviderRules", "Selectable auth validation checks names and the credential", () =>
+            {
+                ProviderSettings Auth(EndpointAuthModeEnum mode, string? header = null, string? query = null, string? user = null) =>
+                    new ProviderSettings { Auth = new EndpointAuthSettings { Mode = mode, HeaderName = header, QueryParameterName = query, Username = user } };
+
+                Check.Equal("ApiKey", Check.Throws<ArgumentException>(() => ProviderDefaults.Validate(ApiFormatEnum.Ollama, EndpointTypeEnum.Completion, "http://o", null, Auth(EndpointAuthModeEnum.Bearer))).ParamName);
+                Check.Equal("ProviderSettings.Auth.HeaderName", Check.Throws<ArgumentException>(() => ProviderDefaults.Validate(ApiFormatEnum.Ollama, EndpointTypeEnum.Completion, "http://o", "k", Auth(EndpointAuthModeEnum.Header))).ParamName);
+                Check.Contains("not a valid HTTP header name", Check.Throws<ArgumentException>(() => ProviderDefaults.Validate(ApiFormatEnum.vLLM, EndpointTypeEnum.Completion, "http://v", "k", Auth(EndpointAuthModeEnum.Header, "X Bad"))).Message);
+                Check.Contains("managed by the HTTP client", Check.Throws<ArgumentException>(() => ProviderDefaults.Validate(ApiFormatEnum.vLLM, EndpointTypeEnum.Completion, "http://v", "k", Auth(EndpointAuthModeEnum.Header, "Host"))).Message);
+                Check.Equal("ProviderSettings.Auth.QueryParameterName", Check.Throws<ArgumentException>(() => ProviderDefaults.Validate(ApiFormatEnum.TEI, EndpointTypeEnum.Embedding, "http://t", "k", Auth(EndpointAuthModeEnum.QueryParameter, query: "a&b"))).ParamName);
+                Check.Equal("ProviderSettings.Auth.Username", Check.Throws<ArgumentException>(() => ProviderDefaults.Validate(ApiFormatEnum.OpenAI, EndpointTypeEnum.Completion, "https://o", "k", Auth(EndpointAuthModeEnum.Basic))).ParamName);
+                Check.Contains("must not contain ':'", Check.Throws<ArgumentException>(() => ProviderDefaults.Validate(ApiFormatEnum.OpenAI, EndpointTypeEnum.Completion, "https://o", "k", Auth(EndpointAuthModeEnum.Basic, user: "a:b"))).Message);
+
+                ProviderDefaults.Validate(ApiFormatEnum.Ollama, EndpointTypeEnum.Completion, "http://o", null, Auth(EndpointAuthModeEnum.None));
+                ProviderDefaults.Validate(ApiFormatEnum.Ollama, EndpointTypeEnum.Completion, "http://o", "k", Auth(EndpointAuthModeEnum.Header, "X-API-Key"));
+                ProviderDefaults.Validate(ApiFormatEnum.TEI, EndpointTypeEnum.Embedding, "http://t", "k", Auth(EndpointAuthModeEnum.QueryParameter, query: "api_key"));
+                ProviderDefaults.Validate(ApiFormatEnum.OpenAI, EndpointTypeEnum.Embedding, "https://o", "k", Auth(EndpointAuthModeEnum.Basic, user: "partio"));
+            }));
+
+            tests.Add(TestCaseFactory.Sync("ProviderRules", "Selectable auth resolves headers and query credentials", () =>
+            {
+                ProviderSettings header = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Header, HeaderName = "X-Gateway-Key" } };
+                ProviderSettings basic = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Basic, Username = "partio" } };
+                ProviderSettings query = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.QueryParameter, QueryParameterName = "api_key" } };
+                ProviderSettings none = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.None } };
+
+                Check.Equal("gw", Headers(ApiFormatEnum.Ollama, "gw", header)["X-Gateway-Key"]);
+                Check.Equal("Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("partio:pw")), Headers(ApiFormatEnum.vLLM, "pw", basic)["Authorization"]);
+                Check.Equal(0, Headers(ApiFormatEnum.TEI, "q", query).Count, "query credentials are not headers");
+                Check.Equal(0, Headers(ApiFormatEnum.OpenAI, "k", none).Count);
+                Check.Equal("Bearer legacy", Headers(ApiFormatEnum.Ollama, "legacy", null)["Authorization"]);
+
+                Check.Equal("http://t/health?api_key=a%20b", ProviderDefaults.ApplyAuthQuery("http://t/health", ApiFormatEnum.TEI, "a b", query));
+                Check.Equal("http://t/x?y=1&api_key=k", ProviderDefaults.ApplyAuthQuery("http://t/x?y=1", ApiFormatEnum.TEI, "k", query));
+                Check.Equal("http://t/x", ProviderDefaults.ApplyAuthQuery("http://t/x", ApiFormatEnum.TEI, "k", header));
+            }));
+
+            tests.Add(TestCaseFactory.Sync("ProviderRules", "Applying defaults clears the key for None and authenticates explicit credentials", () =>
+            {
+                CompletionEndpoint none = new CompletionEndpoint
+                {
+                    ApiFormat = ApiFormatEnum.Ollama, Model = "m", Endpoint = "http://o:11434", ApiKey = "stale",
+                    ProviderSettings = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.None } }
+                };
+                CompletionEndpoint.ApplyHealthCheckDefaults(none);
+                Check.Null(none.ApiKey, "None carries no credential");
+                Check.False(none.HealthCheckUseAuth);
+
+                CompletionEndpoint header = new CompletionEndpoint
+                {
+                    ApiFormat = ApiFormatEnum.Ollama, Model = "m", Endpoint = "http://o:11434", ApiKey = "gw",
+                    ProviderSettings = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Header, HeaderName = "X-Gateway-Key" } }
+                };
+                CompletionEndpoint.ApplyHealthCheckDefaults(header);
+                Check.True(header.HealthCheckUseAuth, "an explicitly authenticated Ollama endpoint authenticates health checks");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("ProviderRules", "Credential resolution routes each mode to PolyPrompt or the auth transport", () =>
+            {
+                ClientCredentials legacy = EndpointAuthHandler.ResolveClientCredentials(ApiFormatEnum.Ollama, "k", null);
+                Check.Equal("k", legacy.ApiKey);
+                Check.Null(legacy.Transport);
+
+                ClientCredentials none = EndpointAuthHandler.ResolveClientCredentials(ApiFormatEnum.Ollama, "k", new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.None } });
+                Check.Null(none.ApiKey);
+                Check.Null(none.Transport);
+
+                ClientCredentials header = EndpointAuthHandler.ResolveClientCredentials(ApiFormatEnum.vLLM, "k", new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Header, HeaderName = "X-K" } });
+                Check.Null(header.ApiKey);
+                Check.True(header.Transport is EndpointAuthHandler, "custom header uses the auth transport");
+
+                ClientCredentials fixedScheme = EndpointAuthHandler.ResolveClientCredentials(ApiFormatEnum.Anthropic, "k", new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Header, HeaderName = "X-K" } });
+                Check.Equal("k", fixedScheme.ApiKey);
+                Check.Null(fixedScheme.Transport);
             }));
 
             // ===== Secret masking =====

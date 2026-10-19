@@ -42,6 +42,33 @@ Most providers are configured by `Endpoint`, `ApiKey`, and `Model` alone. Azure 
 
 Hosted providers default `Endpoint` to their public API root when it is omitted, and Bedrock and Vertex AI derive it from the region. A trailing version segment (`/v1`, `/openai`) is dropped. The server returns 400 when a required value is missing, or when a provider is used for an endpoint kind it does not support (for example `TEI` or `VoyageAI` as a completion endpoint, or `Anthropic` as an embedding endpoint). Bedrock and Vertex AI endpoints cannot be used through the transparent proxy.
 
+### Selectable authentication (Ollama, vLLM, TEI, OpenAI)
+
+Hosted providers use one documented authentication scheme, so their credential always goes where the provider expects it. Ollama, vLLM, TEI, and OpenAI-compatible services are often deployed behind gateways, so their authentication is selectable through `ProviderSettings.Auth`. The credential itself is always `ApiKey` (masked on read, revealable like any other secret).
+
+| `Mode` | What Partio sends | Extra field |
+|---|---|---|
+| `None` | Nothing (the server stores `ApiKey` as `null`) | |
+| `Bearer` | `Authorization: Bearer {ApiKey}` | |
+| `Header` | `{HeaderName}: {ApiKey}` | `HeaderName`, for example `X-API-Key` |
+| `QueryParameter` | `?{QueryParameterName}={ApiKey}` on every request | `QueryParameterName`, for example `api_key` |
+| `Basic` | `Authorization: Basic base64({Username}:{ApiKey})` | `Username` |
+
+Without an `Auth` section, a configured `ApiKey` is sent as a bearer token. The setting applies to provider calls, health checks, and the proxy. The server returns 400 when a mode other than `None` has no `ApiKey`, when `Header` has no valid `HeaderName` (or names a header the HTTP client manages, such as `Host` or `Content-Type`), when `QueryParameter` has no name or one containing `&`, `=`, `?`, `#`, or a space, and when `Basic` has no `Username` or one containing `:`.
+
+```javascript
+import { ApiFormats, EndpointAuthModes } from './partio-sdk.js';
+
+const gateway = await client.createCompletionEndpoint({
+  TenantId: 'default',
+  Model: 'gemma3:4b',
+  Endpoint: 'https://ollama.internal.example.com',
+  ApiFormat: ApiFormats.Ollama,
+  ApiKey: 'your-gateway-key',
+  ProviderSettings: { Auth: { Mode: EndpointAuthModes.Header, HeaderName: 'X-Gateway-Key' } },
+});
+```
+
 ### Secret masking and reveal
 
 Every endpoint response (read, enumerate, create, and update) masks secrets: `ApiKey`, `ProviderSettings.Bedrock.SecretAccessKey`, and `ProviderSettings.Bedrock.SessionToken` are returned as `****` plus the last four characters (or `****` alone for values shorter than twelve characters), and `ProviderSettings.VertexAI.ServiceAccountJson` is returned as `****`. Sending a masked value back on update keeps the stored secret, so a read-modify-write round trip is safe; sending a new value replaces it, and `null` clears it. To read the unmasked endpoint, call the admin-only reveal API (`GET /v1.0/endpoints/embedding/{id}/reveal` and `GET /v1.0/endpoints/completion/{id}/reveal`).

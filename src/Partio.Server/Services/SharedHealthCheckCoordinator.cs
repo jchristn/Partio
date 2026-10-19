@@ -277,7 +277,11 @@ namespace Partio.Server.Services
 
             _Logging.Debug(_Header + "sending shared " + method + " " + subscription.Url + " for " + subscription.Description);
 
-            HttpRequestMessage request = new HttpRequestMessage(method, subscription.Url);
+            // A query-parameter credential is added only to the outgoing request, never to the logged URL or monitor key.
+            string requestUrl = subscription.UseAuth
+                ? ProviderDefaults.ApplyAuthQuery(subscription.Url, subscription.ApiFormat, subscription.ApiKey, subscription.ProviderSettings)
+                : subscription.Url;
+            HttpRequestMessage request = new HttpRequestMessage(method, requestUrl);
 
             if (subscription.UseAuth)
             {

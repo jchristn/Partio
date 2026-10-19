@@ -219,6 +219,22 @@
 		{
 			"key": "gcpServiceAccountJson",
 			"value": ""
+		},
+		{
+			"key": "gatewayOllamaEndpoint",
+			"value": "https://ollama-gateway.example.com"
+		},
+		{
+			"key": "gatewayVllmEndpoint",
+			"value": "https://vllm-gateway.example.com"
+		},
+		{
+			"key": "gatewayApiKey",
+			"value": ""
+		},
+		{
+			"key": "gatewayHeaderName",
+			"value": "X-Gateway-Key"
 		}
 	],
 	"item": [
@@ -351,7 +367,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has Text and Chunks', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Text).to.be.a('string').and.not.empty;",
 									"    pm.expect(jsonData.Chunks).to.be.an('array').and.not.empty;",
 									"    pm.expect(jsonData.Chunks[0].Labels).to.be.an('array');",
@@ -1029,7 +1045,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response is an array with Text', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData).to.be.an('array');",
 									"    pm.expect(jsonData.length).to.equal(2);",
 									"    pm.expect(jsonData[0].Text).to.be.a('string').and.not.empty;",
@@ -1109,7 +1125,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('tenantId', jsonData.Id);",
 									"}"
@@ -1154,7 +1170,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Tenant ID matches', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Id).to.equal(pm.collectionVariables.get('tenantId'));",
 									"});"
 								]
@@ -1263,10 +1279,10 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has data array', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Data).to.be.an('array');",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData.ContinuationToken) {",
 									"    pm.collectionVariables.set('continuationToken', jsonData.ContinuationToken);",
 									"}"
@@ -1377,7 +1393,7 @@
 									"pm.test('Status code is 200 or 201', function () {",
 									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('userId', jsonData.Id);",
 									"}"
@@ -1422,7 +1438,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Password is redacted', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.PasswordSha256).to.equal('********');",
 									"});"
 								]
@@ -1531,7 +1547,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has data array', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Data).to.be.an('array');",
 									"});"
 								]
@@ -1613,7 +1629,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('credentialId', jsonData.Id);",
 									"}"
@@ -1658,7 +1674,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Has bearer token', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.BearerToken).to.be.a('string');",
 									"});"
 								]
@@ -1767,7 +1783,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has data array', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Data).to.be.an('array');",
 									"});"
 								]
@@ -1849,7 +1865,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -1894,7 +1910,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -1939,7 +1955,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -1984,7 +2000,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -2029,7 +2045,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -2074,7 +2090,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -2119,7 +2135,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -2164,7 +2180,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -2199,6 +2215,51 @@
 					}
 				},
 				{
+					"name": "Create Embedding Endpoint - Ollama (Custom Header Auth)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"const jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Ollama behind gateway\",\n    \"Model\": \"nomic-embed-text\",\n    \"Endpoint\": \"{{gatewayOllamaEndpoint}}\",\n    \"ApiFormat\": \"Ollama\",\n    \"ApiKey\": \"{{gatewayApiKey}}\",\n    \"ProviderSettings\": {\n        \"Auth\": {\n            \"Mode\": \"Header\",\n            \"HeaderName\": \"{{gatewayHeaderName}}\"\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create an Ollama embedding endpoint behind an authenticating gateway. ProviderSettings.Auth selects how ApiKey is sent (Ollama, vLLM, TEI, and OpenAI only): None, Bearer (Authorization: Bearer), Header (HeaderName: ApiKey), QueryParameter (?QueryParameterName=ApiKey on every upstream URL), or Basic (Username with ApiKey as the password). Here ApiKey is sent in the header named by gatewayHeaderName on provider calls, health checks, and the proxy. ApiKey is masked in the response."
+					}
+				},
+				{
 					"name": "Create Embedding Endpoint - VoyageAI",
 					"event": [
 						{
@@ -2209,7 +2270,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
 									"}"
@@ -2397,7 +2458,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has data array', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Data).to.be.an('array');",
 									"});"
 								]
@@ -2477,7 +2538,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response is an array', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData).to.be.an('array');",
 									"});"
 								]
@@ -2513,7 +2574,7 @@
 									"pm.test('Status code is 200', function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"pm.test('Response includes TokenizationProfile', function () {",
 									"    pm.expect(jsonData.TokenizationProfile).to.exist;",
 									"});",
@@ -2600,7 +2661,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}",
@@ -2647,7 +2708,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}",
@@ -2684,6 +2745,51 @@
 					}
 				},
 				{
+					"name": "Create Completion Endpoint - vLLM (Query Parameter Auth)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"const jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"vLLM behind gateway\",\n    \"Model\": \"Qwen/Qwen2.5-7B-Instruct\",\n    \"Endpoint\": \"{{gatewayVllmEndpoint}}\",\n    \"ApiFormat\": \"vLLM\",\n    \"ApiKey\": \"{{gatewayApiKey}}\",\n    \"ProviderSettings\": {\n        \"Auth\": {\n            \"Mode\": \"QueryParameter\",\n            \"QueryParameterName\": \"api_key\"\n        }\n    },\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"HealthCheckEnabled\": false,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create a vLLM completion endpoint whose gateway expects the credential as a query parameter. Partio appends ?api_key={ApiKey} to every upstream request (completions, health checks, and the proxy) without recording it in request history. ApiKey is masked in the response; use the reveal request to read it."
+					}
+				},
+				{
 					"name": "Create Completion Endpoint - xAI",
 					"event": [
 						{
@@ -2694,7 +2800,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}",
@@ -2741,7 +2847,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}"
@@ -2786,7 +2892,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}"
@@ -2831,7 +2937,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}"
@@ -2876,7 +2982,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}"
@@ -2921,7 +3027,7 @@
 									"pm.test('Status code is 201', function () {",
 									"    pm.response.to.have.status(201);",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData && jsonData.Id) {",
 									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
 									"}"
@@ -3166,7 +3272,7 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has load outcome', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Outcome).to.be.oneOf(['Loaded', 'Warmed', 'Validated']);",
 									"});"
 								]
@@ -3430,10 +3536,10 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has data array', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Data).to.be.an('array');",
 									"});",
-									"var jsonData = pm.response.json();",
+									"const jsonData = pm.response.json();",
 									"if (jsonData.Data && jsonData.Data.length > 0) {",
 									"    pm.collectionVariables.set('requestId', jsonData.Data[0].Id);",
 									"}"
@@ -3511,11 +3617,11 @@
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test('Response has Buckets array', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Buckets).to.be.an('array');",
 									"});",
 									"pm.test('Response has totals', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData).to.have.property('TotalSuccess');",
 									"    pm.expect(jsonData).to.have.property('TotalFailure');",
 									"});"
@@ -3674,7 +3780,7 @@
 									"    pm.response.to.have.status(400);",
 									"});",
 									"pm.test('Error message mentions strategy compatibility', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Message).to.include('Table');",
 									"});"
 								]
@@ -3798,7 +3904,7 @@
 									"    pm.response.to.have.status(400);",
 									"});",
 									"pm.test('Error message mentions RegexPattern', function () {",
-									"    var jsonData = pm.response.json();",
+									"    const jsonData = pm.response.json();",
 									"    pm.expect(jsonData.Message).to.include('RegexPattern');",
 									"});"
 								]

@@ -264,6 +264,72 @@ namespace Test.Shared
                 Check.False(await unhealthy.ValidateConnectivityAsync("voyage-3.5", 5000), "a 401 should report unreachable");
             }));
 
+            tests.Add(TestCaseFactory.Async("ProviderWire", "Selectable auth: custom header, query parameter, basic, bearer, and none reach the server", async () =>
+            {
+                using ScriptedProviderServer server = new ScriptedProviderServer()
+                    .On("POST", "/v1/embeddings", OpenAiEmbeddings(1))
+                    .On("POST", "/api/embed", "{\"model\":\"m\",\"embeddings\":[" + Vector + "]}");
+
+                List<AuthCase> cases = new List<AuthCase>
+                {
+                    new AuthCase(EndpointAuthModeEnum.Header, "gw-secret-1", new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Header, HeaderName = "X-Gateway-Key" }),
+                    new AuthCase(EndpointAuthModeEnum.QueryParameter, "gw secret/2", new EndpointAuthSettings { Mode = EndpointAuthModeEnum.QueryParameter, QueryParameterName = "api_key" }),
+                    new AuthCase(EndpointAuthModeEnum.Basic, "pa:ss", new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Basic, Username = "partio" }),
+                    new AuthCase(EndpointAuthModeEnum.Bearer, "bearer-secret-4", new EndpointAuthSettings { Mode = EndpointAuthModeEnum.Bearer }),
+                    new AuthCase(EndpointAuthModeEnum.Bearer, "legacy-secret-5", null),
+                    new AuthCase(EndpointAuthModeEnum.None, "ignored-secret-6", new EndpointAuthSettings { Mode = EndpointAuthModeEnum.None }),
+                };
+
+                foreach (AuthCase authCase in cases)
+                {
+                    EndpointAuthModeEnum mode = authCase.Mode;
+                    string? key = authCase.Key;
+                    ProviderSettings? settings = authCase.Auth == null ? null : new ProviderSettings { Auth = authCase.Auth };
+                    ClientCredentials openaiCredentials = EndpointAuthHandler.ResolveClientCredentials(ApiFormatEnum.OpenAI, key, settings);
+                    using OpenAiEmbeddingClient openai = new OpenAiEmbeddingClient(server.BaseUrl, openaiCredentials.ApiKey, Quiet(), 5000, transport: openaiCredentials.Transport);
+                    ClientCredentials ollamaCredentials = EndpointAuthHandler.ResolveClientCredentials(ApiFormatEnum.Ollama, key, settings);
+                    using OllamaEmbeddingClient ollama = new OllamaEmbeddingClient(server.BaseUrl, ollamaCredentials.ApiKey, Quiet(), 5000, transport: ollamaCredentials.Transport);
+
+                    Check.Equal(1, (await openai.EmbedBatchAsync(new List<string> { "a" }, "m")).Count);
+                    Check.Equal(1, (await ollama.EmbedBatchAsync(new List<string> { "a" }, "m")).Count);
+
+                    List<RecordedRequest> requests = server.Requests.ToList().TakeLast(2).ToList();
+                    foreach (RecordedRequest r in requests)
+                    {
+                        string where = mode + " " + r.Path;
+                        switch (mode)
+                        {
+                            case EndpointAuthModeEnum.Header:
+                                Check.Equal(key, r.Header("X-Gateway-Key"), where);
+                                Check.Null(r.Header("Authorization"), where + ": no bearer token");
+                                break;
+                            case EndpointAuthModeEnum.QueryParameter:
+                                Check.Contains("api_key=" + Uri.EscapeDataString(key!), r.Query);
+                                Check.Null(r.Header("Authorization"), where + ": no bearer token");
+                                break;
+                            case EndpointAuthModeEnum.Basic:
+                                Check.Equal("Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("partio:" + key)), r.Header("Authorization"), where);
+                                break;
+                            case EndpointAuthModeEnum.Bearer:
+                                Check.Equal("Bearer " + key, r.Header("Authorization"), where);
+                                break;
+                            case EndpointAuthModeEnum.None:
+                                Check.Null(r.Header("Authorization"), where);
+                                Check.False(r.Query.Contains("ignored-secret", StringComparison.Ordinal), where);
+                                break;
+                        }
+                    }
+
+                    if (mode == EndpointAuthModeEnum.Header || mode == EndpointAuthModeEnum.QueryParameter)
+                    {
+                        string recorded = string.Join("|", openai.CallDetails.Select(d => d.Url + " " + string.Join(",", (d.RequestHeaders ?? new Dictionary<string, string>()).Values)))
+                            + string.Join("|", ollama.CallDetails.Select(d => d.Url + " " + string.Join(",", (d.RequestHeaders ?? new Dictionary<string, string>()).Values)));
+                        Check.False(recorded.Contains(key!, StringComparison.Ordinal) || recorded.Contains(Uri.EscapeDataString(key!), StringComparison.Ordinal),
+                            mode + " credentials must not be recorded in call details: " + recorded);
+                    }
+                }
+            }));
+
             tests.Add(TestCaseFactory.Sync("ProviderWire", "New wrappers reject missing required configuration", () =>
             {
                 LoggingModule logging = Quiet();
@@ -337,6 +403,20 @@ namespace Test.Shared
                 ["token_uri"] = tokenUri
             };
             return JsonSerializer.Serialize(key);
+        }
+
+        private sealed class AuthCase
+        {
+            public EndpointAuthModeEnum Mode { get; }
+            public string? Key { get; }
+            public EndpointAuthSettings? Auth { get; }
+
+            public AuthCase(EndpointAuthModeEnum mode, string? key, EndpointAuthSettings? auth)
+            {
+                Mode = mode;
+                Key = key;
+                Auth = auth;
+            }
         }
     }
 }

@@ -20,6 +20,15 @@ export const ApiFormats = Object.freeze({
   VoyageAI: 'VoyageAI',
 });
 
+/** ProviderSettings.Auth.Mode values (Ollama, vLLM, TEI, and OpenAI endpoints). */
+export const EndpointAuthModes = Object.freeze({
+  None: 'None',
+  Bearer: 'Bearer',
+  Header: 'Header',
+  QueryParameter: 'QueryParameter',
+  Basic: 'Basic',
+});
+
 /** Prefix of masked secrets in endpoint read responses. */
 export const SECRET_MASK_PREFIX = '****';
 

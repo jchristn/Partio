@@ -590,7 +590,7 @@ sub-paths are relayed. A request for another provider's path is rejected, never 
 ### {GET,POST} /v1.0/proxy/{endpointId}/{native-subpath}
 
 Relay a native provider request to the endpoint's upstream. The request body and headers are forwarded as
-sent (with hop-by-hop and the inbound `Authorization` header stripped; Partio injects the upstream credential: Bearer, `x-goog-api-key` for Gemini, `x-api-key` plus `anthropic-version` for Anthropic, and `api-key` (or Bearer) for Azure OpenAI). A caller-supplied `anthropic-version` header is kept.
+sent (with hop-by-hop and the inbound `Authorization` header stripped; Partio injects the upstream credential: Bearer, `x-goog-api-key` for Gemini, `x-api-key` plus `anthropic-version` for Anthropic, and `api-key` (or Bearer) for Azure OpenAI. Ollama, vLLM, and OpenAI endpoints follow their [selectable authentication](#selectable-authentication-providersettingsauth): a bearer token, a custom header, basic auth, or a query parameter appended to the upstream URL). A caller-supplied `anthropic-version` header is kept.
 
 **Path parameters**:
 - `endpointId` — target completion endpoint ID (`cep_...`).
@@ -1000,18 +1000,18 @@ Partio uses. `Endpoint`, `ApiKey`, and `Model` carry the common connection value
 
 | `ApiFormat` | Provider | Completion | Embedding | `Endpoint` (default when omitted) | `ApiKey` | `ProviderSettings` |
 | --- | --- | :-: | :-: | --- | --- | --- |
-| `Ollama` | Local or self-hosted Ollama | ✓ | ✓ | Required (for example `http://localhost:11434`) | Optional (Bearer) | — |
-| `OllamaCloud` | Ollama Cloud (native Ollama API) | ✓ | ✓ | Always stored as `https://ollama.com` | Required | — |
-| `OpenAI` | OpenAI and OpenAI-compatible APIs | ✓ | ✓ | `https://api.openai.com` | Usually required (Bearer) | — |
-| `vLLM` | vLLM (OpenAI-compatible) | ✓ | ✓ | Required | Deployment-dependent (Bearer) | — |
+| `Ollama` | Local or self-hosted Ollama | ✓ | ✓ | Required (for example `http://localhost:11434`) | Optional; sent per `Auth` (default: Bearer) | Optional `Auth` |
+| `OllamaCloud` | Ollama Cloud (native Ollama API) | ✓ | ✓ | Always stored as `https://ollama.com` | Required (Bearer) | — |
+| `OpenAI` | OpenAI and OpenAI-compatible APIs | ✓ | ✓ | `https://api.openai.com` | Usually required; sent per `Auth` (default: Bearer) | Optional `Auth` |
+| `vLLM` | vLLM (OpenAI-compatible) | ✓ | ✓ | Required | Deployment-dependent; sent per `Auth` (default: Bearer) | Optional `Auth` |
 | `Gemini` | Google Gemini API | ✓ | ✓ | `https://generativelanguage.googleapis.com` | Required in practice (`x-goog-api-key`) | — |
-| `xAI` | xAI Grok; completions use the native Responses API | ✓ | ✓ | `https://api.x.ai` (trailing `/v1` dropped) | Required | — |
+| `xAI` | xAI Grok; completions use the native Responses API | ✓ | ✓ | `https://api.x.ai` (trailing `/v1` dropped) | Required (Bearer) | — |
 | `AzureOpenAI` | Azure OpenAI | ✓ | ✓ | **Required**: the resource URL, for example `https://my-resource.openai.azure.com` (trailing `/openai` dropped) | Required: `api-key`, or an Entra ID token when `AuthMode` is `BearerToken` | Optional `AzureOpenAI` |
 | `Anthropic` | Anthropic Claude Messages API | ✓ | — | `https://api.anthropic.com` (trailing `/v1` dropped) | Required (`x-api-key` + `anthropic-version`) | Optional `Anthropic` |
 | `Cohere` | Cohere v2 API | ✓ | ✓ | `https://api.cohere.com` (trailing `/v1` or `/v2` dropped) | Required (Bearer) | Optional `Cohere` |
 | `Bedrock` | AWS Bedrock (Converse, InvokeModel) | ✓ | ✓ | `https://bedrock-runtime.{Region}.amazonaws.com` | Not used; requests are signed with AWS Signature V4 | **Required** `Bedrock` |
 | `VertexAI` | Google Vertex AI | ✓ | ✓ | `https://{Region}-aiplatform.googleapis.com` | Only for `CredentialSource: AccessToken` (the token) | **Required** `VertexAI` |
-| `TEI` | Hugging Face Text Embeddings Inference (self-hosted) | — | ✓ | Required (for example `http://localhost:8080`) | Optional (Bearer, only when the server uses `--api-key`) | — |
+| `TEI` | Hugging Face Text Embeddings Inference (self-hosted) | — | ✓ | Required (for example `http://localhost:8080`) | Optional; sent per `Auth` (default: Bearer, for servers started with `--api-key`) | Optional `Auth` |
 | `VoyageAI` | VoyageAI embeddings | — | ✓ | `https://api.voyageai.com` (trailing `/v1` dropped) | Required (Bearer) | Optional `VoyageAI` |
 
 Per-provider meaning of the common fields:
@@ -1021,15 +1021,19 @@ Per-provider meaning of the common fields:
 - **Vertex AI**: `Model` is the Vertex model, for example `gemini-2.5-flash` or `text-embedding-005`.
 - **TEI**: the server hosts exactly one model, so `Model` is informational (it is still required).
 
-`Endpoint` may be omitted to use the default above. An empty string (`""`) is rejected, as before.
+`Endpoint` may be omitted, or sent as `""`, to use the default above. Providers without a default (`Ollama`, `vLLM`, `TEI`, `AzureOpenAI`) return `400` when it is empty.
 
 ### `ProviderSettings`
 
-Only the section that matches `ApiFormat` is kept. Other sections are dropped on save, and blank strings
-are stored as `null`.
+Only the section that matches `ApiFormat` is kept, plus `Auth` for `Ollama`, `vLLM`, `TEI`, and `OpenAI`.
+Other sections are dropped on save, and blank strings are stored as `null`.
 
 | Section | Field | Type | Default | Description |
 | --- | --- | --- | --- | --- |
+| `Auth` | `Mode` | `None` \| `Bearer` \| `Header` \| `QueryParameter` \| `Basic` | `Bearer` | How the `ApiKey` is sent. Only for `Ollama`, `vLLM`, `TEI`, and `OpenAI`; see [Selectable authentication](#selectable-authentication-providersettingsauth) |
+| `Auth` | `HeaderName` | string? | `null` | Header that carries `ApiKey` when `Mode` is `Header`, for example `X-API-Key` |
+| `Auth` | `QueryParameterName` | string? | `null` | Query parameter that carries `ApiKey` when `Mode` is `QueryParameter`, for example `api_key` |
+| `Auth` | `Username` | string? | `null` | User name when `Mode` is `Basic`; `ApiKey` is the password |
 | `AzureOpenAI` | `ApiVersion` | string? | `null` (`2024-10-21`) | Azure `api-version` query value |
 | `AzureOpenAI` | `AuthMode` | `ApiKey` \| `BearerToken` | `ApiKey` | Send `ApiKey` as the `api-key` header, or as an Entra ID bearer token (static tokens expire) |
 | `Anthropic` | `AnthropicVersion` | string? | `null` (`2023-06-01`) | `anthropic-version` header |
@@ -1082,7 +1086,49 @@ Examples (only the provider fields are shown; every other endpoint field works a
   "ProviderSettings": { "VoyageAI": { "InputType": "document", "OutputDimension": 1024 } } }
 
 { "ApiFormat": "TEI", "Endpoint": "http://localhost:8080", "Model": "BAAI/bge-small-en-v1.5", "ApiKey": null }
+
+{ "ApiFormat": "Ollama", "Endpoint": "https://ollama.internal.example.com", "Model": "gemma3:4b", "ApiKey": "gateway-key",
+  "ProviderSettings": { "Auth": { "Mode": "Header", "HeaderName": "X-Gateway-Key" } } }
+
+{ "ApiFormat": "vLLM", "Endpoint": "https://vllm.example.com", "Model": "Qwen/Qwen2.5-7B-Instruct", "ApiKey": "query-key",
+  "ProviderSettings": { "Auth": { "Mode": "QueryParameter", "QueryParameterName": "api_key" } } }
 ```
+
+#### Selectable authentication (`ProviderSettings.Auth`)
+
+Most providers have one documented authentication scheme, and Partio always uses it:
+
+| Provider | How the credential is sent |
+| --- | --- |
+| `OllamaCloud`, `xAI`, `Cohere`, `VoyageAI` | `Authorization: Bearer {ApiKey}` |
+| `Anthropic` | `x-api-key: {ApiKey}` plus `anthropic-version` (and `anthropic-workspace-id` when set) |
+| `Gemini` | `x-goog-api-key: {ApiKey}` |
+| `AzureOpenAI` | `api-key: {ApiKey}`, or `Authorization: Bearer {ApiKey}` when `ProviderSettings.AzureOpenAI.AuthMode` is `BearerToken` |
+| `Bedrock` | AWS Signature V4 from `ProviderSettings.Bedrock` credentials; `ApiKey` is not used |
+| `VertexAI` | Google OAuth bearer token from `ProviderSettings.VertexAI` (service account, ADC, or the `ApiKey` as a static access token) |
+
+These providers ignore `ProviderSettings.Auth`, and it is dropped on save.
+
+`Ollama`, `vLLM`, `TEI`, and `OpenAI` (including OpenAI-compatible gateways) are often deployed behind proxies
+or gateways, so their authentication is selectable. The secret is always `ApiKey`, which is masked on read
+and can be revealed like any other secret.
+
+| `Mode` | What Partio sends | Required fields |
+| --- | --- | --- |
+| `None` | No credential. `ApiKey` is cleared on save | — |
+| `Bearer` | `Authorization: Bearer {ApiKey}` | `ApiKey` |
+| `Header` | `{HeaderName}: {ApiKey}` | `ApiKey`, `HeaderName` |
+| `QueryParameter` | `?{QueryParameterName}={ApiKey}` appended to every upstream URL | `ApiKey`, `QueryParameterName` |
+| `Basic` | `Authorization: Basic base64({Username}:{ApiKey})` | `ApiKey`, `Username` |
+
+- **Without an `Auth` section** behavior is unchanged: a configured `ApiKey` is sent as a bearer token, and no
+  key means no credential.
+- **Everywhere:** the selected mode is applied to provider calls (completion, embedding, summarization,
+  validation, model loading), to health checks (when `HealthCheckUseAuth` is on, which defaults to on whenever
+  a credential is selected), and to the transparent proxy.
+- **Request history:** custom-header and query-parameter credentials are attached by Partio's transport after
+  PolyPrompt records the call, so they never appear in recorded call details or the recorded upstream URL.
+  Bearer tokens are attached by PolyPrompt and appear in recorded request headers, as before.
 
 ### Validation
 
@@ -1092,7 +1138,9 @@ Create and update return `400 Bad Request` when:
 - `ApiKey` is missing for `OllamaCloud`, `xAI`, `AzureOpenAI`, `Anthropic`, `Cohere`, or `VoyageAI`;
 - an `AzureOpenAI` endpoint has no `Endpoint`;
 - a `Bedrock` endpoint lacks `ProviderSettings.Bedrock` or `Region`, or, for `Static` credentials, `AccessKeyId` or `SecretAccessKey`;
-- a `VertexAI` endpoint lacks `ProviderSettings.VertexAI`, `ProjectId`, or `Region`; for `ServiceAccountJson`, the JSON is missing, invalid, or lacks `client_email` and `private_key`; for `AccessToken`, `ApiKey` is missing.
+- a `VertexAI` endpoint lacks `ProviderSettings.VertexAI`, `ProjectId`, or `Region`; for `ServiceAccountJson`, the JSON is missing, invalid, or lacks `client_email` and `private_key`; for `AccessToken`, `ApiKey` is missing;
+- `Endpoint` is empty for a provider without a default (`Ollama`, `vLLM`, `TEI`, `AzureOpenAI`);
+- `ProviderSettings.Auth` (on `Ollama`, `vLLM`, `TEI`, or `OpenAI`) selects any mode other than `None` without an `ApiKey`; `Header` lacks `HeaderName`, uses a name that is not a valid HTTP token, or uses a header the HTTP client manages (`Host`, `Content-Length`, `Content-Type`, `Connection`, `Transfer-Encoding`, `Keep-Alive`, `Proxy-Connection`, `TE`, `Trailer`, `Upgrade`, `Expect`, `Accept`, `Accept-Encoding`, `User-Agent`); `QueryParameter` lacks `QueryParameterName` or it contains `&`, `=`, `?`, `#`, or a space; `Basic` lacks `Username` or it contains `:`.
 
 The error message names the missing field, for example `Bedrock endpoints require ProviderSettings.Bedrock.Region.`
 
@@ -1102,7 +1150,7 @@ Defaults are applied on create and update when a field is unset or zero.
 
 | `ApiFormat` | Health check | Interval / timeout | Auth |
 | --- | --- | --- | --- |
-| `Ollama` | `GET {Endpoint}/api/tags` | 5s / 2s | Off |
+| `Ollama` | `GET {Endpoint}/api/tags` | 5s / 2s | Off, unless `Auth` selects a credential |
 | `OllamaCloud` | `GET https://ollama.com/api/tags` | 15s / 5s | On when `ApiKey` is set |
 | `OpenAI`, `vLLM`, `xAI`, `Anthropic`, `Cohere` | `GET {Endpoint}/v1/models` | 15s / 5s | On when `ApiKey` is set |
 | `Gemini` | `GET {Endpoint}/v1beta/models` | 15s / 5s | On when `ApiKey` is set |
@@ -1112,7 +1160,10 @@ Defaults are applied on create and update when a field is unset or zero.
 
 Health-check auth uses each provider's real header. Gemini uses `x-goog-api-key`. Anthropic uses `x-api-key`
 with `anthropic-version` (and `anthropic-workspace-id` when set). Azure OpenAI uses `api-key`, or Bearer when
-`AuthMode` is `BearerToken`. Every other provider uses `Authorization: Bearer`.
+`AuthMode` is `BearerToken`. `Ollama`, `vLLM`, `TEI`, and `OpenAI` follow `ProviderSettings.Auth` (a
+query-parameter credential is added to the request URL only, never to the stored `HealthCheckUrl` or logs).
+Every other provider uses `Authorization: Bearer`. An `Ollama` endpoint with an explicitly selected
+credential authenticates its health checks by default.
 
 Bedrock and Vertex AI requests must be signed per request, and VoyageAI has no model-listing API, so their
 health checks run PolyPrompt's connectivity probe with the endpoint's own credentials and model:

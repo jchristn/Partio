@@ -116,7 +116,7 @@ namespace Partio.Core.ThirdParty
         /// <returns>A new PolyPrompt completion client; the caller disposes it.</returns>
         protected virtual PolyPromptCompletionClientBase CreateProviderClient()
         {
-            return new PolyPromptOpenAiCompletionClient(_Endpoint, _ApiKey, _Logging);
+            return new PolyPromptOpenAiCompletionClient(_Endpoint, _ApiKey, _Logging, _HttpClient);
         }
 
         /// <inheritdoc />

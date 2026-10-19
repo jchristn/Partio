@@ -18,6 +18,7 @@ import ProviderPicker from './ProviderPicker';
 import ProviderConnectionFields from './ProviderConnectionFields';
 import {
   applyProviderChange,
+  authFromEndpoint,
   buildConnectionPayload,
   getProvider,
   hasEndpointOverride,
@@ -263,7 +264,7 @@ export default function EmbeddingEndpointsView() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [duplicating, setDuplicating] = useState(false);
-  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
+  const [form, setForm] = useState({ TenantId: 'default', Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, Auth: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), Tokenization: createTokenizationForm(), ...defaultHealthFields });
   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '', type: 'error' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [tenants, setTenants] = useState([]);
@@ -318,7 +319,7 @@ export default function EmbeddingEndpointsView() {
     setEditing(null);
     setDuplicating(false);
     const tenantId = tenants.length > 0 ? tenants[0].Id : '';
-    setForm({ TenantId: tenantId, Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm() });
+    setForm({ TenantId: tenantId, Name: '', Model: '', Endpoint: '', ApiFormat: '', ApiKey: '', ProviderSettings: null, Auth: null, EndpointOverride: false, Active: true, EnableRequestHistory: false, MaximumTimeoutMs: defaultMaximumTimeoutMs.toString(), MaxConcurrentRequests: defaultMaxConcurrentRequests.toString(), MaxQueueDepth: defaultMaxQueueDepth.toString(), ContextSize: defaultContextSize.toString(), Labels: createLabelRows(), Tags: createTagRows(), HealthCheckEnabled: false, Tokenization: createTokenizationForm() });
     setHealthFieldsEdited(false);
     setFormErrors({});
     setShowModal(true);
@@ -337,6 +338,7 @@ export default function EmbeddingEndpointsView() {
       ApiFormat: item.ApiFormat,
       ApiKey: item.ApiKey || '',
       ProviderSettings: providerSettings,
+      Auth: authFromEndpoint(item),
       EndpointOverride: hasEndpointOverride(item.ApiFormat, item.Endpoint, providerSettings),
       Active: item.Active !== false,
       EnableRequestHistory: item.EnableRequestHistory || false,

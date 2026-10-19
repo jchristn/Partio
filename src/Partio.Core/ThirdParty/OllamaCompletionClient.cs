@@ -171,7 +171,7 @@ namespace Partio.Core.ThirdParty
         /// <returns>A new PolyPrompt Ollama completion client; the caller disposes it.</returns>
         protected virtual PolyPromptOllamaCompletionClient CreateProviderClient()
         {
-            return new PolyPromptOllamaCompletionClient(_Endpoint, _ApiKey, _Logging);
+            return new PolyPromptOllamaCompletionClient(_Endpoint, _ApiKey, _Logging, _HttpClient);
         }
 
         private PolyPromptOllamaCompletionClient CreateConfiguredClient(string model, int timeoutMs)

@@ -37,11 +37,13 @@ export const GCP_REGIONS = [
 export const PROVIDERS = [
   {
     value: 'Ollama',
+    selectableAuth: true,
+    defaultAuthMode: 'None',
     label: 'Ollama',
     group: 'selfhosted',
     summary: 'Local or self-hosted Ollama server. Supports model pull and keep-alive loading.',
     kinds: ['completion', 'embedding'],
-    auth: 'Optional key',
+    auth: 'Configurable auth',
     endpoint: { mode: 'required', label: 'Server URL', placeholder: 'http://localhost:11434', defaultValue: 'http://localhost:11434', help: 'Base URL of the Ollama server.' },
     apiKey: { mode: 'optional', label: 'API Key', help: 'Only needed when Ollama sits behind an authenticating proxy.' },
     model: { label: 'Model', defaults: { completion: 'gemma3:4b', embedding: 'nomic-embed-text' }, placeholder: 'gemma3:4b', help: 'Ollama model tag, for example gemma3:4b or nomic-embed-text.' },
@@ -50,11 +52,13 @@ export const PROVIDERS = [
   },
   {
     value: 'vLLM',
+    selectableAuth: true,
+    defaultAuthMode: 'None',
     label: 'vLLM',
     group: 'selfhosted',
     summary: 'Self-hosted vLLM server speaking the OpenAI-compatible API.',
     kinds: ['completion', 'embedding'],
-    auth: 'Optional key',
+    auth: 'Configurable auth',
     endpoint: { mode: 'required', label: 'Server URL', placeholder: 'http://localhost:8000', defaultValue: 'http://localhost:8000', help: 'Base URL of the vLLM server (without /v1).' },
     apiKey: { mode: 'optional', label: 'API Key', help: 'Required when vLLM was started with --api-key.' },
     model: { label: 'Model', defaults: { completion: 'Qwen/Qwen2.5-7B-Instruct', embedding: 'intfloat/e5-small-v2' }, placeholder: 'Qwen/Qwen2.5-7B-Instruct', help: 'The model name vLLM is serving.' },
@@ -63,11 +67,13 @@ export const PROVIDERS = [
   },
   {
     value: 'TEI',
+    selectableAuth: true,
+    defaultAuthMode: 'None',
     label: 'Hugging Face TEI',
     group: 'selfhosted',
     summary: 'Text Embeddings Inference server. Hosts exactly one embedding model.',
     kinds: ['embedding'],
-    auth: 'Optional key',
+    auth: 'Configurable auth',
     endpoint: { mode: 'required', label: 'Server URL', placeholder: 'http://localhost:8080', defaultValue: 'http://localhost:8080', help: 'Base URL of the TEI server.' },
     apiKey: { mode: 'optional', label: 'API Key', help: 'Only needed when TEI was started with --api-key.' },
     model: { label: 'Model', defaults: { embedding: 'BAAI/bge-small-en-v1.5' }, placeholder: 'BAAI/bge-small-en-v1.5', help: 'Informational: the TEI server decides the model. Use the model ID it hosts.' },
@@ -76,24 +82,27 @@ export const PROVIDERS = [
   },
   {
     value: 'OpenAI',
+    selectableAuth: true,
+    defaultAuthMode: 'Bearer',
     label: 'OpenAI',
     group: 'cloud',
     summary: 'OpenAI API, or any OpenAI-compatible service.',
     kinds: ['completion', 'embedding'],
-    auth: 'API key',
+    auth: 'Configurable auth',
     endpoint: { mode: 'default', label: 'Endpoint URL', placeholder: 'https://api.openai.com', defaultValue: 'https://api.openai.com', help: 'API root without /v1. Change it for OpenAI-compatible services.' },
-    apiKey: { mode: 'optional', label: 'API Key', help: 'Your OpenAI API key (sk-...). Required by api.openai.com.' },
+    apiKey: { mode: 'optional', label: 'API Key', help: 'Your OpenAI API key (sk-...), or the credential your OpenAI-compatible gateway expects.' },
     model: { label: 'Model', defaults: { completion: 'gpt-4.1-mini', embedding: 'text-embedding-3-small' }, placeholder: 'gpt-4.1-mini', help: 'OpenAI model name.' },
     health: 'http',
     proxy: true,
   },
   {
     value: 'AzureOpenAI',
+    authScheme: 'api-key header, or Authorization: Bearer with an Entra ID token',
     label: 'Azure OpenAI',
     group: 'cloud',
     summary: 'OpenAI models deployed in your Azure resource. Requests target a deployment.',
     kinds: ['completion', 'embedding'],
-    auth: 'API key or Entra ID',
+    auth: 'api-key or Entra ID',
     settings: 'AzureOpenAI',
     endpoint: { mode: 'required', label: 'Resource URL', placeholder: 'https://my-resource.openai.azure.com', defaultValue: '', help: 'Your Azure OpenAI resource endpoint, from the Azure portal (Keys and Endpoint).' },
     apiKey: { mode: 'required', label: 'API Key', help: 'Azure OpenAI key 1 or key 2.' },
@@ -103,11 +112,12 @@ export const PROVIDERS = [
   },
   {
     value: 'Anthropic',
+    authScheme: 'x-api-key header (with anthropic-version)',
     label: 'Anthropic',
     group: 'cloud',
     summary: 'Claude models through the Anthropic Messages API.',
     kinds: ['completion'],
-    auth: 'API key',
+    auth: 'x-api-key',
     settings: 'Anthropic',
     endpoint: { mode: 'default', label: 'Endpoint URL', placeholder: 'https://api.anthropic.com', defaultValue: 'https://api.anthropic.com', help: 'API root without /v1.' },
     apiKey: { mode: 'required', label: 'API Key', help: 'Anthropic API key (sk-ant-...). Sent as x-api-key.' },
@@ -117,11 +127,12 @@ export const PROVIDERS = [
   },
   {
     value: 'Gemini',
+    authScheme: 'x-goog-api-key header',
     label: 'Google Gemini',
     group: 'cloud',
     summary: 'Gemini models through the Google AI Studio (Generative Language) API.',
     kinds: ['completion', 'embedding'],
-    auth: 'API key',
+    auth: 'x-goog-api-key',
     endpoint: { mode: 'default', label: 'Endpoint URL', placeholder: 'https://generativelanguage.googleapis.com', defaultValue: 'https://generativelanguage.googleapis.com', help: 'Gemini API root.' },
     apiKey: { mode: 'optional', label: 'API Key', help: 'Google AI Studio API key. Sent as x-goog-api-key.' },
     model: { label: 'Model', defaults: { completion: 'gemini-2.5-flash', embedding: 'gemini-embedding-001' }, placeholder: 'gemini-2.5-flash', help: 'Gemini model name.' },
@@ -130,6 +141,7 @@ export const PROVIDERS = [
   },
   {
     value: 'VertexAI',
+    authScheme: 'OAuth bearer token minted from the credential below',
     label: 'Google Vertex AI',
     group: 'cloud',
     summary: 'Gemini and embedding models in your Google Cloud project, authenticated with OAuth.',
@@ -144,6 +156,7 @@ export const PROVIDERS = [
   },
   {
     value: 'Bedrock',
+    authScheme: 'AWS Signature V4, computed from the credentials below',
     label: 'AWS Bedrock',
     group: 'cloud',
     summary: 'Claude, Llama, Titan, Cohere and more through Bedrock, signed with AWS SigV4.',
@@ -158,11 +171,12 @@ export const PROVIDERS = [
   },
   {
     value: 'Cohere',
+    authScheme: 'Authorization: Bearer <API key>',
     label: 'Cohere',
     group: 'cloud',
     summary: 'Command chat models and Embed models through the Cohere v2 API.',
     kinds: ['completion', 'embedding'],
-    auth: 'API key',
+    auth: 'Bearer token',
     settings: 'Cohere',
     endpoint: { mode: 'default', label: 'Endpoint URL', placeholder: 'https://api.cohere.com', defaultValue: 'https://api.cohere.com', help: 'API root without /v1 or /v2.' },
     apiKey: { mode: 'required', label: 'API Key', help: 'Cohere API key.' },
@@ -172,11 +186,12 @@ export const PROVIDERS = [
   },
   {
     value: 'VoyageAI',
+    authScheme: 'Authorization: Bearer <API key>',
     label: 'VoyageAI',
     group: 'cloud',
     summary: 'Voyage embedding models for retrieval.',
     kinds: ['embedding'],
-    auth: 'API key',
+    auth: 'Bearer token',
     settings: 'VoyageAI',
     endpoint: { mode: 'default', label: 'Endpoint URL', placeholder: 'https://api.voyageai.com', defaultValue: 'https://api.voyageai.com', help: 'API root without /v1.' },
     apiKey: { mode: 'required', label: 'API Key', help: 'VoyageAI API key (pa-...).' },
@@ -186,11 +201,12 @@ export const PROVIDERS = [
   },
   {
     value: 'xAI',
+    authScheme: 'Authorization: Bearer <API key>',
     label: 'xAI (Grok)',
     group: 'cloud',
     summary: 'Grok models through the native xAI Responses API.',
     kinds: ['completion', 'embedding'],
-    auth: 'API key',
+    auth: 'Bearer token',
     endpoint: { mode: 'default', label: 'Endpoint URL', placeholder: XAI_ENDPOINT, defaultValue: XAI_ENDPOINT, help: 'API root. A trailing /v1 is removed.' },
     apiKey: { mode: 'required', label: 'API Key', help: 'xAI API key (xai-...).' },
     model: { label: 'Model', defaults: { completion: 'grok-4', embedding: '' }, placeholder: 'grok-4', help: 'Grok model name.' },
@@ -199,11 +215,12 @@ export const PROVIDERS = [
   },
   {
     value: 'OllamaCloud',
+    authScheme: 'Authorization: Bearer <API key>',
     label: 'Ollama Cloud',
     group: 'cloud',
     summary: 'Hosted models on ollama.com through the native Ollama API.',
     kinds: ['completion', 'embedding'],
-    auth: 'API key',
+    auth: 'Bearer token',
     endpoint: { mode: 'fixed', label: 'Endpoint URL', placeholder: OLLAMA_CLOUD_ENDPOINT, defaultValue: OLLAMA_CLOUD_ENDPOINT, help: 'Ollama Cloud always uses https://ollama.com.' },
     apiKey: { mode: 'required', label: 'API Key', help: 'Ollama Cloud API key from ollama.com/settings/keys.' },
     model: { label: 'Model', defaults: { completion: 'gpt-oss:20b', embedding: 'embeddinggemma' }, placeholder: 'gpt-oss:20b', help: 'Ollama Cloud model tag.' },
@@ -282,21 +299,83 @@ export function probeDescription(apiFormat, kind) {
   }
 }
 
+export const AUTH_MODES = [
+  { value: 'None', label: 'None', tooltip: 'Send no credential.' },
+  { value: 'Bearer', label: 'Bearer token', tooltip: 'Authorization: Bearer <token>' },
+  { value: 'Header', label: 'Custom header', tooltip: 'A header you name, for example X-API-Key: <value>' },
+  { value: 'QueryParameter', label: 'Query parameter', tooltip: 'Appended to every request URL, for example ?api_key=<value>' },
+  { value: 'Basic', label: 'Basic auth', tooltip: 'Authorization: Basic base64(username:password)' },
+];
+
+export const RESERVED_AUTH_HEADERS = ['host', 'content-length', 'content-type', 'connection', 'transfer-encoding', 'keep-alive',
+  'proxy-connection', 'te', 'trailer', 'upgrade', 'expect', 'accept', 'accept-encoding', 'user-agent'];
+
+/** Whether the provider's authentication is selectable (Ollama, vLLM, TEI, OpenAI). */
+export function supportsSelectableAuth(apiFormat) {
+  return !!getProvider(apiFormat).selectableAuth && PROVIDERS.some(p => p.value === apiFormat);
+}
+
+/** Default authentication form state for a provider, or null when its scheme is fixed. */
+export function defaultAuth(apiFormat) {
+  if (!supportsSelectableAuth(apiFormat)) return null;
+  return { Mode: getProvider(apiFormat).defaultAuthMode || 'None', HeaderName: '', QueryParameterName: '', Username: '' };
+}
+
+/** Authentication form state for a stored endpoint. Without an Auth section a stored key is a bearer token. */
+export function authFromEndpoint(endpoint) {
+  if (!endpoint || !supportsSelectableAuth(endpoint.ApiFormat)) return null;
+  const stored = endpoint.ProviderSettings?.Auth;
+  if (!stored) return { ...defaultAuth(endpoint.ApiFormat), Mode: endpoint.ApiKey ? 'Bearer' : 'None' };
+  return {
+    Mode: stored.Mode || 'Bearer',
+    HeaderName: stored.HeaderName || '',
+    QueryParameterName: stored.QueryParameterName || '',
+    Username: stored.Username || '',
+  };
+}
+
+/** Exact description of how the credential is sent, for display. */
+export function describeAuth(apiFormat, settings, auth) {
+  if (supportsSelectableAuth(apiFormat)) {
+    switch (auth?.Mode) {
+      case 'Bearer': return 'Sent as Authorization: Bearer <token>.';
+      case 'Header': return `Sent as ${auth.HeaderName?.trim() || '<header>'}: <value>.`;
+      case 'QueryParameter': return `Appended to every request URL as ?${auth.QueryParameterName?.trim() || '<parameter>'}=<value>.`;
+      case 'Basic': return `Sent as Authorization: Basic base64(${auth.Username?.trim() || '<username>'}:<password>).`;
+      default: return 'No credential is sent.';
+    }
+  }
+  if (apiFormat === 'AzureOpenAI') {
+    return settings?.AuthMode === 'BearerToken' ? 'Authorization: Bearer <Entra ID token>' : 'api-key header';
+  }
+  return getProvider(apiFormat).authScheme || '';
+}
+
 /** Whether the ApiKey field applies, given the provider and its settings. */
-export function apiKeyApplies(apiFormat, settings) {
+export function apiKeyApplies(apiFormat, settings, auth) {
   const provider = getProvider(apiFormat);
+  if (supportsSelectableAuth(apiFormat)) return (auth?.Mode || 'None') !== 'None';
   if (apiFormat === 'VertexAI') return settings?.CredentialSource === 'AccessToken';
   return provider.apiKey.mode !== 'none';
 }
 
 /** Whether the ApiKey is required, given the provider and its settings. */
-export function apiKeyRequired(apiFormat, settings) {
+export function apiKeyRequired(apiFormat, settings, auth) {
+  if (supportsSelectableAuth(apiFormat)) return (auth?.Mode || 'None') !== 'None';
   if (apiFormat === 'VertexAI') return settings?.CredentialSource === 'AccessToken';
   return getProvider(apiFormat).apiKey.mode === 'required';
 }
 
-/** Label for the ApiKey field, which depends on the Azure auth mode. */
-export function apiKeyLabel(apiFormat, settings) {
+/** Label for the ApiKey field, which depends on the selected authentication mode or the Azure auth mode. */
+export function apiKeyLabel(apiFormat, settings, auth) {
+  if (supportsSelectableAuth(apiFormat)) {
+    switch (auth?.Mode) {
+      case 'Header': return 'Header Value';
+      case 'QueryParameter': return 'Parameter Value';
+      case 'Basic': return 'Password';
+      default: return 'Bearer Token';
+    }
+  }
   if (apiFormat === 'AzureOpenAI' && settings?.AuthMode === 'BearerToken') return 'Entra ID Access Token';
   return getProvider(apiFormat).apiKey.label || 'API Key';
 }
@@ -336,7 +415,7 @@ export function normalizeEndpoint(apiFormat, endpoint, settings) {
 }
 
 /** Health check defaults for a provider and endpoint URL. */
-export function getHealthCheckDefaults(apiFormat, endpoint, settings) {
+export function getHealthCheckDefaults(apiFormat, endpoint, settings, auth) {
   const probe = usesConnectivityProbe(apiFormat);
   const base = trimTrailingSlashes(normalizeEndpoint(apiFormat, endpoint, settings));
   let url = '';
@@ -369,7 +448,8 @@ export function getHealthCheckDefaults(apiFormat, endpoint, settings) {
     HealthCheckExpectedStatusCode: 200,
     HealthyThreshold: 2,
     UnhealthyThreshold: 2,
-    HealthCheckUseAuth: !local,
+    // Local Ollama is anonymous unless a credential is explicitly selected.
+    HealthCheckUseAuth: !local || (!!auth && auth.Mode !== 'None'),
   };
 }
 
@@ -392,7 +472,8 @@ export function applyProviderChange(form, newFormat, kind, healthFieldsEdited) {
   const settings = defaultProviderSettings(newFormat);
   const next = getProviderDefaults(newFormat, kind, settings);
   const newProvider = getProvider(newFormat);
-  const nextForm = { ...form, ApiFormat: newFormat, ProviderSettings: settings, EndpointOverride: false };
+  const auth = defaultAuth(newFormat);
+  const nextForm = { ...form, ApiFormat: newFormat, ProviderSettings: settings, Auth: auth, EndpointOverride: false };
 
   if (!form.Model || form.Model === previous.Model) nextForm.Model = next.Model;
 
@@ -400,11 +481,11 @@ export function applyProviderChange(form, newFormat, kind, healthFieldsEdited) {
     && (newProvider.endpoint.mode === 'required' || newProvider.endpoint.mode === 'default');
   nextForm.Endpoint = keepEndpoint ? form.Endpoint : next.Endpoint;
 
-  if (!apiKeyApplies(newFormat, settings)) nextForm.ApiKey = '';
+  if (!apiKeyApplies(newFormat, settings, auth)) nextForm.ApiKey = '';
 
   // The health check URL and auth are provider-specific, so they always follow the provider; timings and
   // thresholds keep any values the user edited.
-  const health = getHealthCheckDefaults(newFormat, nextForm.Endpoint, settings);
+  const health = getHealthCheckDefaults(newFormat, nextForm.Endpoint, settings, auth);
   if (healthFieldsEdited) {
     nextForm.HealthCheckUrl = health.HealthCheckUrl;
     nextForm.HealthCheckUseAuth = health.HealthCheckUseAuth;
@@ -428,7 +509,18 @@ export function applySettingsChange(form, field, value, healthFieldsEdited) {
     nextForm.ApiKey = '';
   }
   if (!healthFieldsEdited) {
-    nextForm.HealthCheckUrl = getHealthCheckDefaults(form.ApiFormat, nextForm.Endpoint, settings).HealthCheckUrl;
+    nextForm.HealthCheckUrl = getHealthCheckDefaults(form.ApiFormat, nextForm.Endpoint, settings, form.Auth).HealthCheckUrl;
+  }
+  return nextForm;
+}
+
+/** Update one authentication field; switching to None clears the credential. */
+export function applyAuthChange(form, field, value, healthFieldsEdited) {
+  const auth = { ...(form.Auth || defaultAuth(form.ApiFormat) || {}), [field]: value };
+  const nextForm = { ...form, Auth: auth };
+  if (field === 'Mode' && value === 'None') nextForm.ApiKey = '';
+  if (!healthFieldsEdited) {
+    nextForm.HealthCheckUseAuth = getHealthCheckDefaults(form.ApiFormat, form.Endpoint, form.ProviderSettings, auth).HealthCheckUseAuth;
   }
   return nextForm;
 }
@@ -465,7 +557,27 @@ export function validateConnection(form, kind) {
   if (isBlank(endpoint) && provider.endpoint.mode !== 'derived') errors.Endpoint = `${provider.endpoint.label} is required.`;
   else if (!isBlank(endpoint) && !/^https?:\/\/[^\s/]+/i.test(endpoint)) errors.Endpoint = 'Enter a URL starting with http:// or https://.';
 
-  if (apiKeyRequired(form.ApiFormat, settings) && isBlank(form.ApiKey)) errors.ApiKey = `${apiKeyLabel(form.ApiFormat, settings)} is required.`;
+  if (apiKeyRequired(form.ApiFormat, settings, form.Auth) && isBlank(form.ApiKey)) errors.ApiKey = `${apiKeyLabel(form.ApiFormat, settings, form.Auth)} is required.`;
+
+  if (supportsSelectableAuth(form.ApiFormat) && form.Auth) {
+    const auth = form.Auth;
+    if (auth.Mode === 'Header') {
+      const name = (auth.HeaderName || '').trim();
+      if (!name) errors['Auth.HeaderName'] = 'Header name is required.';
+      else if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) errors['Auth.HeaderName'] = 'Not a valid HTTP header name.';
+      else if (RESERVED_AUTH_HEADERS.includes(name.toLowerCase())) errors['Auth.HeaderName'] = `${name} is managed by the HTTP client and cannot carry a credential.`;
+    }
+    if (auth.Mode === 'QueryParameter') {
+      const name = (auth.QueryParameterName || '').trim();
+      if (!name) errors['Auth.QueryParameterName'] = 'Parameter name is required.';
+      else if (/[&=?#\s]/.test(name)) errors['Auth.QueryParameterName'] = 'Parameter name must not contain &, =, ?, #, or spaces.';
+    }
+    if (auth.Mode === 'Basic') {
+      const name = (auth.Username || '').trim();
+      if (!name) errors['Auth.Username'] = 'Username is required.';
+      else if (name.includes(':')) errors['Auth.Username'] = 'Username must not contain a colon.';
+    }
+  }
 
   if (form.ApiFormat === 'Bedrock') {
     if (isBlank(settings.Region)) errors['Settings.Region'] = 'Region is required.';
@@ -547,8 +659,23 @@ export function buildConnectionPayload(form) {
     ApiFormat: form.ApiFormat,
     Model: (form.Model || '').trim(),
     Endpoint: endpoint,
-    ApiKey: apiKeyApplies(form.ApiFormat, settings) && !isBlank(form.ApiKey) ? form.ApiKey : null,
-    ProviderSettings: buildProviderSettingsPayload(form.ApiFormat, settings),
+    ApiKey: apiKeyApplies(form.ApiFormat, settings, form.Auth) && !isBlank(form.ApiKey) ? form.ApiKey : null,
+    ProviderSettings: withAuthPayload(form.ApiFormat, buildProviderSettingsPayload(form.ApiFormat, settings), form.Auth),
+  };
+}
+
+/** Add the Auth section for providers with selectable authentication, keeping only the fields its mode uses. */
+export function withAuthPayload(apiFormat, providerSettings, auth) {
+  if (!supportsSelectableAuth(apiFormat) || !auth) return providerSettings;
+  const mode = auth.Mode || 'None';
+  return {
+    ...(providerSettings || {}),
+    Auth: {
+      Mode: mode,
+      HeaderName: mode === 'Header' ? blankToNull(auth.HeaderName) : null,
+      QueryParameterName: mode === 'QueryParameter' ? blankToNull(auth.QueryParameterName) : null,
+      Username: mode === 'Basic' ? blankToNull(auth.Username) : null,
+    },
   };
 }
 

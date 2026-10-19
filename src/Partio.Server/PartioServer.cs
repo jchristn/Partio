@@ -483,54 +483,59 @@ namespace Partio.Server
             // (openApiMetadata: null); the proxy is documented in REST_API.md and the Postman collection.
             // Note: a plain regex/dynamic catch-all is not used because the full Watson webserver does not
             // evaluate dynamic routes here; explicit parameter routes are the proven mechanism.
-            (WatsonWebserver.Core.HttpMethod Method, string Path)[] proxyRoutes = new (WatsonWebserver.Core.HttpMethod, string)[]
+            List<string> proxyPostRoutes = new List<string>
             {
                 // OpenAI / vLLM
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/chat/completions"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/completions"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/embeddings"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/models"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/models/{model}"),
+                "/v1.0/proxy/{endpointId}/v1/chat/completions",
+                "/v1.0/proxy/{endpointId}/v1/completions",
+                "/v1.0/proxy/{endpointId}/v1/embeddings",
                 // Ollama
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/chat"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/generate"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/embed"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/embeddings"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/api/show"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/tags"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/ps"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/version"),
+                "/v1.0/proxy/{endpointId}/api/chat",
+                "/v1.0/proxy/{endpointId}/api/generate",
+                "/v1.0/proxy/{endpointId}/api/embed",
+                "/v1.0/proxy/{endpointId}/api/embeddings",
+                "/v1.0/proxy/{endpointId}/api/show",
                 // xAI (native Responses API and model catalogs; chat/embeddings/models share the OpenAI routes above)
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/responses"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/language-models"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/embedding-models"),
+                "/v1.0/proxy/{endpointId}/v1/responses",
                 // Azure OpenAI (deployment-scoped and v1 GA routes; api-version is appended when absent)
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/chat/completions"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/completions"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/embeddings"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/openai/models"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/v1/chat/completions"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/v1/embeddings"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/openai/v1/responses"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/openai/v1/models"),
+                "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/chat/completions",
+                "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/completions",
+                "/v1.0/proxy/{endpointId}/openai/deployments/{deployment}/embeddings",
+                "/v1.0/proxy/{endpointId}/openai/v1/chat/completions",
+                "/v1.0/proxy/{endpointId}/openai/v1/embeddings",
+                "/v1.0/proxy/{endpointId}/openai/v1/responses",
                 // Anthropic (model listing shares the v1/models routes above)
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/messages"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/messages/count_tokens"),
+                "/v1.0/proxy/{endpointId}/v1/messages",
+                "/v1.0/proxy/{endpointId}/v1/messages/count_tokens",
                 // Cohere v2 (model listing shares the v1/models routes above)
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v2/chat"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v2/embed"),
+                "/v1.0/proxy/{endpointId}/v2/chat",
+                "/v1.0/proxy/{endpointId}/v2/embed",
                 // Gemini (the model segment carries the operation, e.g. gemini-1.5-flash:generateContent)
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models"),
-                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models/{model}"),
-                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1beta/models/{model}"),
+                "/v1.0/proxy/{endpointId}/v1beta/models/{model}"
             };
-            foreach ((WatsonWebserver.Core.HttpMethod method, string path) in proxyRoutes)
+            List<string> proxyGetRoutes = new List<string>
             {
-                if (method == WatsonWebserver.Core.HttpMethod.GET)
-                    server.Get(path, ProxyRequestApi, auth: true);
-                else
-                    server.Post(path, ProxyRequestApi, auth: true);
-            }
+                // OpenAI / vLLM
+                "/v1.0/proxy/{endpointId}/v1/models",
+                "/v1.0/proxy/{endpointId}/v1/models/{model}",
+                // Ollama
+                "/v1.0/proxy/{endpointId}/api/tags",
+                "/v1.0/proxy/{endpointId}/api/ps",
+                "/v1.0/proxy/{endpointId}/api/version",
+                // xAI (native Responses API and model catalogs; chat/embeddings/models share the OpenAI routes above)
+                "/v1.0/proxy/{endpointId}/v1/language-models",
+                "/v1.0/proxy/{endpointId}/v1/embedding-models",
+                // Azure OpenAI (deployment-scoped and v1 GA routes; api-version is appended when absent)
+                "/v1.0/proxy/{endpointId}/openai/models",
+                "/v1.0/proxy/{endpointId}/openai/v1/models",
+                // Gemini (the model segment carries the operation, e.g. gemini-1.5-flash:generateContent)
+                "/v1.0/proxy/{endpointId}/v1beta/models",
+                "/v1.0/proxy/{endpointId}/v1beta/models/{model}"
+            };
+            foreach (string path in proxyPostRoutes)
+                server.Post(path, ProxyRequestApi, auth: true);
+            foreach (string path in proxyGetRoutes)
+                server.Get(path, ProxyRequestApi, auth: true);
 
             #endregion
 
@@ -2969,7 +2974,9 @@ namespace Partio.Server
 
                 if (inputs.Count > 1)
                 {
-                    (List<string> left, List<string> right) = SplitInputsForRetry(inputs, tokenizer);
+                    List<List<string>> halves = SplitInputsForRetry(inputs, tokenizer);
+                    List<string> left = halves[0];
+                    List<string> right = halves[1];
                     List<List<float>> leftEmbeddings = await EmbedBatchWithContextFallbackAsync(
                         left,
                         client,
@@ -3077,7 +3084,11 @@ namespace Partio.Server
             }
         }
 
-        private static (List<string> Left, List<string> Right) SplitInputsForRetry(
+        /// <summary>
+        /// Split a batch into two token-balanced halves for a context-length retry.
+        /// </summary>
+        /// <returns>A two-element list: the left half, then the right half.</returns>
+        private static List<List<string>> SplitInputsForRetry(
             List<string> inputs,
             ITokenizerAdapter tokenizer)
         {
@@ -3100,9 +3111,11 @@ namespace Partio.Server
             if (splitIndex <= 0 || splitIndex >= inputs.Count)
                 splitIndex = Math.Max(1, inputs.Count / 2);
 
-            return (
+            return new List<List<string>>
+            {
                 inputs.Take(splitIndex).ToList(),
-                inputs.Skip(splitIndex).ToList());
+                inputs.Skip(splitIndex).ToList()
+            };
         }
 
         private static List<float> AverageEmbeddings(List<List<float>> embeddings)
@@ -3396,14 +3409,17 @@ namespace Partio.Server
         private static EmbeddingClientBase CreateEmbeddingClient(EmbeddingEndpoint endpoint)
         {
             EmbeddingClientBase client;
+            // Ollama, vLLM, TEI, and OpenAI take their credential as PolyPrompt's bearer token or through a
+            // Partio transport that applies a custom header, query parameter, or basic credential.
+            ClientCredentials auth = EndpointAuthHandler.ResolveClientCredentials(endpoint.ApiFormat, endpoint.ApiKey, endpoint.ProviderSettings);
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    client = new OllamaEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    client = new OllamaEmbeddingClient(endpoint.Endpoint, auth.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth, auth.Transport);
                     break;
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    client = new OpenAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    client = new OpenAiEmbeddingClient(endpoint.Endpoint, auth.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth, auth.Transport);
                     break;
                 case ApiFormatEnum.Gemini:
                     client = new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
@@ -3427,7 +3443,7 @@ namespace Partio.Server
                     client = new VertexAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, RequireSettings(endpoint.ProviderSettings?.VertexAI, endpoint.ApiFormat), _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
                 case ApiFormatEnum.TEI:
-                    client = new TeiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    client = new TeiEmbeddingClient(endpoint.Endpoint, auth.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth, auth.Transport);
                     break;
                 case ApiFormatEnum.VoyageAI:
                     client = new VoyageAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, endpoint.ProviderSettings?.VoyageAI, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
@@ -3442,14 +3458,17 @@ namespace Partio.Server
         private static CompletionClientBase CreateCompletionClient(CompletionEndpoint endpoint)
         {
             CompletionClientBase client;
+            // Ollama, vLLM, TEI, and OpenAI take their credential as PolyPrompt's bearer token or through a
+            // Partio transport that applies a custom header, query parameter, or basic credential.
+            ClientCredentials auth = EndpointAuthHandler.ResolveClientCredentials(endpoint.ApiFormat, endpoint.ApiKey, endpoint.ProviderSettings);
             switch (endpoint.ApiFormat)
             {
                 case ApiFormatEnum.Ollama:
-                    client = new OllamaCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    client = new OllamaCompletionClient(endpoint.Endpoint, auth.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth, auth.Transport);
                     break;
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
-                    client = new OpenAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    client = new OpenAiCompletionClient(endpoint.Endpoint, auth.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth, auth.Transport);
                     break;
                 case ApiFormatEnum.Gemini:
                     client = new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);

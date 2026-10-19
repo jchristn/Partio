@@ -227,21 +227,29 @@ namespace Partio.Core.ThirdParty
             if (settings == null) return null;
 
             ProviderSettings normalized = new ProviderSettings();
+            if (SupportsSelectableAuth(format) && settings.Auth != null)
+            {
+                normalized.Auth = settings.Auth;
+                normalized.Auth.HeaderName = normalized.Auth.Mode == EndpointAuthModeEnum.Header ? NullIfBlank(normalized.Auth.HeaderName) : null;
+                normalized.Auth.QueryParameterName = normalized.Auth.Mode == EndpointAuthModeEnum.QueryParameter ? NullIfBlank(normalized.Auth.QueryParameterName) : null;
+                normalized.Auth.Username = normalized.Auth.Mode == EndpointAuthModeEnum.Basic ? NullIfBlank(normalized.Auth.Username) : null;
+            }
+
             switch (format)
             {
                 case ApiFormatEnum.AzureOpenAI:
-                    if (settings.AzureOpenAI == null) return null;
+                    if (settings.AzureOpenAI == null) return normalized.Auth != null ? normalized : null;
                     normalized.AzureOpenAI = settings.AzureOpenAI;
                     normalized.AzureOpenAI.ApiVersion = NullIfBlank(normalized.AzureOpenAI.ApiVersion);
                     break;
                 case ApiFormatEnum.Anthropic:
-                    if (settings.Anthropic == null) return null;
+                    if (settings.Anthropic == null) return normalized.Auth != null ? normalized : null;
                     normalized.Anthropic = settings.Anthropic;
                     normalized.Anthropic.AnthropicVersion = NullIfBlank(normalized.Anthropic.AnthropicVersion);
                     normalized.Anthropic.WorkspaceId = NullIfBlank(normalized.Anthropic.WorkspaceId);
                     break;
                 case ApiFormatEnum.Bedrock:
-                    if (settings.Bedrock == null) return null;
+                    if (settings.Bedrock == null) return normalized.Auth != null ? normalized : null;
                     normalized.Bedrock = settings.Bedrock;
                     normalized.Bedrock.Region = NullIfBlank(normalized.Bedrock.Region);
                     normalized.Bedrock.AccessKeyId = NullIfBlank(normalized.Bedrock.AccessKeyId);
@@ -249,24 +257,24 @@ namespace Partio.Core.ThirdParty
                     normalized.Bedrock.SessionToken = NullIfBlank(normalized.Bedrock.SessionToken);
                     break;
                 case ApiFormatEnum.VertexAI:
-                    if (settings.VertexAI == null) return null;
+                    if (settings.VertexAI == null) return normalized.Auth != null ? normalized : null;
                     normalized.VertexAI = settings.VertexAI;
                     normalized.VertexAI.ProjectId = NullIfBlank(normalized.VertexAI.ProjectId);
                     normalized.VertexAI.Region = NullIfBlank(normalized.VertexAI.Region);
                     normalized.VertexAI.ServiceAccountJson = NullIfBlank(normalized.VertexAI.ServiceAccountJson);
                     break;
                 case ApiFormatEnum.Cohere:
-                    if (settings.Cohere == null) return null;
+                    if (settings.Cohere == null) return normalized.Auth != null ? normalized : null;
                     normalized.Cohere = settings.Cohere;
                     normalized.Cohere.InputType = NullIfBlank(normalized.Cohere.InputType);
                     break;
                 case ApiFormatEnum.VoyageAI:
-                    if (settings.VoyageAI == null) return null;
+                    if (settings.VoyageAI == null) return normalized.Auth != null ? normalized : null;
                     normalized.VoyageAI = settings.VoyageAI;
                     normalized.VoyageAI.InputType = NullIfBlank(normalized.VoyageAI.InputType);
                     break;
                 default:
-                    return null;
+                    return normalized.Auth != null ? normalized : null;
             }
 
             return normalized;
@@ -289,6 +297,7 @@ namespace Partio.Core.ThirdParty
                 throw new ArgumentException(DisplayName(format) + " does not support embedding endpoints; create a completion endpoint instead.", "ApiFormat");
 
             ValidateApiKey(format, apiKey);
+            ValidateAuth(format, apiKey, settings?.Auth);
 
             if (string.IsNullOrWhiteSpace(endpoint))
             {
@@ -330,6 +339,100 @@ namespace Partio.Core.ThirdParty
                         throw new ArgumentException("Vertex AI endpoints using an access token require the token in ApiKey.", "ApiKey");
                     break;
             }
+        }
+
+        /// <summary>
+        /// Whether the provider's authentication depends on its deployment and can be selected through
+        /// <see cref="ProviderSettings.Auth"/> (none, bearer token, custom header, query parameter, or basic).
+        /// </summary>
+        /// <param name="format">Provider dialect.</param>
+        /// <returns>True for Ollama, vLLM, TEI, and OpenAI (including OpenAI-compatible gateways).</returns>
+        public static bool SupportsSelectableAuth(ApiFormatEnum format)
+        {
+            return format == ApiFormatEnum.Ollama
+                || format == ApiFormatEnum.vLLM
+                || format == ApiFormatEnum.TEI
+                || format == ApiFormatEnum.OpenAI;
+        }
+
+        /// <summary>
+        /// Effective authentication mode for a provider with selectable authentication. Without an Auth section a
+        /// configured ApiKey is sent as a bearer token (the behavior before Auth existed) and no key means None.
+        /// </summary>
+        /// <param name="format">Provider dialect.</param>
+        /// <param name="apiKey">Configured API key.</param>
+        /// <param name="settings">Provider settings.</param>
+        /// <returns>The mode, or null when the provider has a fixed authentication scheme.</returns>
+        public static EndpointAuthModeEnum? EffectiveAuthMode(ApiFormatEnum format, string? apiKey, ProviderSettings? settings)
+        {
+            if (!SupportsSelectableAuth(format)) return null;
+            if (settings?.Auth != null) return settings.Auth.Mode;
+            return string.IsNullOrEmpty(apiKey) ? EndpointAuthModeEnum.None : EndpointAuthModeEnum.Bearer;
+        }
+
+        /// <summary>
+        /// Append the endpoint's query-parameter credential to a URL when its authentication mode is
+        /// QueryParameter; otherwise return the URL unchanged.
+        /// </summary>
+        /// <param name="url">Absolute or relative URL, with or without a query string.</param>
+        /// <param name="format">Provider dialect.</param>
+        /// <param name="apiKey">Configured API key (the parameter value).</param>
+        /// <param name="settings">Provider settings.</param>
+        /// <returns>The URL to request.</returns>
+        public static string ApplyAuthQuery(string url, ApiFormatEnum format, string? apiKey, ProviderSettings? settings)
+        {
+            if (EffectiveAuthMode(format, apiKey, settings) != EndpointAuthModeEnum.QueryParameter) return url;
+            string? name = settings?.Auth?.QueryParameterName;
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(apiKey)) return url;
+            string separator = url.IndexOf('?') >= 0 ? "&" : "?";
+            return url + separator + Uri.EscapeDataString(name) + "=" + Uri.EscapeDataString(apiKey);
+        }
+
+        private static readonly HashSet<string> _ReservedAuthHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Host", "Content-Length", "Content-Type", "Connection", "Transfer-Encoding", "Keep-Alive",
+            "Proxy-Connection", "TE", "Trailer", "Upgrade", "Expect", "Accept", "Accept-Encoding", "User-Agent"
+        };
+
+        private static void ValidateAuth(ApiFormatEnum format, string? apiKey, EndpointAuthSettings? auth)
+        {
+            if (auth == null || !SupportsSelectableAuth(format)) return;
+
+            if (auth.Mode != EndpointAuthModeEnum.None && string.IsNullOrWhiteSpace(apiKey))
+                throw new ArgumentException("ProviderSettings.Auth.Mode " + auth.Mode + " requires the credential in ApiKey.", "ApiKey");
+
+            switch (auth.Mode)
+            {
+                case EndpointAuthModeEnum.Header:
+                    if (string.IsNullOrWhiteSpace(auth.HeaderName))
+                        throw new ArgumentException("ProviderSettings.Auth.HeaderName is required when Mode is Header.", "ProviderSettings.Auth.HeaderName");
+                    if (!IsHttpToken(auth.HeaderName))
+                        throw new ArgumentException("ProviderSettings.Auth.HeaderName '" + auth.HeaderName + "' is not a valid HTTP header name.", "ProviderSettings.Auth.HeaderName");
+                    if (_ReservedAuthHeaders.Contains(auth.HeaderName))
+                        throw new ArgumentException("ProviderSettings.Auth.HeaderName '" + auth.HeaderName + "' is managed by the HTTP client and cannot carry a credential.", "ProviderSettings.Auth.HeaderName");
+                    break;
+                case EndpointAuthModeEnum.QueryParameter:
+                    if (string.IsNullOrWhiteSpace(auth.QueryParameterName))
+                        throw new ArgumentException("ProviderSettings.Auth.QueryParameterName is required when Mode is QueryParameter.", "ProviderSettings.Auth.QueryParameterName");
+                    if (auth.QueryParameterName.IndexOfAny(new[] { '&', '=', '?', '#', ' ' }) >= 0)
+                        throw new ArgumentException("ProviderSettings.Auth.QueryParameterName must not contain &, =, ?, #, or spaces.", "ProviderSettings.Auth.QueryParameterName");
+                    break;
+                case EndpointAuthModeEnum.Basic:
+                    if (string.IsNullOrWhiteSpace(auth.Username))
+                        throw new ArgumentException("ProviderSettings.Auth.Username is required when Mode is Basic.", "ProviderSettings.Auth.Username");
+                    if (auth.Username.Contains(':'))
+                        throw new ArgumentException("ProviderSettings.Auth.Username must not contain ':'.", "ProviderSettings.Auth.Username");
+                    break;
+            }
+        }
+
+        private static bool IsHttpToken(string value)
+        {
+            foreach (char c in value)
+            {
+                if (c <= 32 || c >= 127 || "()<>@,;:\\\"/[]?={}".IndexOf(c) >= 0) return false;
+            }
+            return value.Length > 0;
         }
 
         /// <summary>
@@ -384,7 +487,9 @@ namespace Partio.Core.ThirdParty
         }
 
         /// <summary>
-        /// Resolve the authentication headers Partio sends upstream for a provider: <c>x-goog-api-key</c> for
+        /// Resolve the authentication headers Partio sends upstream for a provider. Ollama, vLLM, TEI, and OpenAI
+        /// follow <see cref="ProviderSettings.Auth"/> (bearer, custom header, or basic; a query-parameter credential
+        /// is applied to the URL by <see cref="ApplyAuthQuery"/>). Otherwise: <c>x-goog-api-key</c> for
         /// Gemini; <c>x-api-key</c> plus <c>anthropic-version</c> (and <c>anthropic-workspace-id</c> when set) for
         /// Anthropic; <c>api-key</c> for Azure OpenAI with key auth; and <c>Authorization: Bearer</c> otherwise.
         /// Bedrock and Vertex AI with minted credentials return no headers because each request is signed by
@@ -399,6 +504,27 @@ namespace Partio.Core.ThirdParty
             List<KeyValuePair<string, string>> headers = new List<KeyValuePair<string, string>>();
 
             if (format == ApiFormatEnum.Bedrock) return headers;
+
+            EndpointAuthModeEnum? selectable = EffectiveAuthMode(format, apiKey, settings);
+            if (selectable.HasValue)
+            {
+                if (string.IsNullOrEmpty(apiKey)) return headers;
+                switch (selectable.Value)
+                {
+                    case EndpointAuthModeEnum.Bearer:
+                        headers.Add(new KeyValuePair<string, string>("Authorization", "Bearer " + apiKey));
+                        break;
+                    case EndpointAuthModeEnum.Header:
+                        if (!string.IsNullOrEmpty(settings?.Auth?.HeaderName))
+                            headers.Add(new KeyValuePair<string, string>(settings!.Auth!.HeaderName!, apiKey));
+                        break;
+                    case EndpointAuthModeEnum.Basic:
+                        string pair = (settings?.Auth?.Username ?? string.Empty) + ":" + apiKey;
+                        headers.Add(new KeyValuePair<string, string>("Authorization", "Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(pair))));
+                        break;
+                }
+                return headers;
+            }
             if (format == ApiFormatEnum.VertexAI
                 && (settings?.VertexAI?.CredentialSource ?? GcpCredentialSourceEnum.ServiceAccountJson) != GcpCredentialSourceEnum.AccessToken)
                 return headers;

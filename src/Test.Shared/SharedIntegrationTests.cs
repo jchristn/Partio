@@ -2328,6 +2328,8 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Bedrock Completion Signed and Not Proxied", async () => await TestBedrockCompletionSignedAndNotProxiedAsync()));
             tests.Add(TestCaseFactory.Async("Integration","TEI and Cohere Embeddings", async () => await TestEmbeddingOnlyProvidersEmbedAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Connectivity Probe Health Check (VoyageAI)", async () => await TestConnectivityProbeHealthCheckAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Selectable Auth: Custom Header End to End (Ollama)", async () => await TestSelectableAuthHeaderEndToEndAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Selectable Auth: Query Parameter, Basic, and None", async () => await TestSelectableAuthQueryAndBasicAsync()));
 
             // Model Loading
             tests.Add(TestCaseFactory.Async("Integration","Load Ollama Completion Endpoint Model", async () => await TestLoadOllamaCompletionEndpointAsync()));

@@ -237,3 +237,63 @@ describe('payloads', () => {
     expect(hasEndpointOverride('Bedrock', 'https://bedrock-runtime.us-east-1.amazonaws.com', { Region: 'us-east-1' })).toBe(false);
   });
 });
+
+describe('selectable authentication', () => {
+  it('is offered for Ollama, vLLM, TEI, and OpenAI with sensible defaults', async () => {
+    const { supportsSelectableAuth, defaultAuth } = await import('./providers');
+    expect(PROVIDERS.filter(p => supportsSelectableAuth(p.value)).map(p => p.value).sort()).toEqual(['Ollama', 'OpenAI', 'TEI', 'vLLM']);
+    expect(defaultAuth('Ollama').Mode).toBe('None');
+    expect(defaultAuth('OpenAI').Mode).toBe('Bearer');
+    expect(defaultAuth('Anthropic')).toBeNull();
+  });
+
+  it('describes fixed schemes exactly and labels the secret by mode', async () => {
+    const { describeAuth } = await import('./providers');
+    expect(describeAuth('Anthropic')).toMatch(/x-api-key/);
+    expect(describeAuth('Gemini')).toMatch(/x-goog-api-key/);
+    expect(describeAuth('OllamaCloud')).toMatch(/Authorization: Bearer/);
+    expect(describeAuth('AzureOpenAI', { AuthMode: 'BearerToken' })).toMatch(/Entra ID/);
+    expect(describeAuth('Ollama', null, { Mode: 'Header', HeaderName: 'X-Gateway-Key' })).toBe('Sent as X-Gateway-Key: <value>.');
+    expect(describeAuth('vLLM', null, { Mode: 'QueryParameter', QueryParameterName: 'api_key' })).toMatch(/\?api_key=<value>/);
+    expect(apiKeyLabel('Ollama', null, { Mode: 'Basic' })).toBe('Password');
+    expect(apiKeyApplies('Ollama', null, { Mode: 'None' })).toBe(false);
+    expect(apiKeyRequired('TEI', null, { Mode: 'Header' })).toBe(true);
+  });
+
+  it('reads legacy endpoints as bearer or none', async () => {
+    const { authFromEndpoint } = await import('./providers');
+    expect(authFromEndpoint({ ApiFormat: 'Ollama', ApiKey: '****abcd' }).Mode).toBe('Bearer');
+    expect(authFromEndpoint({ ApiFormat: 'Ollama', ApiKey: null }).Mode).toBe('None');
+    expect(authFromEndpoint({ ApiFormat: 'vLLM', ProviderSettings: { Auth: { Mode: 'Header', HeaderName: 'X-K' } } }))
+      .toEqual({ Mode: 'Header', HeaderName: 'X-K', QueryParameterName: '', Username: '' });
+    expect(authFromEndpoint({ ApiFormat: 'Anthropic', ApiKey: 'k' })).toBeNull();
+  });
+
+  it('validates names and credentials per mode', () => {
+    const base = formFor('Ollama', 'completion');
+    expect(validateConnection({ ...base, Auth: { Mode: 'Header', HeaderName: '' }, ApiKey: 'k' }, 'completion')['Auth.HeaderName']).toMatch(/required/);
+    expect(validateConnection({ ...base, Auth: { Mode: 'Header', HeaderName: 'X Bad' }, ApiKey: 'k' }, 'completion')['Auth.HeaderName']).toMatch(/valid HTTP header/);
+    expect(validateConnection({ ...base, Auth: { Mode: 'Header', HeaderName: 'Host' }, ApiKey: 'k' }, 'completion')['Auth.HeaderName']).toMatch(/managed by the HTTP client/);
+    expect(validateConnection({ ...base, Auth: { Mode: 'QueryParameter', QueryParameterName: 'a&b' }, ApiKey: 'k' }, 'completion')['Auth.QueryParameterName']).toBeDefined();
+    expect(validateConnection({ ...base, Auth: { Mode: 'Basic', Username: 'a:b' }, ApiKey: 'k' }, 'completion')['Auth.Username']).toMatch(/colon/);
+    expect(validateConnection({ ...base, Auth: { Mode: 'Bearer' }, ApiKey: '' }, 'completion').ApiKey).toMatch(/Bearer Token is required/);
+    expect(validateConnection({ ...base, Auth: { Mode: 'Header', HeaderName: 'X-Gateway-Key' }, ApiKey: 'k' }, 'completion')).toEqual({});
+  });
+
+  it('sends an explicit Auth section with only the fields its mode uses', () => {
+    const payload = buildConnectionPayload({ ...formFor('vLLM', 'completion'), ApiKey: 'secret', Auth: { Mode: 'QueryParameter', HeaderName: 'X-Stale', QueryParameterName: ' api_key ', Username: 'stale' } });
+    expect(payload.ProviderSettings).toEqual({ Auth: { Mode: 'QueryParameter', HeaderName: null, QueryParameterName: 'api_key', Username: null } });
+    expect(payload.ApiKey).toBe('secret');
+
+    const none = buildConnectionPayload({ ...formFor('Ollama', 'embedding'), ApiKey: 'left-over', Auth: { Mode: 'None' } });
+    expect(none.ApiKey).toBeNull();
+    expect(none.ProviderSettings.Auth.Mode).toBe('None');
+
+    expect(buildConnectionPayload({ ...formFor('Anthropic', 'completion'), ApiKey: 'k', Auth: { Mode: 'Header', HeaderName: 'X' } }).ProviderSettings).toBeNull();
+  });
+
+  it('authenticates local Ollama health checks only when a credential is selected', () => {
+    expect(getHealthCheckDefaults('Ollama', 'http://localhost:11434', null, { Mode: 'None' }).HealthCheckUseAuth).toBe(false);
+    expect(getHealthCheckDefaults('Ollama', 'http://localhost:11434', null, { Mode: 'Header', HeaderName: 'X' }).HealthCheckUseAuth).toBe(true);
+  });
+});

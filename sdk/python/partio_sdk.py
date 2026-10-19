@@ -8,6 +8,9 @@ API_FORMATS = (
     "AzureOpenAI", "Anthropic", "Cohere", "Bedrock", "VertexAI", "TEI", "VoyageAI",
 )
 
+# ProviderSettings.Auth.Mode values (Ollama, vLLM, TEI, and OpenAI endpoints).
+ENDPOINT_AUTH_MODES = ("None", "Bearer", "Header", "QueryParameter", "Basic")
+
 # Prefix of masked secrets in endpoint read responses.
 SECRET_MASK_PREFIX = "****"
 

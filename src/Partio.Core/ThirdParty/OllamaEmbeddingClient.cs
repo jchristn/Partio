@@ -233,7 +233,7 @@ namespace Partio.Core.ThirdParty
         /// <returns>A new PolyPrompt Ollama embedding client; the caller disposes it.</returns>
         protected virtual PolyPromptOllamaEmbeddingClient CreateProviderClient()
         {
-            return new PolyPromptOllamaEmbeddingClient(_Endpoint, _ApiKey, _Logging);
+            return new PolyPromptOllamaEmbeddingClient(_Endpoint, _ApiKey, _Logging, _HttpClient);
         }
 
         private PolyPromptOllamaEmbeddingClient CreateConfiguredClient(int timeoutMs)

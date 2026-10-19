@@ -59,6 +59,21 @@
 - **Tokenization defaults** for `AzureOpenAI` (8192), `Cohere` (512), `Bedrock` (8192), `VertexAI` (2048), `TEI`
   (512), and `VoyageAI` (32000). Telemetry `service` labels add `azureopenai`, `anthropic`, `cohere`,
   `bedrock`, `vertexai`, `tei`, and `voyageai`.
+- **Selectable authentication** for `Ollama`, `vLLM`, `TEI`, and `OpenAI` endpoints, which are often deployed
+  behind gateways. A new `ProviderSettings.Auth` section selects how `ApiKey` is sent:
+  - `None` (no credential; `ApiKey` is cleared on save), `Bearer` (`Authorization: Bearer`), `Header` (a custom
+    header named by `HeaderName`), `QueryParameter` (appended to every upstream URL as `QueryParameterName`), or
+    `Basic` (`Authorization: Basic` with `Username` and `ApiKey` as the password).
+  - **Backward compatible:** without `Auth`, a configured `ApiKey` is still sent as a bearer token.
+  - **Everywhere:** the mode applies to provider calls, health checks, and the proxy. Custom-header and query
+    credentials are applied by a Partio transport around PolyPrompt's client, so they never appear in recorded
+    call details, health-check logs, or the recorded upstream URL.
+  - **Validation:** `400` for a missing credential, a missing or invalid header name, headers the HTTP client
+    manages (such as `Host` or `Content-Length`), a missing or malformed query parameter name, or a missing
+    basic user name.
+  - Providers with one documented scheme ignore `Auth`: Anthropic (`x-api-key`), Gemini (`x-goog-api-key`), Azure
+    OpenAI (`api-key` or an Entra bearer token), Ollama Cloud, xAI, Cohere, and VoyageAI (bearer), Bedrock
+    (SigV4), and Vertex AI (OAuth).
 
 ### Changed
 - **Dashboard endpoint forms redesigned.** Creating and editing embedding and inference endpoints now starts with
@@ -72,6 +87,10 @@
     Reveal and Replace actions.
   - **Provider changes:** switching providers on an existing endpoint asks for confirmation.
   - **Health Checks section:** for probe providers, it explains the probe instead of asking for a URL.
+  - **Authentication:** providers with a fixed scheme show exactly what is sent (for example "Bearer token,
+    `Authorization: Bearer …`" or "`x-api-key` header") with a correctly labelled credential field. Ollama, vLLM,
+    TEI, and OpenAI get an Authentication selector (None, Bearer token, Custom header, Query parameter, Basic
+    auth) with the fields each mode needs.
   - **Chat and API Explorer:** both support the Azure OpenAI, Anthropic, and Cohere dialects. Endpoints that
     can't be proxied are hidden from Chat and from the proxy explorer.
 - **Duplicate action.** The row action menus for tenants, users, credentials, embedding endpoints, and inference
@@ -81,16 +100,25 @@
     masked placeholders.
   - **Users:** the email (which must be unique) and password start blank.
   - **Credentials:** the duplicate gets a new bearer token from the server.
+- **No tuples or `var` in the C# codebase.** Tuple usages were replaced with explicit types: the proxy route
+  table is two string lists, the context-length batch split returns a list of halves, provider credential
+  resolution returns a `ClientCredentials` class, and test helpers use small named classes. The Postman
+  collection's test scripts use `const` instead of `var`.
 
 ### Tests
-- **Test.Automated:** 332 passed, up from 282.
+- **Test.Automated:** 341 passed, up from 282.
   - New `ProviderRules` and `ProviderWire` suites cover validation, normalization, auth headers, proxy
     policy, masking, and wire-level tests of every new client against a scripted fake provider, including
     SigV4 signing and the service-account token exchange.
   - New integration cases cover validation, normalization, masking and reveal, admin-only reveal,
     Anthropic, Azure, and Bedrock traffic, TEI and Cohere embeddings, and probe-based health checks.
-- **SDK harnesses:** each adds provider, masking, reveal, and validation tests.
-- **Dashboard:** 47 tests, up from 19.
+  - Selectable authentication is covered by rule tests, a wire test of every mode against Ollama and OpenAI
+    clients (including a check that custom credentials stay out of call details), and integration tests of a
+    header-authenticated Ollama endpoint (health check, completion, proxy) plus query-parameter, basic, and
+    `None` endpoints.
+- **SDK harnesses:** C#, JS, and Python each pass 69 tests, adding provider, masking, reveal, validation, and selectable-auth tests.
+- **xUnit and NUnit:** 213 passed each.
+- **Dashboard:** 55 tests, up from 19.
 
 ## v0.5.1 - 2026-10-18
 

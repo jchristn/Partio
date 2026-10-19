@@ -3,16 +3,20 @@ import FormFieldLabel from './FormFieldLabel';
 import SecretInput from './SecretInput';
 import {
   ANTHROPIC_DEFAULT_VERSION,
+  AUTH_MODES,
   AWS_REGIONS,
   AZURE_DEFAULT_API_VERSION,
   GCP_REGIONS,
   apiKeyApplies,
   apiKeyLabel,
   apiKeyRequired,
+  applyAuthChange,
   applySettingsChange,
   derivedEndpoint,
+  describeAuth,
   getHealthCheckDefaults,
   getProvider,
+  supportsSelectableAuth,
 } from '../utils/providers';
 import './ProviderForm.css';
 
@@ -82,17 +86,20 @@ export default function ProviderConnectionFields({
   const setField = (field, value) => {
     const next = { ...form, [field]: value };
     if (field === 'Endpoint' && !healthFieldsEdited) {
-      next.HealthCheckUrl = getHealthCheckDefaults(form.ApiFormat, value, settings).HealthCheckUrl;
+      next.HealthCheckUrl = getHealthCheckDefaults(form.ApiFormat, value, settings, form.Auth).HealthCheckUrl;
     }
     setForm(next);
   };
 
   const setSetting = (field, value) => setForm(applySettingsChange(form, field, value, healthFieldsEdited));
+  const setAuth = (field, value) => setForm(applyAuthChange(form, field, value, healthFieldsEdited));
+  const selectable = supportsSelectableAuth(form.ApiFormat);
+  const auth = form.Auth || { Mode: 'None' };
 
   const setOverride = (enabled) => {
     const next = { ...form, EndpointOverride: enabled };
     if (!enabled) next.Endpoint = derivedEndpoint(form.ApiFormat, settings);
-    if (!healthFieldsEdited) next.HealthCheckUrl = getHealthCheckDefaults(form.ApiFormat, next.Endpoint, settings).HealthCheckUrl;
+    if (!healthFieldsEdited) next.HealthCheckUrl = getHealthCheckDefaults(form.ApiFormat, next.Endpoint, settings, form.Auth).HealthCheckUrl;
     setForm(next);
   };
 
@@ -131,14 +138,15 @@ export default function ProviderConnectionFields({
   }
 
   // ----- API key -----
-  const keyLabel = apiKeyLabel(form.ApiFormat, settings);
-  const keyRequired = apiKeyRequired(form.ApiFormat, settings);
-  const keyHelp = form.ApiFormat === 'AzureOpenAI' && settings.AuthMode === 'BearerToken'
-    ? 'Entra ID (Azure AD) access token for the Cognitive Services scope. Tokens expire, so prefer API keys for long-lived endpoints.'
-    : provider.apiKey.help;
-  const apiKeyField = apiKeyApplies(form.ApiFormat, settings) ? (
+  const keyLabel = apiKeyLabel(form.ApiFormat, settings, form.Auth);
+  const keyRequired = apiKeyRequired(form.ApiFormat, settings, form.Auth);
+  let keyHelp = provider.apiKey.help;
+  if (selectable) keyHelp = describeAuth(form.ApiFormat, settings, auth) + ' Applied to inference, health checks, and the proxy.';
+  else if (form.ApiFormat === 'AzureOpenAI' && settings.AuthMode === 'BearerToken')
+    keyHelp = 'Entra ID (Azure AD) access token for the Cognitive Services scope. Tokens expire, so prefer API keys for long-lived endpoints.';
+  const apiKeyField = apiKeyApplies(form.ApiFormat, settings, form.Auth) ? (
     <Field id={fieldId('apikey')} label={keyLabel} tooltip={keyHelp} required={keyRequired} error={errors.ApiKey}
-      hint={keyHelp + (keyRequired ? '' : ' Optional.')}>
+      hint={keyHelp + (keyRequired || selectable ? '' : ' Optional.')}>
       <SecretInput id={fieldId('apikey')} ariaLabel={keyLabel} value={form.ApiKey} onChange={v => setField('ApiKey', v)}
         placeholder={keyRequired ? 'Required' : 'Optional'} invalid={!!errors.ApiKey} {...revealProps} />
     </Field>
@@ -162,6 +170,37 @@ export default function ProviderConnectionFields({
       {/* ----- Credentials ----- */}
       <div className="provider-subsection">
         <div className="provider-subsection-header">Credentials</div>
+
+        {selectable ? (
+          <>
+            <Field id={fieldId('authmode')} label="Authentication" tooltip="How Partio sends the credential. Self-hosted servers and gateways vary, so pick what yours expects.">
+              <Segmented name="Authentication" value={auth.Mode || 'None'} onChange={v => setAuth('Mode', v)} options={AUTH_MODES} />
+            </Field>
+            {auth.Mode === 'Header' && (
+              <Field id={fieldId('authheader')} label="Header Name" tooltip="Name of the header that carries the credential." required error={errors['Auth.HeaderName']}>
+                <input id={fieldId('authheader')} className={errors['Auth.HeaderName'] ? 'invalid' : undefined} value={auth.HeaderName || ''} onChange={e => setAuth('HeaderName', e.target.value)} placeholder="X-API-Key" />
+              </Field>
+            )}
+            {auth.Mode === 'QueryParameter' && (
+              <Field id={fieldId('authquery')} label="Parameter Name" tooltip="Query-string parameter that carries the credential." required error={errors['Auth.QueryParameterName']}
+                hint="The value is added to every request URL. Partio does not record it in request history.">
+                <input id={fieldId('authquery')} className={errors['Auth.QueryParameterName'] ? 'invalid' : undefined} value={auth.QueryParameterName || ''} onChange={e => setAuth('QueryParameterName', e.target.value)} placeholder="api_key" />
+              </Field>
+            )}
+            {auth.Mode === 'Basic' && (
+              <Field id={fieldId('authuser')} label="Username" tooltip="User name for HTTP basic authentication." required error={errors['Auth.Username']}>
+                <input id={fieldId('authuser')} className={errors['Auth.Username'] ? 'invalid' : undefined} value={auth.Username || ''} onChange={e => setAuth('Username', e.target.value)} placeholder="partio" autoComplete="off" />
+              </Field>
+            )}
+            {auth.Mode === 'None' && (
+              <div className="provider-note">No credential is sent. Choose another mode if the server or a gateway in front of it requires one.</div>
+            )}
+          </>
+        ) : (
+          <Field id={fieldId('authscheme')} label="Authentication" tooltip={`${provider.label} uses one documented authentication scheme.`}>
+            <div className="provider-readonly" id={fieldId('authscheme')}>{describeAuth(form.ApiFormat, settings, null)}</div>
+          </Field>
+        )}
 
         {form.ApiFormat === 'AzureOpenAI' && (
           <Field id={fieldId('authmode')} label="Authentication" tooltip="How Partio authenticates to Azure OpenAI.">
@@ -236,9 +275,6 @@ export default function ProviderConnectionFields({
         )}
 
         {apiKeyField}
-        {!apiKeyField && form.ApiFormat !== 'Bedrock' && form.ApiFormat !== 'VertexAI' && (
-          <div className="provider-note">This provider needs no credential.</div>
-        )}
       </div>
 
       {provider.endpoint.mode === 'derived' && (

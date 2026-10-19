@@ -122,7 +122,10 @@ namespace Partio.Core.Proxy
             CancellationTokenSource? linkedCts = null;
             try
             {
-                HttpRequestMessage request = new HttpRequestMessage(new HttpMethod(method), url);
+                // A query-parameter credential goes on the outgoing request only; UpstreamUrl (recorded in request
+                // history) keeps the URL without it.
+                string requestUrl = ProviderDefaults.ApplyAuthQuery(url, endpoint.ApiFormat, endpoint.ApiKey, endpoint.ProviderSettings);
+                HttpRequestMessage request = new HttpRequestMessage(new HttpMethod(method), requestUrl);
 
                 if (body != null && body.Length > 0 && MethodAllowsBody(method))
                 {

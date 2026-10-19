@@ -411,8 +411,14 @@ namespace Partio.Core.Models
             if (ep.UnhealthyThreshold <= 0)
                 ep.UnhealthyThreshold = 2;
 
-            // Every provider except local Ollama typically requires auth for its health check.
-            if (ProviderDefaults.DefaultHealthCheckUseAuth(ep.ApiFormat) && !string.IsNullOrEmpty(ep.ApiKey))
+            // An endpoint whose selectable authentication is None carries no credential.
+            if (ProviderDefaults.EffectiveAuthMode(ep.ApiFormat, ep.ApiKey, ep.ProviderSettings) == EndpointAuthModeEnum.None)
+                ep.ApiKey = null;
+
+            // Every provider except local Ollama typically requires auth for its health check, as does any
+            // endpoint with an explicitly selected credential.
+            bool explicitAuth = ep.ProviderSettings?.Auth != null && ep.ProviderSettings.Auth.Mode != EndpointAuthModeEnum.None;
+            if ((ProviderDefaults.DefaultHealthCheckUseAuth(ep.ApiFormat) || explicitAuth) && !string.IsNullOrEmpty(ep.ApiKey))
                 ep.HealthCheckUseAuth = true;
         }
 

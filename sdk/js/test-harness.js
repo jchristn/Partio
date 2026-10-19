@@ -2,7 +2,7 @@
  * Partio JavaScript SDK Test Harness.
  */
 
-import { ApiFormats, PartioClient, PartioError } from './partio-sdk.js';
+import { ApiFormats, EndpointAuthModes, PartioClient, PartioError } from './partio-sdk.js';
 
 const endpoint = process.argv[2] || 'http://localhost:8400';
 const adminKey = process.argv[3] || 'partioadmin';
@@ -477,6 +477,50 @@ await runTest('Provider Validation Errors (400)', async () => {
     ProviderSettings: { Bedrock: { AccessKeyId: 'AKIAPARTIOTEST', SecretAccessKey: bedrockSecret } },
   }), 'Bedrock without Region');
   await expect400(() => client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Azure No Key', Model: 'gpt-4o-mini', Endpoint: 'https://partio-test.openai.azure.com', ApiFormat: ApiFormats.AzureOpenAI, HealthCheckEnabled: false }), 'Azure without ApiKey');
+});
+
+await runTest('Selectable Authentication (Ollama)', async () => {
+  const gatewayKey = 'gw-secret-key-0001';
+  let headerCepId = null;
+  let noneEpId = null;
+  try {
+    const header = await client.createCompletionEndpoint({
+      TenantId: testTenantId, Name: 'Ollama Behind Gateway', Model: 'gemma3:4b', Endpoint: 'http://localhost:11434',
+      ApiFormat: ApiFormats.Ollama, ApiKey: gatewayKey, HealthCheckEnabled: false,
+      ProviderSettings: { Auth: { Mode: EndpointAuthModes.Header, HeaderName: 'X-Gateway-Key' } },
+    });
+    if (!header?.Id) throw new Error('No header-auth endpoint returned');
+    headerCepId = header.Id;
+
+    const read = await client.getCompletionEndpoint(headerCepId);
+    if (read?.ProviderSettings?.Auth?.Mode !== EndpointAuthModes.Header) throw new Error(`Expected Auth.Mode Header, got ${read?.ProviderSettings?.Auth?.Mode}`);
+    if (read.ProviderSettings.Auth.HeaderName !== 'X-Gateway-Key') throw new Error('Expected HeaderName X-Gateway-Key');
+    if (read.ApiKey !== '****0001') throw new Error(`Expected masked ApiKey, got ${read.ApiKey}`);
+    if ((await client.revealCompletionEndpoint(headerCepId))?.ApiKey !== gatewayKey) throw new Error('Reveal did not return the gateway key');
+
+    const none = await client.createEndpoint({
+      TenantId: testTenantId, Name: 'Ollama No Auth', Model: 'nomic-embed-text', Endpoint: 'http://localhost:11434',
+      ApiFormat: ApiFormats.Ollama, ApiKey: 'dropped-secret-0001', HealthCheckEnabled: false,
+      ProviderSettings: { Auth: { Mode: EndpointAuthModes.None } },
+    });
+    if (!none?.Id) throw new Error('No None-auth endpoint returned');
+    noneEpId = none.Id;
+    if (none.ApiKey !== null && none.ApiKey !== undefined) throw new Error(`Auth Mode None should drop the ApiKey, got ${none.ApiKey}`);
+
+    await expect400(() => client.createCompletionEndpoint({
+      TenantId: testTenantId, Name: 'Header No Name', Model: 'gemma3:4b', Endpoint: 'http://localhost:11434',
+      ApiFormat: ApiFormats.Ollama, ApiKey: gatewayKey, HealthCheckEnabled: false,
+      ProviderSettings: { Auth: { Mode: EndpointAuthModes.Header } },
+    }), 'Header auth without HeaderName');
+    await expect400(() => client.createEndpoint({
+      TenantId: testTenantId, Name: 'Basic No User', Model: 'text-embedding-3-small', Endpoint: 'https://api.openai.com',
+      ApiFormat: ApiFormats.OpenAI, ApiKey: gatewayKey, HealthCheckEnabled: false,
+      ProviderSettings: { Auth: { Mode: EndpointAuthModes.Basic } },
+    }), 'Basic auth without Username');
+  } finally {
+    if (headerCepId) await client.deleteCompletionEndpoint(headerCepId);
+    if (noneEpId) await client.deleteEndpoint(noneEpId);
+  }
 });
 
 await runTest('Delete Provider-Specific Endpoints', async () => {

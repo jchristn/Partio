@@ -540,6 +540,73 @@ namespace Partio.Sdk.TestHarness
                     await Expect400(() => admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Azure No Key", Model = "gpt-4o-mini", Endpoint = "https://partio-test.openai.azure.com", ApiFormat = ApiFormats.AzureOpenAI, HealthCheckEnabled = false }), "Azure without ApiKey");
                 });
 
+                await RunTest("Selectable Authentication (Ollama)", async () =>
+                {
+                    string gatewayKey = "gw-secret-key-0001";
+                    string headerCepId = "";
+                    string noneEpId = "";
+                    try
+                    {
+                        CompletionEndpoint? header = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                        {
+                            TenantId = testTenantId, Name = "Ollama Behind Gateway", Model = "gemma3:4b", Endpoint = "http://localhost:11434",
+                            ApiFormat = ApiFormats.Ollama, ApiKey = gatewayKey, HealthCheckEnabled = false,
+                            ProviderSettings = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModes.Header, HeaderName = "X-Gateway-Key" } }
+                        });
+                        if (header == null || string.IsNullOrEmpty(header.Id)) throw new Exception("No header-auth endpoint returned");
+                        headerCepId = header.Id;
+
+                        CompletionEndpoint? read = await admin.GetCompletionEndpointAsync(headerCepId);
+                        if (read?.ProviderSettings?.Auth?.Mode != EndpointAuthModes.Header) throw new Exception("Expected Auth.Mode Header, got " + read?.ProviderSettings?.Auth?.Mode);
+                        if (read.ProviderSettings.Auth.HeaderName != "X-Gateway-Key") throw new Exception("Expected HeaderName X-Gateway-Key");
+                        if (read.ApiKey != "****0001") throw new Exception("Expected masked ApiKey, got " + read.ApiKey);
+                        if ((await admin.RevealCompletionEndpointAsync(headerCepId))?.ApiKey != gatewayKey) throw new Exception("Reveal did not return the gateway key");
+
+                        EmbeddingEndpoint? none = await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                        {
+                            TenantId = testTenantId, Name = "Ollama No Auth", Model = "nomic-embed-text", Endpoint = "http://localhost:11434",
+                            ApiFormat = ApiFormats.Ollama, ApiKey = "dropped-secret-0001", HealthCheckEnabled = false,
+                            ProviderSettings = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModes.None } }
+                        });
+                        if (none == null || string.IsNullOrEmpty(none.Id)) throw new Exception("No None-auth endpoint returned");
+                        noneEpId = none.Id;
+                        if (none.ApiKey != null) throw new Exception("Auth Mode None should drop the ApiKey, got " + none.ApiKey);
+
+                        try
+                        {
+                            await admin.CreateCompletionEndpointAsync(new CompletionEndpoint
+                            {
+                                TenantId = testTenantId, Name = "Header No Name", Model = "gemma3:4b", Endpoint = "http://localhost:11434",
+                                ApiFormat = ApiFormats.Ollama, ApiKey = gatewayKey, HealthCheckEnabled = false,
+                                ProviderSettings = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModes.Header } }
+                            });
+                            throw new Exception("Expected 400 for Header auth without HeaderName");
+                        }
+                        catch (PartioException ex) when (ex.StatusCode == 400)
+                        {
+                        }
+
+                        try
+                        {
+                            await admin.CreateEndpointAsync(new EmbeddingEndpoint
+                            {
+                                TenantId = testTenantId, Name = "Basic No User", Model = "text-embedding-3-small", Endpoint = "https://api.openai.com",
+                                ApiFormat = ApiFormats.OpenAI, ApiKey = gatewayKey, HealthCheckEnabled = false,
+                                ProviderSettings = new ProviderSettings { Auth = new EndpointAuthSettings { Mode = EndpointAuthModes.Basic } }
+                            });
+                            throw new Exception("Expected 400 for Basic auth without Username");
+                        }
+                        catch (PartioException ex) when (ex.StatusCode == 400)
+                        {
+                        }
+                    }
+                    finally
+                    {
+                        if (!string.IsNullOrEmpty(headerCepId)) await admin.DeleteCompletionEndpointAsync(headerCepId);
+                        if (!string.IsNullOrEmpty(noneEpId)) await admin.DeleteEndpointAsync(noneEpId);
+                    }
+                });
+
                 await RunTest("Delete Provider-Specific Endpoints", async () =>
                 {
                     foreach (string id in new[] { azureCepId, anthropicCepId })

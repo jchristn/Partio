@@ -2,11 +2,18 @@ namespace Partio.Core.Models
 {
     /// <summary>
     /// Optional provider-specific settings for an embedding or completion endpoint. Only the section that
-    /// matches the endpoint's ApiFormat is read and validated; the others are ignored and dropped on save.
-    /// Providers configured entirely by Endpoint, ApiKey, and Model need no section.
+    /// matches the endpoint's ApiFormat, plus Auth for providers with selectable authentication, is read and
+    /// validated; the others are ignored and dropped on save. Providers configured entirely by Endpoint, ApiKey,
+    /// and Model need no section.
     /// </summary>
     public class ProviderSettings
     {
+        /// <summary>
+        /// Selectable authentication for Ollama, vLLM, TEI, and OpenAI endpoints. When absent, a configured
+        /// ApiKey is sent as a bearer token. Ignored for providers with a fixed authentication scheme.
+        /// </summary>
+        public EndpointAuthSettings? Auth { get; set; }
+
         /// <summary>
         /// Azure OpenAI settings (ApiFormat AzureOpenAI).
         /// </summary>

@@ -5,11 +5,11 @@ import userEvent from '@testing-library/user-event';
 import ProviderPicker from './ProviderPicker';
 import ProviderConnectionFields from './ProviderConnectionFields';
 import SecretInput from './SecretInput';
-import { applyProviderChange, defaultProviderSettings, getProviderDefaults } from '../utils/providers';
+import { applyProviderChange, defaultAuth, defaultProviderSettings, getProviderDefaults } from '../utils/providers';
 
 function initialForm(apiFormat, kind, overrides = {}) {
   const settings = defaultProviderSettings(apiFormat);
-  return { ApiFormat: apiFormat, ApiKey: '', ProviderSettings: settings, EndpointOverride: false, HealthCheckUrl: '', ...getProviderDefaults(apiFormat, kind, settings), ...overrides };
+  return { ApiFormat: apiFormat, ApiKey: '', ProviderSettings: settings, Auth: defaultAuth(apiFormat), EndpointOverride: false, HealthCheckUrl: '', ...getProviderDefaults(apiFormat, kind, settings), ...overrides };
 }
 
 function Harness({ kind, start, onForm, editing = false, onReveal }) {
@@ -120,6 +120,31 @@ describe('ProviderConnectionFields', () => {
     expect(screen.getByText(/Stored \(\*\*\*\*abcd\)/)).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Reveal' }));
     expect(onReveal).toHaveBeenCalled();
+  });
+
+  it('offers an Authentication selector for Ollama and shows mode-specific fields', async () => {
+    const user = userEvent.setup();
+    let latest = null;
+    render(<Harness kind="completion" start={initialForm('Ollama', 'completion', { Auth: { Mode: 'None', HeaderName: '', QueryParameterName: '', Username: '' } })} onForm={f => { latest = f; }} />);
+    expect(screen.getByText(/No credential is sent/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Bearer Token/)).toBeNull();
+
+    await user.click(screen.getByRole('radio', { name: 'Custom header' }));
+    expect(screen.getByLabelText(/Header Name/)).toBeTruthy();
+    expect(screen.getByLabelText('Header Value')).toBeTruthy();
+    await user.type(screen.getByLabelText(/Header Name/), 'X-Gateway-Key');
+    expect(latest.Auth).toMatchObject({ Mode: 'Header', HeaderName: 'X-Gateway-Key' });
+    expect(screen.getByText(/Sent as X-Gateway-Key: <value>/)).toBeTruthy();
+
+    await user.click(screen.getByRole('radio', { name: 'Basic auth' }));
+    expect(screen.getByLabelText(/Username/)).toBeTruthy();
+    expect(screen.getByLabelText('Password')).toBeTruthy();
+  });
+
+  it('states the fixed scheme for providers with one documented authentication', () => {
+    render(<Harness kind="completion" start={initialForm('Anthropic', 'completion')} />);
+    expect(screen.getByText(/x-api-key header/)).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: 'Custom header' })).toBeNull();
   });
 
   it('warns that signed providers cannot use the proxy', () => {

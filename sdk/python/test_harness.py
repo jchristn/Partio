@@ -5,7 +5,7 @@ import os
 import sys
 import time
 import urllib.request
-from partio_sdk import PartioClient, PartioError
+from partio_sdk import ENDPOINT_AUTH_MODES, PartioClient, PartioError
 
 
 class SkipTest(Exception):
@@ -471,6 +471,53 @@ def main():
             }), "Bedrock without Region")
             expect_400(lambda: client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Azure No Key", "Model": "gpt-4o-mini", "Endpoint": "https://partio-test.openai.azure.com", "ApiFormat": "AzureOpenAI", "HealthCheckEnabled": False}), "Azure without ApiKey")
         run_test("Provider Validation Errors (400)", test_provider_validation_errors)
+
+        def test_selectable_auth():
+            assert "Header" in ENDPOINT_AUTH_MODES, "ENDPOINT_AUTH_MODES should list Header"
+            gateway_key = "gw-secret-key-0001"
+            header_cep_id = None
+            none_ep_id = None
+            try:
+                header = client.create_completion_endpoint({
+                    "TenantId": test_tenant_id, "Name": "Ollama Behind Gateway", "Model": "gemma3:4b", "Endpoint": "http://localhost:11434",
+                    "ApiFormat": "Ollama", "ApiKey": gateway_key, "HealthCheckEnabled": False,
+                    "ProviderSettings": {"Auth": {"Mode": "Header", "HeaderName": "X-Gateway-Key"}},
+                })
+                assert header and header.get("Id"), "No header-auth endpoint returned"
+                header_cep_id = header["Id"]
+
+                read = client.get_completion_endpoint(header_cep_id)
+                auth = (read.get("ProviderSettings") or {}).get("Auth") or {}
+                assert auth.get("Mode") == "Header", "Expected Auth.Mode Header, got " + str(auth.get("Mode"))
+                assert auth.get("HeaderName") == "X-Gateway-Key", "Expected HeaderName X-Gateway-Key"
+                assert read.get("ApiKey") == "****0001", "Expected masked ApiKey, got " + str(read.get("ApiKey"))
+                assert client.reveal_completion_endpoint(header_cep_id)["ApiKey"] == gateway_key, "Reveal did not return the gateway key"
+
+                none = client.create_endpoint({
+                    "TenantId": test_tenant_id, "Name": "Ollama No Auth", "Model": "nomic-embed-text", "Endpoint": "http://localhost:11434",
+                    "ApiFormat": "Ollama", "ApiKey": "dropped-secret-0001", "HealthCheckEnabled": False,
+                    "ProviderSettings": {"Auth": {"Mode": "None"}},
+                })
+                assert none and none.get("Id"), "No None-auth endpoint returned"
+                none_ep_id = none["Id"]
+                assert none.get("ApiKey") is None, "Auth Mode None should drop the ApiKey, got " + str(none.get("ApiKey"))
+
+                expect_400(lambda: client.create_completion_endpoint({
+                    "TenantId": test_tenant_id, "Name": "Header No Name", "Model": "gemma3:4b", "Endpoint": "http://localhost:11434",
+                    "ApiFormat": "Ollama", "ApiKey": gateway_key, "HealthCheckEnabled": False,
+                    "ProviderSettings": {"Auth": {"Mode": "Header"}},
+                }), "Header auth without HeaderName")
+                expect_400(lambda: client.create_endpoint({
+                    "TenantId": test_tenant_id, "Name": "Basic No User", "Model": "text-embedding-3-small", "Endpoint": "https://api.openai.com",
+                    "ApiFormat": "OpenAI", "ApiKey": gateway_key, "HealthCheckEnabled": False,
+                    "ProviderSettings": {"Auth": {"Mode": "Basic"}},
+                }), "Basic auth without Username")
+            finally:
+                if header_cep_id:
+                    client.delete_completion_endpoint(header_cep_id)
+                if none_ep_id:
+                    client.delete_endpoint(none_ep_id)
+        run_test("Selectable Authentication (Ollama)", test_selectable_auth)
 
         def test_delete_provider_endpoints():
             for key in ("azure", "anthropic"):
