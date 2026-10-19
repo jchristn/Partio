@@ -2,6 +2,7 @@ namespace Partio.Core.Models
 {
     using System.Data;
     using Partio.Core.Enums;
+    using Partio.Core.ThirdParty;
 
     /// <summary>
     /// Represents a completion/inference model endpoint in the Partio system.
@@ -66,6 +67,7 @@ namespace Partio.Core.Models
         /// <summary>
         /// Base URL for the completion API (e.g., http://ollama:11434).
         /// </summary>
+        /// <remarks>OllamaCloud endpoints always resolve to https://ollama.com; xAI defaults to https://api.x.ai.</remarks>
         public string Endpoint
         {
             get => _Endpoint;
@@ -84,7 +86,7 @@ namespace Partio.Core.Models
         }
 
         /// <summary>
-        /// API key for the upstream inference provider (optional, required for OpenAI/Gemini/vLLM).
+        /// API key for the upstream inference provider (optional, required for OpenAI/Gemini/vLLM/OllamaCloud/xAI).
         /// </summary>
         public string? ApiKey
         {
@@ -256,7 +258,7 @@ namespace Partio.Core.Models
 
         /// <summary>
         /// Whether to send the endpoint's ApiKey on health check requests.
-        /// OpenAI and vLLM use a Bearer token. Gemini uses x-goog-api-key.
+        /// OpenAI, vLLM, Ollama Cloud, and xAI use a Bearer token. Gemini uses x-goog-api-key.
         /// </summary>
         public bool HealthCheckUseAuth
         {
@@ -365,12 +367,18 @@ namespace Partio.Core.Models
         {
             if (ep == null) throw new ArgumentNullException(nameof(ep));
 
+            // Ollama Cloud has a fixed host and xAI has a well-known default; resolve them before deriving URLs.
+            string normalizedEndpoint = ProviderDefaults.NormalizeEndpoint(ep.ApiFormat, ep.Endpoint);
+            if (!string.IsNullOrEmpty(normalizedEndpoint))
+                ep.Endpoint = normalizedEndpoint;
+
             if (string.IsNullOrEmpty(ep.HealthCheckUrl))
             {
                 string baseUrl = ep.Endpoint.TrimEnd('/');
                 ep.HealthCheckUrl = ep.ApiFormat switch
                 {
                     ApiFormatEnum.Ollama => baseUrl + "/api/tags",
+                    ApiFormatEnum.OllamaCloud => baseUrl + "/api/tags",
                     ApiFormatEnum.Gemini => baseUrl + "/v1beta/models",
                     _ => baseUrl + "/v1/models"
                 };
@@ -391,10 +399,12 @@ namespace Partio.Core.Models
             if (ep.UnhealthyThreshold <= 0)
                 ep.UnhealthyThreshold = 2;
 
-            // OpenAI, vLLM, and Gemini typically require auth for model listing.
+            // OpenAI, vLLM, Gemini, Ollama Cloud, and xAI typically require auth for model listing.
             if ((ep.ApiFormat == ApiFormatEnum.OpenAI
                 || ep.ApiFormat == ApiFormatEnum.vLLM
-                || ep.ApiFormat == ApiFormatEnum.Gemini)
+                || ep.ApiFormat == ApiFormatEnum.Gemini
+                || ep.ApiFormat == ApiFormatEnum.OllamaCloud
+                || ep.ApiFormat == ApiFormatEnum.xAI)
                 && !string.IsNullOrEmpty(ep.ApiKey))
                 ep.HealthCheckUseAuth = true;
         }

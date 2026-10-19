@@ -303,6 +303,30 @@ def main():
             vllm_cep_id = cep["Id"]
         run_test("Create vLLM Completion Endpoint", test_create_vllm_completion_endpoint)
 
+        def test_create_cloud_provider_endpoints():
+            cloud = client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "Ollama Cloud Inference", "Model": "gpt-oss:20b", "Endpoint": "http://ignored-host:11434", "ApiFormat": "OllamaCloud", "ApiKey": "test-api-key", "HealthCheckEnabled": False})
+            try:
+                assert cloud and "Id" in cloud
+                assert cloud["Endpoint"] == "https://ollama.com", "Expected the fixed Ollama Cloud host, got " + str(cloud.get("Endpoint"))
+            finally:
+                if cloud and "Id" in cloud:
+                    client.delete_completion_endpoint(cloud["Id"])
+
+            xai = client.create_endpoint({"TenantId": test_tenant_id, "Name": "xAI Embedding", "Model": "grok-embedding", "Endpoint": "https://api.x.ai/v1", "ApiFormat": "xAI", "ApiKey": "test-api-key", "HealthCheckEnabled": False})
+            try:
+                assert xai and "Id" in xai
+                assert xai["Endpoint"] == "https://api.x.ai", "Expected the /v1 suffix to be dropped, got " + str(xai.get("Endpoint"))
+            finally:
+                if xai and "Id" in xai:
+                    client.delete_endpoint(xai["Id"])
+
+            try:
+                client.create_completion_endpoint({"TenantId": test_tenant_id, "Name": "xAI Missing Key", "Model": "grok-4", "Endpoint": "https://api.x.ai", "ApiFormat": "xAI", "HealthCheckEnabled": False})
+                raise AssertionError("Expected 400")
+            except PartioError as e:
+                assert e.status_code == 400
+        run_test("Create Ollama Cloud and xAI Endpoints", test_create_cloud_provider_endpoints)
+
         def test_load_completion_endpoint():
             skip_if_provider_unavailable()
             result = client.load_completion_endpoint(test_cep_id, {"KeepAlive": "30m"})

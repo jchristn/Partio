@@ -14,6 +14,17 @@ import FormFieldLabel from './FormFieldLabel';
 import Tooltip from './Tooltip';
 import EndpointMetadataEditor, { createLabelRows, createTagRows, normalizeLabelRows, normalizeTagRows } from './EndpointMetadataEditor';
 import { t } from '../i18n';
+import {
+  API_FORMAT_OPTIONS,
+  API_FORMAT_TOOLTIP,
+  API_KEY_TOOLTIP_SUFFIX,
+  OLLAMA_CLOUD_ENDPOINT,
+  XAI_ENDPOINT,
+  applyApiFormatDefaults,
+  getHealthCheckDefaults,
+  isFixedEndpoint,
+  requiresApiKey,
+} from '../utils/apiFormats';
 import './EmbeddingEndpointsView.css';
 
 function getApiFormatDefaults(apiFormat) {
@@ -33,70 +44,22 @@ function getApiFormatDefaults(apiFormat) {
         Model: 'gemini-2.5-flash',
         Endpoint: 'https://generativelanguage.googleapis.com',
       };
+    case 'OllamaCloud':
+      return {
+        Model: 'gpt-oss:20b',
+        Endpoint: OLLAMA_CLOUD_ENDPOINT,
+      };
+    case 'xAI':
+      return {
+        Model: 'grok-4',
+        Endpoint: XAI_ENDPOINT,
+      };
     default:
       return {
         Model: 'gemma3:4b',
         Endpoint: 'http://localhost:11434',
       };
   }
-}
-
-function getHealthCheckDefaults(apiFormat, endpoint) {
-  const baseUrl = (endpoint || '').replace(/\/+$/, '');
-  if (apiFormat === 'Ollama') {
-    return {
-      HealthCheckUrl: baseUrl ? baseUrl + '/api/tags' : '',
-      HealthCheckMethod: 'GET',
-      HealthCheckIntervalMs: 5000,
-      HealthCheckTimeoutMs: 2000,
-      HealthCheckExpectedStatusCode: 200,
-      HealthyThreshold: 2,
-      UnhealthyThreshold: 2,
-      HealthCheckUseAuth: false,
-    };
-  }
-  if (apiFormat === 'Gemini') {
-    return {
-      HealthCheckUrl: baseUrl ? baseUrl + '/v1beta/models' : '',
-      HealthCheckMethod: 'GET',
-      HealthCheckIntervalMs: 15000,
-      HealthCheckTimeoutMs: 5000,
-      HealthCheckExpectedStatusCode: 200,
-      HealthyThreshold: 2,
-      UnhealthyThreshold: 2,
-      HealthCheckUseAuth: true,
-    };
-  }
-  return {
-    HealthCheckUrl: baseUrl ? baseUrl + '/v1/models' : '',
-    HealthCheckMethod: 'GET',
-    HealthCheckIntervalMs: 15000,
-    HealthCheckTimeoutMs: 5000,
-    HealthCheckExpectedStatusCode: 200,
-    HealthyThreshold: 2,
-    UnhealthyThreshold: 2,
-    HealthCheckUseAuth: true,
-  };
-}
-
-function applyApiFormatDefaults(currentForm, newFormat, healthFieldsEdited) {
-  const previousDefaults = getApiFormatDefaults(currentForm.ApiFormat);
-  const newDefaults = getApiFormatDefaults(newFormat);
-  const nextForm = { ...currentForm, ApiFormat: newFormat };
-
-  if (!currentForm.Model || currentForm.Model === previousDefaults.Model) {
-    nextForm.Model = newDefaults.Model;
-  }
-
-  if (!currentForm.Endpoint || currentForm.Endpoint === previousDefaults.Endpoint) {
-    nextForm.Endpoint = newDefaults.Endpoint;
-  }
-
-  if (!healthFieldsEdited) {
-    Object.assign(nextForm, getHealthCheckDefaults(newFormat, nextForm.Endpoint));
-  }
-
-  return nextForm;
 }
 
 function formatTenantOption(tenant) {
@@ -380,7 +343,7 @@ export default function CompletionEndpointsView() {
   };
 
   const handleFormatChange = (newFormat) => {
-    setForm(applyApiFormatDefaults(form, newFormat, healthFieldsEdited));
+    setForm(applyApiFormatDefaults(form, newFormat, healthFieldsEdited, getApiFormatDefaults));
   };
 
   const handleEndpointChange = (newEndpoint) => {
@@ -492,7 +455,7 @@ export default function CompletionEndpointsView() {
     {
       key: 'ApiFormat',
       label: 'Format',
-      tooltip: 'API protocol format: Ollama, OpenAI, Gemini, or vLLM'
+      tooltip: 'API protocol format: Ollama, Ollama Cloud, OpenAI, Gemini, vLLM, or xAI'
     },
     {
       key: 'Active',
@@ -585,13 +548,12 @@ export default function CompletionEndpointsView() {
                 </Tooltip>
               </div>
               <div className="form-group">
-                <FormFieldLabel text="API Format" tooltip="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." />
-                <Tooltip content="Protocol format. Ollama for local Ollama servers, OpenAI and vLLM for OpenAI-compatible APIs, Gemini for Google Gemini." block>
+                <FormFieldLabel text="API Format" tooltip={API_FORMAT_TOOLTIP} />
+                <Tooltip content={API_FORMAT_TOOLTIP} block>
                   <select value={form.ApiFormat} onChange={e => handleFormatChange(e.target.value)}>
-                    <option value="Ollama">Ollama</option>
-                    <option value="OpenAI">OpenAI</option>
-                    <option value="Gemini">Gemini</option>
-                    <option value="vLLM">vLLM</option>
+                    {API_FORMAT_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </Tooltip>
               </div>
@@ -612,10 +574,10 @@ export default function CompletionEndpointsView() {
             </div>
             <div className="endpoint-form-row">
               <div className="form-group">
-                <FormFieldLabel text="API Key" tooltip="Authentication key for the inference API. Required for OpenAI, Gemini, and most vLLM deployments; optional for Ollama." />
+                <FormFieldLabel text="API Key" tooltip={"Authentication key for the inference API. " + API_KEY_TOOLTIP_SUFFIX} />
                 <div className="password-input-wrapper">
-                  <Tooltip content="Authentication key for the inference API. Required for OpenAI, Gemini, and most vLLM deployments; optional for Ollama." block>
-                    <input type={showApiKey ? "text" : "password"} value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder="Optional" />
+                  <Tooltip content={"Authentication key for the inference API. " + API_KEY_TOOLTIP_SUFFIX} block>
+                    <input type={showApiKey ? "text" : "password"} value={form.ApiKey} onChange={e => setForm({ ...form, ApiKey: e.target.value })} placeholder={requiresApiKey(form.ApiFormat) ? "Required" : "Optional"} />
                   </Tooltip>
                   <button type="button" className="password-toggle-btn" onClick={() => setShowApiKey(!showApiKey)} title={showApiKey ? "Hide API Key" : "Show API Key"}>
                     {showApiKey ? (
@@ -635,9 +597,9 @@ export default function CompletionEndpointsView() {
               </div>
             </div>
             <div className="form-group">
-              <FormFieldLabel text="Endpoint URL" tooltip="Base URL of the completion API server. Example: http://localhost:11434 or https://api.openai.com" />
-              <Tooltip content="Base URL of the completion API server. Example: http://localhost:11434 or https://api.openai.com." block>
-                <input value={form.Endpoint} onChange={e => handleEndpointChange(e.target.value)} placeholder="http://localhost:11434" />
+              <FormFieldLabel text="Endpoint URL" tooltip="Base URL of the completion API server. Example: http://localhost:11434 or https://api.openai.com. Ollama Cloud always uses https://ollama.com." />
+              <Tooltip content="Base URL of the completion API server. Example: http://localhost:11434 or https://api.openai.com. Ollama Cloud always uses https://ollama.com." block>
+                <input value={form.Endpoint} onChange={e => handleEndpointChange(e.target.value)} placeholder="http://localhost:11434" disabled={isFixedEndpoint(form.ApiFormat)} />
               </Tooltip>
             </div>
           </div>

@@ -5,6 +5,7 @@ namespace Partio.Core.ThirdParty
     using Partio.Core.Observability;
     using PolyPromptEmbeddingOptions = PolyPrompt.Models.EmbeddingOptions;
     using PolyPromptOpenAiEmbeddingClient = PolyPrompt.Clients.OpenAiEmbeddingClient;
+    using PolyPromptEmbeddingClientBase = PolyPrompt.Clients.EmbeddingClientBase;
     using SyslogLogging;
 
     /// <summary>
@@ -51,7 +52,7 @@ namespace Partio.Core.ThirdParty
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "embedding", _ConcurrencyKey);
             PolyPrompt.Models.EmbeddingResponse response;
             IDisposable? concurrencyLease = null;
-            using (PolyPromptOpenAiEmbeddingClient client = CreateConfiguredClient(_MaximumTimeoutMs))
+            using (PolyPromptEmbeddingClientBase client = CreateConfiguredClient(_MaximumTimeoutMs))
             {
                 try
                 {
@@ -101,7 +102,7 @@ namespace Partio.Core.ThirdParty
                             _MaximumTimeoutMs);
                     }
 
-                    throw new Exception(response.Error ?? "OpenAI embedding request failed.");
+                    throw new Exception(response.Error ?? ProviderName + " embedding request failed.");
                 }
 
                 integ.Outcome = "ok";
@@ -126,9 +127,23 @@ namespace Partio.Core.ThirdParty
             return Task.FromResult<EmbeddingModelCapabilities?>(capabilities);
         }
 
-        private PolyPromptOpenAiEmbeddingClient CreateConfiguredClient(int timeoutMs)
+        /// <summary>
+        /// Provider display name used in error messages.
+        /// </summary>
+        protected virtual string ProviderName => "OpenAI";
+
+        /// <summary>
+        /// Create the PolyPrompt client used for a single embedding operation.
+        /// </summary>
+        /// <returns>A new PolyPrompt embedding client; the caller disposes it.</returns>
+        protected virtual PolyPromptEmbeddingClientBase CreateProviderClient()
         {
-            PolyPromptOpenAiEmbeddingClient client = new PolyPromptOpenAiEmbeddingClient(_Endpoint, _ApiKey, _Logging);
+            return new PolyPromptOpenAiEmbeddingClient(_Endpoint, _ApiKey, _Logging);
+        }
+
+        private PolyPromptEmbeddingClientBase CreateConfiguredClient(int timeoutMs)
+        {
+            PolyPromptEmbeddingClientBase client = CreateProviderClient();
             client.TimeoutMs = timeoutMs;
             return client;
         }

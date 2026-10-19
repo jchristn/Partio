@@ -63,7 +63,20 @@ namespace Partio.Core.Settings
         };
 
         /// <summary>
-        /// Optional baseline defaults for Ollama endpoints.
+        /// Provider defaults for xAI embedding endpoints.
+        /// </summary>
+        public EndpointTokenizationSettings xAI { get; set; } = new EndpointTokenizationSettings
+        {
+            TokenizerKind = TokenizerKindEnum.Cl100kBase,
+            TokenizerModel = "cl100k_base",
+            MaxInputTokens = 8192,
+            ReservedInputTokens = 0,
+            BatchLimitMode = BatchLimitModeEnum.PerInput,
+            AutoDetect = true
+        };
+
+        /// <summary>
+        /// Optional baseline defaults for Ollama and Ollama Cloud endpoints.
         /// </summary>
         public EndpointTokenizationSettings? Ollama { get; set; } = null;
 

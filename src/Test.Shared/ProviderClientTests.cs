@@ -581,6 +581,115 @@ namespace Test.Shared
                 }
             }));
 
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Ollama Cloud embedding client targets the fixed host with a bearer token", async () =>
+            {
+                using SlowOllamaCompatibleServer provider = new SlowOllamaCompatibleServer();
+                using RedirectingHttpHandler transport = new RedirectingHttpHandler(provider.BaseUrl);
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using OllamaCloudEmbeddingClient client = new OllamaCloudEmbeddingClient("cloud-secret", logging, 5000, transport: transport);
+
+                List<List<float>> result = await client.EmbedBatchAsync(new List<string> { "first input", "second input" }, "embeddinggemma");
+
+                Check.Equal(2, result.Count);
+                Check.True(transport.RequestedUris.Count > 0, "the embedding request should be sent");
+                Check.All(transport.RequestedUris, uri => Check.Equal("ollama.com", uri.Host));
+                Check.All(transport.RequestedUris, uri => Check.Equal("https", uri.Scheme));
+                Check.All(transport.Authorizations, auth => Check.Equal("Bearer cloud-secret", auth));
+                Check.True(transport.RequestedUris.Any(uri => uri.AbsolutePath == "/api/embed"), "Ollama Cloud should use the native /api/embed path");
+                Check.True(client.CallDetails.Count(d => d.Success) >= 1, "the call should be recorded as successful");
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Ollama Cloud completion client targets the fixed host with a bearer token", async () =>
+            {
+                using SlowOllamaCompatibleServer provider = new SlowOllamaCompatibleServer();
+                using RedirectingHttpHandler transport = new RedirectingHttpHandler(provider.BaseUrl);
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using OllamaCloudCompletionClient client = new OllamaCloudCompletionClient("cloud-secret", logging, 5000, transport: transport);
+
+                string? result = await client.GenerateCompletionAsync("hello", "gpt-oss:20b", 64, 5000);
+
+                Check.Equal("Stub Ollama response.", result);
+                Check.Equal(1, provider.ChatRequestCount);
+                Check.All(transport.RequestedUris, uri => Check.Equal("ollama.com", uri.Host));
+                Check.All(transport.Authorizations, auth => Check.Equal("Bearer cloud-secret", auth));
+                Check.True(transport.RequestedUris.Any(uri => uri.AbsolutePath == "/api/chat"), "Ollama Cloud should use the native /api/chat path");
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "Ollama Cloud capability probe uses the fixed host", async () =>
+            {
+                using SlowOllamaCompatibleServer provider = new SlowOllamaCompatibleServer();
+                using RedirectingHttpHandler transport = new RedirectingHttpHandler(provider.BaseUrl);
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using OllamaCloudEmbeddingClient client = new OllamaCloudEmbeddingClient("cloud-secret", logging, 5000, transport: transport);
+
+                await client.GetModelCapabilitiesAsync("embeddinggemma");
+
+                Uri probe = Check.Single(transport.RequestedUris);
+                Check.Equal("ollama.com", probe.Host);
+                Check.Equal("/api/show", probe.AbsolutePath);
+                Check.Equal("Bearer cloud-secret", Check.Single(transport.Authorizations));
+            }));
+
+            tests.Add(TestCaseFactory.Sync("ProviderClients", "Ollama Cloud and xAI clients require an API key", () =>
+            {
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                Check.Throws<ArgumentException>(() => new OllamaCloudEmbeddingClient("", logging, 5000));
+                Check.Throws<ArgumentException>(() => new OllamaCloudCompletionClient("  ", logging, 5000));
+                Check.Throws<ArgumentException>(() => new XAiEmbeddingClient("https://api.x.ai", "", logging, 5000));
+                Check.Throws<ArgumentException>(() => new XAiCompletionClient("https://api.x.ai", "", logging, 5000));
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "xAI completion client uses the native Responses API with a bearer token", async () =>
+            {
+                using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+                provider.CompletionModel = "grok-4";
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using XAiCompletionClient client = new XAiCompletionClient(provider.BaseUrl, "xai-secret", logging, 5000);
+
+                string? result = await client.GenerateCompletionAsync("say hi", "grok-4", 64, 5000, default, "be terse");
+
+                Check.Equal("Stub xAI response.", result);
+                Check.Equal(1, provider.ResponsesRequestCount);
+                Check.Equal(0, provider.CompletionRequestCount);
+                Check.Equal("/v1/responses", provider.LastPath);
+                Check.Equal("Bearer xai-secret", provider.LastAuthorization);
+                Partio.Core.Models.CompletionCallDetail detail = Check.Single(client.CallDetails);
+                Check.True(detail.Success, "the recorded call should be successful");
+                Check.NotNull(detail.RequestBody);
+                Check.Contains("grok-4", detail.RequestBody!);
+                Check.Contains("say hi", detail.RequestBody!);
+                Check.Contains("be terse", detail.RequestBody!);
+            }));
+
+            tests.Add(TestCaseFactory.Async("ProviderClients", "xAI embedding client accepts a /v1 base URL and sends a bearer token", async () =>
+            {
+                using SlowOpenAiCompatibleServer provider = new SlowOpenAiCompatibleServer();
+                LoggingModule logging = new LoggingModule();
+                logging.Settings.EnableConsole = false;
+
+                using XAiEmbeddingClient client = new XAiEmbeddingClient(provider.BaseUrl + "/v1/", "xai-secret", logging, 5000);
+
+                List<List<float>> result = await client.EmbedBatchAsync(new List<string> { "a", "b" }, "grok-embedding");
+                EmbeddingModelCapabilities? capabilities = await client.GetModelCapabilitiesAsync("grok-embedding");
+
+                Check.Equal(2, result.Count);
+                Check.Equal(1, provider.EmbeddingRequestCount);
+                Check.Equal("/v1/embeddings", provider.LastPath);
+                Check.Equal("Bearer xai-secret", provider.LastAuthorization);
+                Check.NotNull(capabilities);
+                Check.Equal("XAiModelRegistry", capabilities!.ProviderMetadata["CapabilitySource"]);
+            }));
+
             return tests;
         }
 

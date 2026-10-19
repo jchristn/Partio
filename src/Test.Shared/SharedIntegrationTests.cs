@@ -2057,7 +2057,8 @@ namespace Test.Shared
         {
             if (string.IsNullOrWhiteSpace(_LiveProxyUpstream)) return; // not configured; nothing to do
 
-            bool isOllama = _LiveProxyFormat.Equals("Ollama", StringComparison.OrdinalIgnoreCase);
+            bool isOllama = _LiveProxyFormat.Equals("Ollama", StringComparison.OrdinalIgnoreCase)
+                || _LiveProxyFormat.Equals("OllamaCloud", StringComparison.OrdinalIgnoreCase);
             string model = string.IsNullOrWhiteSpace(_LiveProxyModel) ? "llama3" : _LiveProxyModel;
 
             using PartioClient admin = new PartioClient(_Endpoint, _AdminKey);
@@ -2316,12 +2317,16 @@ namespace Test.Shared
             tests.Add(TestCaseFactory.Async("Integration","Enumerate Completion Endpoints", async () => await TestEnumerateCompletionEndpointsAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Create Gemini Completion Endpoint", async () => await TestCreateGeminiCompletionEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Create vLLM Completion Endpoint", async () => await TestCreateVllmCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Ollama Cloud and xAI Endpoints Require ApiKey (400)", async () => await TestCloudProviderEndpointsRequireApiKeyAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Create Ollama Cloud Endpoints", async () => await TestCreateOllamaCloudEndpointsAsync()));
 
             // Model Loading
             tests.Add(TestCaseFactory.Async("Integration","Load Ollama Completion Endpoint Model", async () => await TestLoadOllamaCompletionEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Load Ollama Embedding Endpoint Model", async () => await TestLoadOllamaEmbeddingEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Warm OpenAI Completion Endpoint Model", async () => await TestWarmOpenAiCompletionEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Warm OpenAI Embedding Endpoint Model", async () => await TestWarmOpenAiEmbeddingEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm xAI Completion Endpoint Model", async () => await TestWarmXAiCompletionEndpointAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Warm xAI Embedding Endpoint Model", async () => await TestWarmXAiEmbeddingEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Warm vLLM Completion Endpoint Model", async () => await TestWarmVllmCompletionEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Warm vLLM Embedding Endpoint Model", async () => await TestWarmVllmEmbeddingEndpointAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Warm Gemini Completion Endpoint Model", async () => await TestWarmGeminiCompletionEndpointAsync()));
@@ -2368,6 +2373,7 @@ namespace Test.Shared
             // Proxy (transparent passthrough)
             tests.Add(TestCaseFactory.Async("Integration","Proxy OpenAI Chat Completions", async () => await TestProxyOpenAiChatAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Proxy GET Models Passthrough", async () => await TestProxyGetModelsAsync()));
+            tests.Add(TestCaseFactory.Async("Integration","Proxy xAI Responses", async () => await TestProxyXAiResponsesAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Proxy Disallowed Sub-path (404)", async () => await TestProxyDisallowedPathAsync()));
             tests.Add(TestCaseFactory.Async("Integration","Proxy Unknown Endpoint (404)", async () => await TestProxyUnknownEndpointAsync()));
 

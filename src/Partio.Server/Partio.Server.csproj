@@ -20,8 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Watson" Version="7.2.2" />
-    <PackageReference Include="Radiant" Version="0.1.2" />
+    <PackageReference Include="Watson" Version="7.3.1" />
+    <PackageReference Include="Radiant" Version="0.1.3" />
     <PackageReference Include="SyslogLogging" Version="*" />
     <PackageReference Include="SerializationHelper" Version="*" />
     <PackageReference Include="Inputty" Version="*" />

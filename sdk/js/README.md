@@ -19,10 +19,12 @@ The Partio JavaScript SDK provides a `PartioClient` class for interacting with a
 - Transparent completion proxy (`proxy`, `proxyPost`, `proxyGet`) — relay a native provider request through an endpoint and get the upstream response (`{statusCode, headers, body}`) verbatim; a non-2xx upstream status is returned, not thrown
 - Request history (`getRequestHistory`, `getRequestHistoryDetail`, `deleteRequestHistory`, `enumerateRequestHistory`)
 
-Embedding and completion endpoint payloads accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
+Embedding and completion endpoint payloads accept `ApiFormat` values `Ollama`, `OllamaCloud`, `OpenAI`, `Gemini`, `vLLM`, and `xAI`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
 Endpoint payloads are passed through unchanged, so optional embedding-endpoint `Tokenization` overrides and explorer `TokenizationProfile` diagnostics are available without extra client-side translation.
 Use `MaximumTimeoutMs` and `MaxConcurrentRequests` on embedding or completion endpoints to cap upstream provider calls per endpoint. Process routes that hit the timeout cap raise `PartioError` with status code `504`; concurrency-limit rejections raise `PartioError` with status code `429`. Set `MaxQueueDepth` (default `0`) to let further requests wait for a concurrency slot once `MaxConcurrentRequests` is reached; a queued request that waits past `MaximumTimeoutMs` raises `PartioError` with status code `504`, and when the queue is full the request raises `PartioError` with status code `429`.
-Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.
+Model loading reports provider-specific semantics: Ollama can return `Loaded`; Ollama Cloud, OpenAI, Gemini, vLLM, and xAI return `Warmed` because those APIs do not expose a general remote model-residency operation.
+
+`OllamaCloud` and `xAI` endpoints require `ApiKey` (the server returns 400 without one). `OllamaCloud` always targets `https://ollama.com`, whatever `Endpoint` is sent. `xAI` uses `https://api.x.ai` (a trailing `/v1` is accepted and dropped), serves completions through xAI's native Responses API, and relays `v1/responses` through the proxy.
 
 ## Prerequisites
 

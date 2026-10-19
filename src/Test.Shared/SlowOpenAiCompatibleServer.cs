@@ -8,7 +8,8 @@ namespace Test.Shared
     using System.Threading;
 
     /// <summary>
-    /// Minimal OpenAI-compatible test server used to simulate slow upstream providers.
+    /// Minimal OpenAI-compatible test server used to simulate slow upstream providers. Also serves the
+    /// xAI native Responses API (<c>POST /v1/responses</c>) so xAI clients can be exercised in-process.
     /// </summary>
     public sealed class SlowOpenAiCompatibleServer : IDisposable, IAsyncDisposable
     {
@@ -32,11 +33,25 @@ namespace Test.Shared
 
         public int CompletionRequestCount => Volatile.Read(ref _CompletionRequestCount);
 
+        public int ResponsesRequestCount => Volatile.Read(ref _ResponsesRequestCount);
+
+        /// <summary>Authorization header value of the most recent request, or null when none was sent.</summary>
+        public string? LastAuthorization => Volatile.Read(ref _LastAuthorization);
+
+        /// <summary>Path of the most recent request.</summary>
+        public string? LastPath => Volatile.Read(ref _LastPath);
+
         public int MaxActiveCompletionRequests => Volatile.Read(ref _MaxActiveCompletionRequests);
 
         private int _EmbeddingRequestCount = 0;
 
         private int _CompletionRequestCount = 0;
+
+        private int _ResponsesRequestCount = 0;
+
+        private string? _LastAuthorization = null;
+
+        private string? _LastPath = null;
 
         private int _ActiveCompletionRequests = 0;
 
@@ -120,6 +135,9 @@ namespace Test.Shared
                     RawHttpRequest? request = await ReadRequestAsync(stream, token).ConfigureAwait(false);
                     if (request == null) return;
 
+                    Volatile.Write(ref _LastPath, request.Path);
+                    Volatile.Write(ref _LastAuthorization, request.Headers.TryGetValue("Authorization", out string? authorization) ? authorization : null);
+
                     if (request.Method == "GET" && request.Path == "/v1/models")
                     {
                         await DelayIfNeededAsync(ModelsDelayMs, token).ConfigureAwait(false);
@@ -174,6 +192,36 @@ namespace Test.Shared
                         {
                             Interlocked.Decrement(ref _ActiveCompletionRequests);
                         }
+                        return;
+                    }
+
+                    if (request.Method == "POST" && request.Path == "/v1/responses")
+                    {
+                        Interlocked.Increment(ref _ResponsesRequestCount);
+                        await DelayIfNeededAsync(CompletionDelayMs, token).ConfigureAwait(false);
+                        await WriteJsonResponseAsync(stream, 200, new
+                        {
+                            id = "resp_stub",
+                            @object = "response",
+                            created_at = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                            status = "completed",
+                            model = CompletionModel,
+                            output = new object[]
+                            {
+                                new
+                                {
+                                    type = "message",
+                                    id = "msg_stub",
+                                    role = "assistant",
+                                    status = "completed",
+                                    content = new object[]
+                                    {
+                                        new { type = "output_text", text = "Stub xAI response.", annotations = Array.Empty<object>() }
+                                    }
+                                }
+                            },
+                            usage = new { input_tokens = 1, output_tokens = 1, total_tokens = 2 }
+                        }).ConfigureAwait(false);
                         return;
                     }
 
@@ -243,7 +291,7 @@ namespace Test.Shared
                 body = new string(buffer, 0, read);
             }
 
-            return new RawHttpRequest(method, path, body);
+            return new RawHttpRequest(method, path, body, headers);
         }
 
         public async Task WaitForEmbeddingRequestCountAsync(int minCount, int timeoutMs = 5000)
@@ -377,11 +425,14 @@ namespace Test.Shared
 
             public string Body { get; }
 
-            public RawHttpRequest(string method, string path, string body)
+            public Dictionary<string, string> Headers { get; }
+
+            public RawHttpRequest(string method, string path, string body, Dictionary<string, string> headers)
             {
                 Method = method;
                 Path = path;
                 Body = body;
+                Headers = headers;
             }
         }
     }

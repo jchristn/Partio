@@ -568,7 +568,7 @@ summarization engine as `/v1.0/process`.
 The proxy is a **transparent passthrough** to a completion endpoint's upstream provider. You send the
 provider's **native** request and Partio relays the provider's response **verbatim** — it performs no
 request/response translation. This is the recommended way to use an off-the-shelf provider SDK (OpenAI,
-Ollama, Gemini, vLLM) against a Partio-managed endpoint: point the SDK's base URL at
+Ollama, Ollama Cloud, Gemini, vLLM, xAI) against a Partio-managed endpoint: point the SDK's base URL at
 `{baseUrl}/v1.0/proxy/{endpointId}` and the SDK appends its own native sub-path.
 
 For each proxied request Partio: authenticates the caller (tenant bearer), resolves the endpoint (tenant
@@ -598,8 +598,9 @@ sent (with hop-by-hop and the inbound `Authorization` header stripped; Partio in
 
 **Allowed sub-paths by `ApiFormat`** (any other path returns `404`):
 - **OpenAI / vLLM**: `v1/chat/completions`, `v1/completions`, `v1/embeddings`, `v1/models`, `v1/models/{model}`
-- **Ollama**: `api/chat`, `api/generate`, `api/embed`, `api/embeddings`, `api/tags`, `api/show`, `api/ps`, `api/version`
+- **Ollama / Ollama Cloud**: `api/chat`, `api/generate`, `api/embed`, `api/embeddings`, `api/tags`, `api/show`, `api/ps`, `api/version`
 - **Gemini**: `v1beta/models`, `v1beta/models/{model}:{method}`
+- **xAI**: `v1/responses`, `v1/chat/completions`, `v1/embeddings`, `v1/models`, `v1/models/{model}`, `v1/language-models`, `v1/embedding-models`
 
 **Example** (OpenAI-dialect endpoint):
 
@@ -739,6 +740,8 @@ Provider semantics:
 | OpenAI | Minimal chat completion warm request | Minimal embedding warm request | `Warmed` |
 | vLLM | OpenAI-compatible minimal chat completion warm request | OpenAI-compatible minimal embedding warm request | `Warmed`; the model must already be served by that vLLM process |
 | Gemini | Minimal `generateContent` warm request | Minimal `embedContent` warm request | `Warmed` |
+| Ollama Cloud | Minimal chat warm request (hosted models are already resident) | Minimal embedding warm request | `Warmed` |
+| xAI | Minimal Responses API (`/v1/responses`) warm request | Minimal embedding warm request | `Warmed` |
 
 ### POST /v1.0/endpoints/embedding/{id}/load
 Load or warm a configured embedding endpoint model.
@@ -803,7 +806,7 @@ Errors:
 | Invalid request body or `KeepAlive` unload value such as `0` | `400` |
 | Unauthenticated or non-admin caller | `401` |
 | Endpoint not found | `404` |
-| Native load required for OpenAI, Gemini, or vLLM | `409` |
+| Native load required for Ollama Cloud, OpenAI, Gemini, vLLM, or xAI | `409` |
 | Endpoint concurrency limit reached | `429` |
 | Upstream provider failure | `502` |
 | Upstream provider timeout | `504` |
@@ -1021,7 +1024,7 @@ Create an embedding endpoint.
 | `HealthCheckExpectedStatusCode` | int | `200` | Expected HTTP status code for a healthy response |
 | `HealthyThreshold` | int | `3` | Consecutive successes required to transition to healthy |
 | `UnhealthyThreshold` | int | `3` | Consecutive failures required to transition to unhealthy |
-| `HealthCheckUseAuth` | bool | `false` | Include the endpoint's API key in health checks (Bearer for OpenAI/vLLM, `x-goog-api-key` for Gemini) |
+| `HealthCheckUseAuth` | bool | `false` | Include the endpoint's API key in health checks (Bearer for OpenAI/vLLM/Ollama Cloud/xAI, `x-goog-api-key` for Gemini) |
 
 #### Tokenization Properties
 
@@ -1040,11 +1043,24 @@ When `HealthCheckEnabled` is `true` and the endpoint is active, the server runs 
 If the embedding provider call itself exceeds `MaximumTimeoutMs`, process routes return `504 Gateway Timeout`.
 If the endpoint already has `MaxConcurrentRequests` upstream calls in flight, Partio queues up to `MaxQueueDepth` further requests to wait for a slot. A queued request that waits past `MaximumTimeoutMs` returns `504 Gateway Timeout`, and when the queue is full Partio returns `429 Too Many Requests`. With the default `MaxQueueDepth` of `0`, requests over the concurrency limit are rejected immediately with `429 Too Many Requests`.
 
+Supported `ApiFormat` values (embedding and completion endpoints):
+
+| `ApiFormat` | Provider | `Endpoint` | `ApiKey` |
+| --- | --- | --- | --- |
+| `Ollama` | Local or self-hosted Ollama | Required (for example `http://localhost:11434`) | Optional (sent as Bearer) |
+| `OllamaCloud` | Ollama Cloud (native Ollama API) | Always stored as `https://ollama.com`, whatever value is sent | Required (`400` without one) |
+| `OpenAI` | OpenAI and OpenAI-compatible APIs | Required | Usually required |
+| `vLLM` | vLLM (OpenAI-compatible) | Required | Deployment-dependent |
+| `Gemini` | Google Gemini | Required (`https://generativelanguage.googleapis.com`) | Required (sent as `x-goog-api-key`) |
+| `xAI` | xAI Grok; completions use the native Responses API | `https://api.x.ai` (a trailing `/v1` is accepted and dropped) | Required (`400` without one) |
+
 Health check defaults are applied automatically based on `ApiFormat` when creating or updating an endpoint:
 - **Ollama**: URL defaults to `{Endpoint}/api/tags`, 5s interval, 2s timeout, no auth
+- **Ollama Cloud**: URL defaults to `https://ollama.com/api/tags`, 15s interval, 5s timeout, auth enabled
 - **OpenAI**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
 - **vLLM**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
 - **Gemini**: URL defaults to `{Endpoint}/v1beta/models`, 15s interval, 5s timeout, auth enabled
+- **xAI**: URL defaults to `{Endpoint}/v1/models`, 15s interval, 5s timeout, auth enabled
 
 **Response**: `201 Created` â€” `EmbeddingEndpoint`
 

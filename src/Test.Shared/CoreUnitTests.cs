@@ -9,6 +9,7 @@ namespace Test.Shared
     using Partio.Core.Models;
     using Partio.Core.Proxy;
     using Partio.Core.Serialization;
+    using Partio.Core.ThirdParty;
     using Partio.Core.Tokenization;
     using SyslogLogging;
     using Touchstone.Core;
@@ -441,6 +442,95 @@ namespace Test.Shared
                 Check.True(gemini != null && gemini.Value.Name == "x-goog-api-key" && gemini.Value.Value == "g-123", "Gemini key header");
                 Check.True(ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.Ollama, null) == null, "No key -> no header");
                 Check.True(ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.Ollama, "") == null, "Empty key -> no header");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: Ollama Cloud shares the Ollama api allow-list", () =>
+            {
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.OllamaCloud, "api/chat"), "Ollama Cloud chat");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.OllamaCloud, "api/embed"), "Ollama Cloud embed");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.OllamaCloud, "api/tags"), "Ollama Cloud tags");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.OllamaCloud, "v1/chat/completions"), "Ollama Cloud rejects OpenAI path");
+                Check.Equal(ProxyPathPolicy.DescribeAllowed(ApiFormatEnum.Ollama), ProxyPathPolicy.DescribeAllowed(ApiFormatEnum.OllamaCloud));
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: xAI allows Responses, chat, embeddings, and model catalog paths", () =>
+            {
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.xAI, "v1/responses"), "xAI responses");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.xAI, "v1/chat/completions"), "xAI chat completions");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.xAI, "v1/embeddings"), "xAI embeddings");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.xAI, "v1/models/grok-4"), "xAI model by id");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.xAI, "v1/language-models"), "xAI language models");
+                Check.True(ProxyPathPolicy.IsAllowed(ApiFormatEnum.xAI, "v1/embedding-models"), "xAI embedding models");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.xAI, "api/chat"), "xAI rejects Ollama path");
+                Check.True(!ProxyPathPolicy.IsAllowed(ApiFormatEnum.OpenAI, "v1/responses"), "OpenAI dialect does not relay xAI Responses");
+                Check.Contains("v1/responses", ProxyPathPolicy.DescribeAllowed(ApiFormatEnum.xAI));
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProxyPathPolicy: Ollama Cloud and xAI use bearer auth", () =>
+            {
+                ProxyAuthHeader? cloud = ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.OllamaCloud, "oc-123");
+                Check.True(cloud != null && cloud.Value.Name == "Authorization" && cloud.Value.Value == "Bearer oc-123", "Ollama Cloud bearer");
+                ProxyAuthHeader? xai = ProxyPathPolicy.ResolveAuthHeader(ApiFormatEnum.xAI, "xai-123");
+                Check.True(xai != null && xai.Value.Name == "Authorization" && xai.Value.Value == "Bearer xai-123", "xAI bearer");
+            }));
+
+            // ===== ProviderDefaults =====
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProviderDefaults: normalizes Ollama Cloud and xAI endpoints", () =>
+            {
+                Check.Equal("https://ollama.com", ProviderDefaults.NormalizeEndpoint(ApiFormatEnum.OllamaCloud, null));
+                Check.Equal("https://ollama.com", ProviderDefaults.NormalizeEndpoint(ApiFormatEnum.OllamaCloud, "http://localhost:11434"));
+                Check.Equal("https://api.x.ai", ProviderDefaults.NormalizeEndpoint(ApiFormatEnum.xAI, ""));
+                Check.Equal("https://api.x.ai", ProviderDefaults.NormalizeEndpoint(ApiFormatEnum.xAI, "https://api.x.ai/v1/"));
+                Check.Equal("http://gateway:8080/xai", ProviderDefaults.NormalizeEndpoint(ApiFormatEnum.xAI, " http://gateway:8080/xai/ "));
+                Check.Equal("http://localhost:11434", ProviderDefaults.NormalizeEndpoint(ApiFormatEnum.Ollama, "http://localhost:11434"));
+                Check.Equal("https://api.openai.com/v1", ProviderDefaults.NormalizeEndpoint(ApiFormatEnum.OpenAI, "https://api.openai.com/v1"));
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "ProviderDefaults: API key requirements, dialects, and service labels", () =>
+            {
+                Check.True(ProviderDefaults.RequiresApiKey(ApiFormatEnum.OllamaCloud), "Ollama Cloud requires a key");
+                Check.True(ProviderDefaults.RequiresApiKey(ApiFormatEnum.xAI), "xAI requires a key");
+                Check.False(ProviderDefaults.RequiresApiKey(ApiFormatEnum.Ollama), "local Ollama does not require a key");
+                Check.False(ProviderDefaults.RequiresApiKey(ApiFormatEnum.OpenAI), "OpenAI-compatible servers may be keyless");
+                Check.True(ProviderDefaults.IsOllamaDialect(ApiFormatEnum.OllamaCloud), "Ollama Cloud speaks the Ollama API");
+                Check.False(ProviderDefaults.IsOllamaDialect(ApiFormatEnum.xAI), "xAI is not the Ollama API");
+                Check.Equal("ollamacloud", ProviderDefaults.ServiceLabel(ApiFormatEnum.OllamaCloud));
+                Check.Equal("xai", ProviderDefaults.ServiceLabel(ApiFormatEnum.xAI));
+                ArgumentException ex = Check.Throws<ArgumentException>(() => ProviderDefaults.ValidateApiKey(ApiFormatEnum.xAI, " "));
+                Check.Contains("xAI", ex.Message);
+                ProviderDefaults.ValidateApiKey(ApiFormatEnum.Ollama, null);
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "Endpoint defaults: Ollama Cloud pins the host and authenticates health checks", () =>
+            {
+                EmbeddingEndpoint embedding = new EmbeddingEndpoint { Model = "embeddinggemma", Endpoint = "http://wrong-host:11434", ApiFormat = ApiFormatEnum.OllamaCloud, ApiKey = "oc-key" };
+                EmbeddingEndpoint.ApplyHealthCheckDefaults(embedding);
+                Check.Equal("https://ollama.com", embedding.Endpoint);
+                Check.Equal("https://ollama.com/api/tags", embedding.HealthCheckUrl);
+                Check.True(embedding.HealthCheckUseAuth, "Ollama Cloud health checks should send the bearer token");
+
+                CompletionEndpoint completion = new CompletionEndpoint { Model = "gpt-oss:20b", ApiFormat = ApiFormatEnum.OllamaCloud, ApiKey = "oc-key" };
+                completion.HealthCheckIntervalMs = 0;
+                completion.HealthCheckTimeoutMs = 0;
+                CompletionEndpoint.ApplyHealthCheckDefaults(completion);
+                Check.Equal("https://ollama.com", completion.Endpoint);
+                Check.Equal("https://ollama.com/api/tags", completion.HealthCheckUrl);
+                Check.True(completion.HealthCheckUseAuth, "Ollama Cloud completion health checks should send the bearer token");
+            }));
+
+            tests.Add(TestCaseFactory.Sync("Core", "Endpoint defaults: xAI defaults the API root and model-list health check", () =>
+            {
+                CompletionEndpoint completion = new CompletionEndpoint { Model = "grok-4", ApiFormat = ApiFormatEnum.xAI, ApiKey = "xai-key" };
+                CompletionEndpoint.ApplyHealthCheckDefaults(completion);
+                Check.Equal("https://api.x.ai", completion.Endpoint);
+                Check.Equal("https://api.x.ai/v1/models", completion.HealthCheckUrl);
+                Check.True(completion.HealthCheckUseAuth, "xAI health checks should send the bearer token");
+
+                EmbeddingEndpoint embedding = new EmbeddingEndpoint { Model = "grok-embedding", Endpoint = "https://api.x.ai/v1", ApiFormat = ApiFormatEnum.xAI, ApiKey = "xai-key" };
+                EmbeddingEndpoint.ApplyHealthCheckDefaults(embedding);
+                Check.Equal("https://api.x.ai", embedding.Endpoint);
+                Check.Equal("https://api.x.ai/v1/models", embedding.HealthCheckUrl);
             }));
 
             return tests;

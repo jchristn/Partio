@@ -29,6 +29,7 @@ namespace Partio.Core.ThirdParty
         /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
         /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
         /// <param name="maxQueueDepth">Maximum number of requests allowed to wait for a concurrency slot.</param>
+        /// <param name="transport">Optional HTTP message handler for upstream requests. The caller owns it.</param>
         public OllamaEmbeddingClient(
             string endpoint,
             string? apiKey,
@@ -36,8 +37,9 @@ namespace Partio.Core.ThirdParty
             int maximumTimeoutMs,
             string? concurrencyKey = null,
             int maxConcurrentRequests = 2,
-            int maxQueueDepth = 0)
-            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth)
+            int maxQueueDepth = 0,
+            HttpMessageHandler? transport = null)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth, transport)
         {
             _Header = "[OllamaEmbedding] ";
             if (!string.IsNullOrWhiteSpace(_ApiKey))
@@ -225,9 +227,18 @@ namespace Partio.Core.ThirdParty
             return capabilities?.MaxInputTokens;
         }
 
+        /// <summary>
+        /// Create the PolyPrompt client used for a single embedding operation.
+        /// </summary>
+        /// <returns>A new PolyPrompt Ollama embedding client; the caller disposes it.</returns>
+        protected virtual PolyPromptOllamaEmbeddingClient CreateProviderClient()
+        {
+            return new PolyPromptOllamaEmbeddingClient(_Endpoint, _ApiKey, _Logging);
+        }
+
         private PolyPromptOllamaEmbeddingClient CreateConfiguredClient(int timeoutMs)
         {
-            PolyPromptOllamaEmbeddingClient client = new PolyPromptOllamaEmbeddingClient(_Endpoint, _ApiKey, _Logging);
+            PolyPromptOllamaEmbeddingClient client = CreateProviderClient();
             client.TimeoutMs = timeoutMs;
             return client;
         }

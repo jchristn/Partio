@@ -135,6 +135,26 @@ namespace Test.Shared
             throw new Exception("Expected " + typeof(TException).Name + " but no exception was thrown.");
         }
 
+        /// <summary>Assert a synchronous action throws the given exception type or a derived type and return it.</summary>
+        public static TException Throws<TException>(Action action)
+            where TException : Exception
+        {
+            try
+            {
+                action();
+            }
+            catch (TException expected)
+            {
+                return expected;
+            }
+            catch (Exception other)
+            {
+                throw new Exception("Expected " + typeof(TException).Name + " but got " + other.GetType().Name + ": " + other.Message);
+            }
+
+            throw new Exception("Expected " + typeof(TException).Name + " but no exception was thrown.");
+        }
+
         /// <summary>Assert an awaited action throws the given exception type or a derived type.</summary>
         public static async Task<TException> ThrowsAnyAsync<TException>(Func<Task> action)
             where TException : Exception

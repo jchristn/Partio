@@ -1,11 +1,33 @@
 # Changelog
 
-## v0.5.1 - 2026-10-03
+## v0.5.1 - 2026-10-18
+
+### Added
+- **Ollama Cloud and xAI (Grok) providers.** `ApiFormat` accepts two new values on embedding and completion
+  endpoints, backed by PolyPrompt 3.4's `OllamaCloud*` and `XAi*` clients:
+  - `OllamaCloud` speaks the native Ollama API at the fixed host `https://ollama.com`. The server stores that
+    host on every OllamaCloud endpoint regardless of the `Endpoint` value sent. Health checks default to
+    `/api/tags` with bearer auth, the proxy relays the Ollama `api/...` allow-list, and model loading warms
+    with a minimal request because hosted models are already resident.
+  - `xAI` defaults to `https://api.x.ai` (a trailing `/v1` is accepted and dropped). Completions use xAI's
+    native Responses API (`/v1/responses`), and embeddings use `/v1/embeddings`. Health checks default to
+    `/v1/models` with bearer auth. The proxy relays `v1/responses`, `v1/chat/completions`, `v1/embeddings`,
+    `v1/models`, `v1/models/{model}`, `v1/language-models`, and `v1/embedding-models`. A new
+    `TokenizationDefaults.xAI` profile (cl100k_base, 8192 tokens, `PerInput`) is used for xAI embeddings.
+  - Both formats require `ApiKey`: create and update return `400` without one.
+  - Telemetry `service` labels add `ollamacloud` and `xai`.
+  - Surfaced across the dashboard (API Format selectors, provider defaults, a read-only endpoint URL for Ollama
+    Cloud, required-key hints, Chat and API Explorer proxy defaults), the MCP tool schemas, the C#/JS/Python
+    SDK docs, REST_API.md, the Postman collection, and the Docker configs.
 
 ### Changed
-- **Dependency updates:** PolyPrompt 2.6.0 → 3.1.0, Voltaic 2.0.0 → 2.2.1, Watson 7.2.0 → 7.2.2,
-  SyslogLogging 2.2.2 → 2.3.1 (floating), NUnit 4.6.1 → 5.0.0, and Touchstone (Core, Cli, XunitAdapter,
-  NunitAdapter) 0.1.12 → 0.2.0.
+- **Dependency updates:** PolyPrompt 2.6.0 → 3.4.0, Voltaic 2.0.0 → 2.4.0, Watson 7.2.0 → 7.3.1,
+  Radiant 0.1.2 → 0.1.3, Microsoft.ML.Tokenizers 2.0.0 → 2.0.1, SyslogLogging 2.2.2 → 2.4.1 (floating),
+  NUnit 4.6.1 → 5.0.0, NUnit3TestAdapter 6.3.0 → 6.3.1, Microsoft.NET.Test.Sdk 18.10.1 → 18.11.0,
+  xunit.runner.visualstudio 4.0.0 → 4.0.1, and Touchstone (Core, Cli, XunitAdapter, NunitAdapter)
+  0.1.12 → 0.2.1. Dashboard npm dependencies refreshed within their semver ranges, and `npm audit` is clean.
+- **Security:** `System.Security.Cryptography.Pkcs` is pinned to 10.0.13 because Microsoft.Data.SqlClient's
+  transitive versions were affected by GHSA-846f-f764-76mx (high) and GHSA-2fmv-rv2c-59x7 (moderate).
 - **PolyPrompt 3.x migration.** PolyPrompt 3 splits each provider client into one client per capability, so
   Partio's provider wrappers now use `OpenAiCompletionClient` / `OpenAiEmbeddingClient`,
   `OllamaCompletionClient` / `OllamaEmbeddingClient`, and `GeminiCompletionClient` / `GeminiEmbeddingClient`
@@ -41,6 +63,13 @@
   `ping` within an `/mcp` session, `ping` without a bearer is `401` on both endpoints, `/rpc` before
   `initialize` is `-32600`, `/mcp` `ping` without a session is `400`, and an end-to-end stdio bridge test
   (initialize → tools/list → tools/call through `partio-mcp mcp stdio`).
+- Ollama Cloud and xAI coverage. `ProviderClients`: the Ollama Cloud clients target the fixed host with a
+  bearer token (embeddings, chat, and the `/api/show` capability probe, through a redirecting test
+  transport); the xAI completion client uses `/v1/responses`; the xAI embedding client accepts a `/v1` base;
+  both providers reject a missing API key. `Core`: proxy allow-lists and auth headers, endpoint normalization,
+  and health-check defaults. `Integration`: `400` without an `ApiKey`, the Ollama Cloud host pinned on create
+  and update, xAI warm requests (completion and embedding), and an xAI `v1/responses` proxy passthrough.
+  The dashboard adds a vitest suite for the shared ApiFormat helpers.
 - `ProviderClients` suite extended with PolyPrompt 3 coverage: OpenAI completion call details map the
   request/response fields (URL, method, status, model, prompt, system prompt, max tokens, response body), and
   Gemini completion/embedding clients never place the API key in the request URL.

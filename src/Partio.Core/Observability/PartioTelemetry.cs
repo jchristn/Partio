@@ -27,7 +27,7 @@ namespace Partio.Core.Observability
         /// <summary>Span tag: a processing-pipeline stage name (tokenize, chunk, summarize, embed).</summary>
         public const string TagStage = "partio.stage";
 
-        /// <summary>Span tag: the downstream service for an integration span (ollama, openai, gemini, vllm).</summary>
+        /// <summary>Span tag: the downstream service for an integration span (ollama, ollamacloud, openai, gemini, vllm, xai).</summary>
         public const string TagService = "partio.service";
 
         /// <summary>Span tag: the tenant id (high-cardinality — spans only, never a metric label).</summary>

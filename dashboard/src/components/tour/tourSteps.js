@@ -17,7 +17,7 @@ const tourSteps = [
   {
     target: 'nav-embeddings',
     title: 'Embedding Endpoints',
-    description: 'Set up connections to embedding providers like Ollama, OpenAI, Gemini, or vLLM to generate vector embeddings.',
+    description: 'Set up connections to embedding providers like Ollama, Ollama Cloud, OpenAI, Gemini, vLLM, or xAI to generate vector embeddings.',
     position: 'right',
   },
   {

@@ -86,7 +86,7 @@ namespace Partio.Core.Observability
         }
 
         /// <summary>Record an outbound integration (provider) call result and duration.</summary>
-        /// <param name="service">Provider service: ollama, openai, gemini, or vllm.</param>
+        /// <param name="service">Provider service: ollama, ollamacloud, openai, gemini, vllm, or xai.</param>
         /// <param name="operation">Operation: embedding, completion, or probe.</param>
         /// <param name="outcome">Outcome: ok, error, cancelled, or rejected.</param>
         /// <param name="seconds">Call duration in seconds.</param>

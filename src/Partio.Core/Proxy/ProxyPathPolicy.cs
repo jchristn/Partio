@@ -40,6 +40,7 @@ namespace Partio.Core.Proxy
             switch (format)
             {
                 case ApiFormatEnum.Ollama:
+                case ApiFormatEnum.OllamaCloud:
                     return p == "api/chat"
                         || p == "api/generate"
                         || p == "api/embed"
@@ -56,6 +57,16 @@ namespace Partio.Core.Proxy
                         || p == "v1/embeddings"
                         || p == "v1/models"
                         || p.StartsWith("v1/models/", StringComparison.Ordinal);
+
+                case ApiFormatEnum.xAI:
+                    // xAI's native Responses API plus its OpenAI-compatible chat, embeddings, and model catalogs.
+                    return p == "v1/responses"
+                        || p == "v1/chat/completions"
+                        || p == "v1/embeddings"
+                        || p == "v1/models"
+                        || p.StartsWith("v1/models/", StringComparison.Ordinal)
+                        || p == "v1/language-models"
+                        || p == "v1/embedding-models";
 
                 case ApiFormatEnum.Gemini:
                     // Gemini encodes the model and operation in the path
@@ -78,12 +89,15 @@ namespace Partio.Core.Proxy
             switch (format)
             {
                 case ApiFormatEnum.Ollama:
+                case ApiFormatEnum.OllamaCloud:
                     return "api/chat, api/generate, api/embed, api/embeddings, api/tags, api/show, api/ps, api/version";
                 case ApiFormatEnum.OpenAI:
                 case ApiFormatEnum.vLLM:
                     return "v1/chat/completions, v1/completions, v1/embeddings, v1/models, v1/models/{model}";
                 case ApiFormatEnum.Gemini:
                     return "v1beta/models, v1beta/models/{model}:{method}";
+                case ApiFormatEnum.xAI:
+                    return "v1/responses, v1/chat/completions, v1/embeddings, v1/models, v1/models/{model}, v1/language-models, v1/embedding-models";
                 default:
                     return string.Empty;
             }
@@ -111,7 +125,7 @@ namespace Partio.Core.Proxy
 
         /// <summary>
         /// Resolve the upstream authentication header Partio injects on the caller's behalf, based on the
-        /// provider dialect. OpenAI, vLLM, and Ollama use <c>Authorization: Bearer</c>; Gemini uses
+        /// provider dialect. OpenAI, vLLM, Ollama, Ollama Cloud, and xAI use <c>Authorization: Bearer</c>; Gemini uses
         /// <c>x-goog-api-key</c>. Returns null when the endpoint has no API key configured.
         /// </summary>
         /// <param name="format">The endpoint's provider dialect.</param>

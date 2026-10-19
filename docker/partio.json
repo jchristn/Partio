@@ -81,6 +81,14 @@
             "BatchLimitMode": "PerInput",
             "AutoDetect": true
         },
+        "xAI": {
+            "TokenizerKind": "Cl100kBase",
+            "TokenizerModel": "cl100k_base",
+            "MaxInputTokens": 8192,
+            "ReservedInputTokens": 0,
+            "BatchLimitMode": "PerInput",
+            "AutoDetect": true
+        },
         "Ollama": null,
         "CapabilityCacheTtlSeconds": 300
     },

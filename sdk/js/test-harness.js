@@ -307,6 +307,31 @@ await runTest('Create vLLM Completion Endpoint', async () => {
   vllmCepId = cep.Id;
 });
 
+await runTest('Create Ollama Cloud and xAI Endpoints', async () => {
+  const cloud = await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'Ollama Cloud Inference', Model: 'gpt-oss:20b', Endpoint: 'http://ignored-host:11434', ApiFormat: 'OllamaCloud', ApiKey: 'test-api-key', HealthCheckEnabled: false });
+  try {
+    if (!cloud || !cloud.Id) throw new Error('No response');
+    if (cloud.Endpoint !== 'https://ollama.com') throw new Error('Expected the fixed Ollama Cloud host, got ' + cloud.Endpoint);
+  } finally {
+    if (cloud && cloud.Id) await client.deleteCompletionEndpoint(cloud.Id);
+  }
+
+  const xai = await client.createEndpoint({ TenantId: testTenantId, Name: 'xAI Embedding', Model: 'grok-embedding', Endpoint: 'https://api.x.ai/v1', ApiFormat: 'xAI', ApiKey: 'test-api-key', HealthCheckEnabled: false });
+  try {
+    if (!xai || !xai.Id) throw new Error('No response');
+    if (xai.Endpoint !== 'https://api.x.ai') throw new Error('Expected the /v1 suffix to be dropped, got ' + xai.Endpoint);
+  } finally {
+    if (xai && xai.Id) await client.deleteEndpoint(xai.Id);
+  }
+
+  try {
+    await client.createCompletionEndpoint({ TenantId: testTenantId, Name: 'xAI Missing Key', Model: 'grok-4', Endpoint: 'https://api.x.ai', ApiFormat: 'xAI', HealthCheckEnabled: false });
+    throw new Error('Expected 400');
+  } catch (ex) {
+    if (!(ex instanceof PartioError) || ex.statusCode !== 400) throw ex;
+  }
+});
+
 await runTest('Load Completion Endpoint', async () => {
   skipIfProviderUnavailable();
   const result = await client.loadCompletionEndpoint(testCepId, { KeepAlive: '30m' });

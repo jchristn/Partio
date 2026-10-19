@@ -19,9 +19,11 @@ The Partio C# SDK provides a strongly-typed client (`PartioClient`) for interact
 - Transparent completion proxy (`ProxyAsync`, `ProxyPostAsync`, `ProxyGetAsync`) — relay a native provider request through an endpoint and get the upstream response (`ProxyResponse`) verbatim; a non-2xx upstream status is returned, not thrown
 - Request history (`GetRequestHistoryAsync`, `GetRequestHistoryDetailAsync`, `DeleteRequestHistoryAsync`, `EnumerateRequestHistoryAsync`)
 
-Embedding and completion endpoint models accept `ApiFormat` values such as `Ollama`, `OpenAI`, `Gemini`, and `vLLM`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
+Embedding and completion endpoint models accept `ApiFormat` values `Ollama`, `OllamaCloud`, `OpenAI`, `Gemini`, `vLLM`, and `xAI`, plus optional `Labels` and string key/value `Tags` for endpoint metadata.
 Endpoint models also expose `MaximumTimeoutMs` and `MaxConcurrentRequests`, the per-endpoint caps enforced for upstream provider calls. Process routes that hit the timeout cap return HTTP `504`, while requests rejected by the concurrency cap return HTTP `429`, both surfaced by the SDK as `PartioException`.
-Model loading reports provider-specific semantics: Ollama can return `Loaded`; OpenAI, Gemini, and vLLM return `Warmed` because those APIs do not expose a general remote model-residency operation.
+Model loading reports provider-specific semantics: Ollama can return `Loaded`; Ollama Cloud, OpenAI, Gemini, vLLM, and xAI return `Warmed` because those APIs do not expose a general remote model-residency operation.
+
+`OllamaCloud` and `xAI` endpoints require `ApiKey` (the server returns 400 without one). `OllamaCloud` always targets `https://ollama.com`, whatever `Endpoint` is sent. `xAI` uses `https://api.x.ai` (a trailing `/v1` is accepted and dropped), serves completions through xAI's native Responses API, and relays `v1/responses` through the proxy.
 
 ## Installation
 

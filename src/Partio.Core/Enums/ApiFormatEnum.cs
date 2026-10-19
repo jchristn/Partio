@@ -1,7 +1,7 @@
 namespace Partio.Core.Enums
 {
     /// <summary>
-    /// Supported embedding API formats.
+    /// Supported provider API formats for embedding and completion endpoints.
     /// </summary>
     public enum ApiFormatEnum
     {
@@ -12,6 +12,10 @@ namespace Partio.Core.Enums
         /// <summary>Google Gemini API format.</summary>
         Gemini,
         /// <summary>vLLM API format (OpenAI-compatible).</summary>
-        vLLM
+        vLLM,
+        /// <summary>Ollama Cloud (native Ollama API at https://ollama.com, bearer token required).</summary>
+        OllamaCloud,
+        /// <summary>xAI Grok API format (native Responses API for completions, bearer token required).</summary>
+        xAI
     }
 }

@@ -36,7 +36,7 @@ namespace Partio.Core.ThirdParty
         protected string _Header = "[EmbeddingClient] ";
 
         /// <summary>
-        /// Provider service name used as a low-cardinality telemetry label (ollama, openai, gemini, vllm).
+        /// Provider service name used as a low-cardinality telemetry label (ollama, ollamacloud, openai, gemini, vllm, xai).
         /// Set by the client factory from the endpoint's API format so vLLM is distinguished from OpenAI.
         /// </summary>
         public string ServiceName { get; set; } = "(unknown)";
@@ -89,6 +89,7 @@ namespace Partio.Core.ThirdParty
         /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
         /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
         /// <param name="maxQueueDepth">Maximum number of requests allowed to wait for a concurrency slot.</param>
+        /// <param name="transport">Optional HTTP message handler for upstream requests (for example an outbound proxy). The caller owns it; it is never disposed by the client.</param>
         protected EmbeddingClientBase(
             string endpoint,
             string? apiKey,
@@ -96,7 +97,8 @@ namespace Partio.Core.ThirdParty
             int maximumTimeoutMs,
             string? concurrencyKey = null,
             int maxConcurrentRequests = 2,
-            int maxQueueDepth = 0)
+            int maxQueueDepth = 0,
+            HttpMessageHandler? transport = null)
         {
             _Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
             _ApiKey = apiKey;
@@ -105,7 +107,7 @@ namespace Partio.Core.ThirdParty
             _ConcurrencyKey = !string.IsNullOrWhiteSpace(concurrencyKey) ? concurrencyKey : endpoint;
             _MaxConcurrentRequests = maxConcurrentRequests < 1 ? 1 : maxConcurrentRequests;
             _MaxQueueDepth = maxQueueDepth < 0 ? 0 : maxQueueDepth;
-            _HttpClient = new HttpClient();
+            _HttpClient = transport != null ? new HttpClient(transport, disposeHandler: false) : new HttpClient();
             _HttpClient.Timeout = Timeout.InfiniteTimeSpan;
         }
 

@@ -14,7 +14,7 @@ namespace Partio.Core.Proxy
 
     /// <summary>
     /// Transparent HTTP passthrough client for the completion proxy. Forwards a caller's native provider
-    /// request (OpenAI, Ollama, Gemini, or vLLM) to the endpoint's configured upstream and returns the
+    /// request (OpenAI, Ollama, Ollama Cloud, Gemini, vLLM, or xAI) to the endpoint's configured upstream and returns the
     /// upstream response for verbatim relay. Partio performs no body translation here: it injects the
     /// upstream API key, enforces per-endpoint concurrency and timeout, and streams the response back.
     /// </summary>

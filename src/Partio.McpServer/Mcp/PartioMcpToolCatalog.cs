@@ -228,7 +228,7 @@ namespace Partio.McpServer.Mcp
 
             server.RegisterTool(
                 "partio_proxy",
-                "Relay a native provider request through a completion endpoint's transparent proxy. Partio injects the upstream API key, enforces per-endpoint concurrency/timeout, and returns the provider's response verbatim as { StatusCode, ContentType, Body, Headers }. 'subpath' must be the endpoint dialect's native path (for example v1/chat/completions for an OpenAI endpoint or api/chat for an Ollama endpoint); 'body' is the raw request body sent verbatim (no translation). A non-2xx upstream status is returned, not raised.",
+                "Relay a native provider request through a completion endpoint's transparent proxy. Partio injects the upstream API key, enforces per-endpoint concurrency/timeout, and returns the provider's response verbatim as { StatusCode, ContentType, Body, Headers }. 'subpath' must be the endpoint dialect's native path (for example v1/chat/completions for an OpenAI endpoint, api/chat for an Ollama or OllamaCloud endpoint, or v1/responses for an xAI endpoint); 'body' is the raw request body sent verbatim (no translation). A non-2xx upstream status is returned, not raised.",
                 SchemaProxy(),
                 async (parameters, token) =>
                 {
@@ -419,7 +419,7 @@ namespace Partio.McpServer.Mcp
                 properties = new
                 {
                     endpointId = new { type = "string", description = "Target completion endpoint id." },
-                    subpath = new { type = "string", description = "Native provider sub-path, for example 'v1/chat/completions' (OpenAI/vLLM), 'api/chat' (Ollama), or 'v1beta/models/{model}:generateContent' (Gemini)." },
+                    subpath = new { type = "string", description = "Native provider sub-path, for example 'v1/chat/completions' (OpenAI/vLLM), 'api/chat' (Ollama/OllamaCloud), 'v1/responses' (xAI), or 'v1beta/models/{model}:generateContent' (Gemini)." },
                     method = new { type = "string", description = "HTTP method (default POST). Use GET for discovery paths such as v1/models or api/tags." },
                     body = new { type = "string", description = "Raw request body, sent verbatim to the upstream provider. Omit for GET." },
                     contentType = new { type = "string", description = "Content type of the body (default application/json)." }
@@ -434,7 +434,7 @@ namespace Partio.McpServer.Mcp
             {
                 ["Name"] = new { type = "string" },
                 ["Endpoint"] = new { type = "string", description = "Upstream provider base URL." },
-                ["ApiFormat"] = new { type = "string", description = "Ollama, OpenAI, vLLM, or Gemini." },
+                ["ApiFormat"] = new { type = "string", description = "Ollama, OllamaCloud, OpenAI, vLLM, Gemini, or xAI. OllamaCloud always targets https://ollama.com; xAI defaults to https://api.x.ai. OllamaCloud and xAI require ApiKey." },
                 ["ApiKey"] = new { type = "string" },
                 ["Model"] = new { type = "string" },
                 ["Active"] = new { type = "boolean" },

@@ -106,7 +106,9 @@ function buildFullEndpointUrl(endpoint) {
   if (!endpoint || !endpoint.Endpoint) return null;
   const base = endpoint.Endpoint.replace(/\/+$/, '');
   switch (endpoint.ApiFormat) {
-    case 'Ollama': return base + '/api/embed';
+    case 'Ollama':
+    case 'OllamaCloud': return base + '/api/embed';
+    case 'xAI': return base.replace(/\/v1$/i, '') + '/v1/embeddings';
     case 'OpenAI': return base + '/v1/embeddings';
     case 'vLLM': return base + '/v1/embeddings';
     case 'Gemini': return base + '/v1beta/models/' + encodeURIComponent(endpoint.Model || 'gemini-embedding-001') + ':embedContent';

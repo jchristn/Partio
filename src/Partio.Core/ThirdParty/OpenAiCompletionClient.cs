@@ -3,6 +3,7 @@ namespace Partio.Core.ThirdParty
     using PolyPromptCompletionOptions = PolyPrompt.Models.CompletionOptions;
     using PolyPromptChatResponse = PolyPrompt.Models.ChatResponse;
     using PolyPromptOpenAiCompletionClient = PolyPrompt.Clients.OpenAiCompletionClient;
+    using PolyPromptCompletionClientBase = PolyPrompt.Clients.CompletionClientBase;
     using Partio.Core.Observability;
     using SyslogLogging;
 
@@ -56,7 +57,7 @@ namespace Partio.Core.ThirdParty
             using IntegrationScope integ = IntegrationScope.Begin(ServiceName, "completion", _ConcurrencyKey);
             PolyPromptChatResponse response;
             IDisposable? concurrencyLease = null;
-            using (PolyPromptOpenAiCompletionClient client = CreateConfiguredClient(model, effectiveTimeoutMs))
+            using (PolyPromptCompletionClientBase client = CreateConfiguredClient(model, effectiveTimeoutMs))
             {
                 try
                 {
@@ -107,9 +108,18 @@ namespace Partio.Core.ThirdParty
             }
         }
 
-        private PolyPromptOpenAiCompletionClient CreateConfiguredClient(string model, int timeoutMs)
+        /// <summary>
+        /// Create the PolyPrompt client used for a single completion operation.
+        /// </summary>
+        /// <returns>A new PolyPrompt completion client; the caller disposes it.</returns>
+        protected virtual PolyPromptCompletionClientBase CreateProviderClient()
         {
-            PolyPromptOpenAiCompletionClient client = new PolyPromptOpenAiCompletionClient(_Endpoint, _ApiKey, _Logging);
+            return new PolyPromptOpenAiCompletionClient(_Endpoint, _ApiKey, _Logging);
+        }
+
+        private PolyPromptCompletionClientBase CreateConfiguredClient(string model, int timeoutMs)
+        {
+            PolyPromptCompletionClientBase client = CreateProviderClient();
             client.Model = model;
             client.TimeoutMs = timeoutMs;
             return client;

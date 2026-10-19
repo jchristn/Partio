@@ -335,6 +335,40 @@ namespace Partio.Sdk.TestHarness
                     vllmCepId = cep.Id;
                 });
 
+                await RunTest("Create Ollama Cloud and xAI Endpoints", async () =>
+                {
+                    CompletionEndpoint? cloud = await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "Ollama Cloud Inference", Model = "gpt-oss:20b", Endpoint = "http://ignored-host:11434", ApiFormat = "OllamaCloud", ApiKey = "test-api-key", HealthCheckEnabled = false });
+                    try
+                    {
+                        if (cloud == null || string.IsNullOrEmpty(cloud.Id)) throw new Exception("No response");
+                        if (cloud.Endpoint != "https://ollama.com") throw new Exception("Expected the fixed Ollama Cloud host, got " + cloud.Endpoint);
+                    }
+                    finally
+                    {
+                        if (!string.IsNullOrEmpty(cloud?.Id)) await admin.DeleteCompletionEndpointAsync(cloud.Id);
+                    }
+
+                    EmbeddingEndpoint? xai = await admin.CreateEndpointAsync(new EmbeddingEndpoint { TenantId = testTenantId, Name = "xAI Embedding", Model = "grok-embedding", Endpoint = "https://api.x.ai/v1", ApiFormat = "xAI", ApiKey = "test-api-key", HealthCheckEnabled = false });
+                    try
+                    {
+                        if (xai == null || string.IsNullOrEmpty(xai.Id)) throw new Exception("No response");
+                        if (xai.Endpoint != "https://api.x.ai") throw new Exception("Expected the /v1 suffix to be dropped, got " + xai.Endpoint);
+                    }
+                    finally
+                    {
+                        if (!string.IsNullOrEmpty(xai?.Id)) await admin.DeleteEndpointAsync(xai.Id);
+                    }
+
+                    try
+                    {
+                        await admin.CreateCompletionEndpointAsync(new CompletionEndpoint { TenantId = testTenantId, Name = "xAI Missing Key", Model = "grok-4", Endpoint = "https://api.x.ai", ApiFormat = "xAI", HealthCheckEnabled = false });
+                        throw new Exception("Expected 400");
+                    }
+                    catch (PartioException ex) when (ex.StatusCode == 400)
+                    {
+                    }
+                });
+
                 await RunTest("Load Completion Endpoint", async () =>
                 {
                     SkipIfProviderUnavailable();

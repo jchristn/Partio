@@ -135,8 +135,10 @@ function CallGroups({ title, calls }) {
 function defaultProxySubpath(apiFormat, model) {
   const m = model || 'MODEL';
   switch ((apiFormat || '').toLowerCase()) {
-    case 'ollama': return 'api/chat';
+    case 'ollama':
+    case 'ollamacloud': return 'api/chat';
     case 'gemini': return `v1beta/models/${m}:generateContent`;
+    case 'xai': return 'v1/responses';
     default: return 'v1/chat/completions'; // openai, vllm
   }
 }
@@ -145,7 +147,10 @@ function defaultProxyBody(apiFormat, model) {
   const m = model || 'MODEL';
   switch ((apiFormat || '').toLowerCase()) {
     case 'ollama':
+    case 'ollamacloud':
       return JSON.stringify({ model: m, messages: [{ role: 'user', content: 'Hello from the Partio proxy' }], stream: false }, null, 2);
+    case 'xai':
+      return JSON.stringify({ model: m, input: 'Hello from the Partio proxy' }, null, 2);
     case 'gemini':
       return JSON.stringify({ contents: [{ parts: [{ text: 'Hello from the Partio proxy' }] }] }, null, 2);
     default:

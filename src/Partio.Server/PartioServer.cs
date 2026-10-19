@@ -467,7 +467,7 @@ namespace Partio.Server
             // Transparent completion proxy: /v1.0/proxy/{endpointId}/<provider-native-subpath>
             //
             // A caller points a native provider SDK's base URL at /v1.0/proxy/{endpointId} and issues the
-            // provider's own request (OpenAI, Ollama, Gemini, or vLLM). Partio authenticates the caller,
+            // provider's own request (OpenAI, Ollama, Ollama Cloud, Gemini, vLLM, or xAI). Partio authenticates the caller,
             // resolves the endpoint (tenant scope + active + healthy), verifies the sub-path belongs to that
             // endpoint's dialect, injects the upstream API key, and relays the request/response verbatim —
             // passing the upstream HTTP status code through (unlike /v1.0/completion, which wraps failures as
@@ -500,6 +500,10 @@ namespace Partio.Server
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/tags"),
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/ps"),
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/api/version"),
+                // xAI (native Responses API and model catalogs; chat/embeddings/models share the OpenAI routes above)
+                (WatsonWebserver.Core.HttpMethod.POST, "/v1.0/proxy/{endpointId}/v1/responses"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/language-models"),
+                (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1/embedding-models"),
                 // Gemini (the model segment carries the operation, e.g. gemini-1.5-flash:generateContent)
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models"),
                 (WatsonWebserver.Core.HttpMethod.GET,  "/v1.0/proxy/{endpointId}/v1beta/models/{model}"),
@@ -671,7 +675,7 @@ namespace Partio.Server
                 api.Summary = "Load or warm a completion endpoint model";
                 api.Security = new List<string> { "Bearer" };
                 api.WithTag("Model Loading")
-                    .WithDescription("Requests that the configured inference provider load or warm the endpoint model. Ollama uses native keep-alive behavior; OpenAI, vLLM, and Gemini use a minimal warm completion request.")
+                    .WithDescription("Requests that the configured inference provider load or warm the endpoint model. Ollama uses native keep-alive behavior; Ollama Cloud, OpenAI, vLLM, Gemini, and xAI use a minimal warm completion request.")
                     .WithParameter(OpenApiParameterMetadata.Path("id", "Completion endpoint ID", OpenApiSchemaMetadata.String()))
                     .WithRequestBody(OpenApiRequestBodyMetadata.Json(null, "Model load request", false))
                     .WithResponse(200, OpenApiResponseMetadata.Json("Model load result", null))
@@ -3113,7 +3117,7 @@ namespace Partio.Server
 
         private static void ApplyRuntimeEmbeddingSafeguards(EmbeddingEndpoint endpoint, ResolvedTokenizationProfile profile)
         {
-            if (endpoint.ApiFormat != ApiFormatEnum.Ollama)
+            if (!ProviderDefaults.IsOllamaDialect(endpoint.ApiFormat))
                 return;
             if (profile.TokenizerKind != TokenizerKindEnum.BertWordPiece)
                 return;
@@ -3367,6 +3371,12 @@ namespace Partio.Server
                 case ApiFormatEnum.Gemini:
                     client = new GeminiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
+                case ApiFormatEnum.OllamaCloud:
+                    client = new OllamaCloudEmbeddingClient(endpoint.ApiKey ?? string.Empty, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.xAI:
+                    client = new XAiEmbeddingClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -3389,6 +3399,12 @@ namespace Partio.Server
                 case ApiFormatEnum.Gemini:
                     client = new GeminiCompletionClient(endpoint.Endpoint, endpoint.ApiKey, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
                     break;
+                case ApiFormatEnum.OllamaCloud:
+                    client = new OllamaCloudCompletionClient(endpoint.ApiKey ?? string.Empty, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
+                case ApiFormatEnum.xAI:
+                    client = new XAiCompletionClient(endpoint.Endpoint, endpoint.ApiKey ?? string.Empty, _Logging, endpoint.MaximumTimeoutMs, endpoint.Id, endpoint.MaxConcurrentRequests, endpoint.MaxQueueDepth);
+                    break;
                 default:
                     throw new ArgumentException("Unsupported API format: " + endpoint.ApiFormat);
             }
@@ -3396,17 +3412,10 @@ namespace Partio.Server
             return client;
         }
 
-        /// <summary>Low-cardinality provider service label for telemetry (ollama, openai, gemini, vllm).</summary>
+        /// <summary>Low-cardinality provider service label for telemetry (ollama, ollamacloud, openai, gemini, vllm, xai).</summary>
         private static string ServiceLabelFor(ApiFormatEnum format)
         {
-            switch (format)
-            {
-                case ApiFormatEnum.Ollama: return "ollama";
-                case ApiFormatEnum.OpenAI: return "openai";
-                case ApiFormatEnum.vLLM: return "vllm";
-                case ApiFormatEnum.Gemini: return "gemini";
-                default: return "(unknown)";
-            }
+            return ProviderDefaults.ServiceLabel(format);
         }
 
         #endregion
@@ -3679,6 +3688,7 @@ namespace Partio.Server
             RequireAdmin(req);
             EmbeddingEndpoint? ep = req.GetData<EmbeddingEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
+            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.CreatedUtc = ep.LastUpdateUtc = DateTime.UtcNow;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
             EmbeddingEndpoint created = await _Database.EmbeddingEndpoint.CreateAsync(ep).ConfigureAwait(false);
@@ -3705,6 +3715,7 @@ namespace Partio.Server
             if (ep == null) throw new ArgumentException("Request body is required.");
             EmbeddingEndpoint existing = await _Database.EmbeddingEndpoint.ReadByIdAsync(id).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException("Embedding endpoint not found: " + id);
+            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.Id = id;
             ep.CreatedUtc = existing.CreatedUtc;
             EmbeddingEndpoint.ApplyHealthCheckDefaults(ep);
@@ -3792,6 +3803,7 @@ namespace Partio.Server
             RequireAdmin(req);
             CompletionEndpoint? ep = req.GetData<CompletionEndpoint>();
             if (ep == null) throw new ArgumentException("Request body is required.");
+            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.CreatedUtc = ep.LastUpdateUtc = DateTime.UtcNow;
             CompletionEndpoint.ApplyHealthCheckDefaults(ep);
             CompletionEndpoint created = await _Database.CompletionEndpoint.CreateAsync(ep).ConfigureAwait(false);
@@ -3817,6 +3829,7 @@ namespace Partio.Server
             if (ep == null) throw new ArgumentException("Request body is required.");
             CompletionEndpoint existing = await _Database.CompletionEndpoint.ReadByIdAsync(id).ConfigureAwait(false)
                 ?? throw new KeyNotFoundException("Completion endpoint not found: " + id);
+            ProviderDefaults.ValidateApiKey(ep.ApiFormat, ep.ApiKey);
             ep.Id = id;
             ep.CreatedUtc = existing.CreatedUtc;
             CompletionEndpoint.ApplyHealthCheckDefaults(ep);

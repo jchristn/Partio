@@ -52,7 +52,7 @@ It ships as a server, a React admin dashboard, three SDKs (C#, Python, JavaScrip
 ## What It Does
 
 - **Chunks** structured content using type-aware strategies (token, sentence, paragraph, regex, list, and table strategies), sizing every chunk to the target embedding model's real token budget.
-- **Embeds** chunks (or arbitrary strings) through pluggable providers: Ollama, OpenAI, Gemini, and OpenAI-compatible backends like vLLM.
+- **Embeds** chunks (or arbitrary strings) through pluggable providers: Ollama, Ollama Cloud, OpenAI, Gemini, xAI (Grok), and OpenAI-compatible backends like vLLM.
 - **Summarizes** cells with an LLM before chunking and embedding, when you want denser or condensed representations.
 - **Exposes each stage independently** — `/v1.0/chunk`, `/v1.0/embed`, and `/v1.0/summarize` — so you can run and time chunking, embedding, and summarization on their own, or combine them in one call with `/v1.0/process`.
 - **Isolates tenants** — tenants, users, credentials, and endpoints are fully partitioned behind scoped bearer tokens.
@@ -73,7 +73,7 @@ It ships as a server, a React admin dashboard, three SDKs (C#, Python, JavaScrip
 |---|---|
 | A RAG ingestion pipeline | Type-aware chunking + embeddings from one endpoint, deterministic chunk output, and traceable labels/tags from input to every chunk. |
 | A multi-tenant SaaS with per-customer embeddings | Row-level tenant isolation, scoped credentials, and per-tenant endpoint configuration. |
-| A model/provider migration | A config-only switch between Ollama, OpenAI, Gemini, and vLLM — no application code changes. |
+| A model/provider migration | A config-only switch between Ollama, Ollama Cloud, OpenAI, Gemini, xAI, and vLLM — no application code changes. |
 | An embedding gateway for many apps | One API, policy-managed endpoints, health gating, timeouts, and concurrency caps enforced centrally. |
 | Anything you have to debug | Full request history + an API Explorer that shows the exact upstream exchange, tokenizer source, and effective budget. |
 
@@ -215,27 +215,27 @@ curl -X POST http://localhost:8400/v1.0/process \
 - **Standalone chunk, embed, and summarize endpoints** (`POST /v1.0/chunk`, `/v1.0/embed`, `/v1.0/summarize`) so each stage can be run and timed independently, in addition to the combined `/v1.0/process`. Chunking uses a built-in tokenizer and needs no embedding endpoint.
 - **Multiple chunking strategies** — fixed token count, sentence, paragraph, regex, whole list, list entry, and several table strategies — with configurable overlap via sliding window.
 - **Endpoint-aware token budgeting** with model-native token counting, endpoint overrides, provider probing where available, provider defaults, and a required global fallback profile.
-- **Pluggable provider support** for Ollama, OpenAI, Gemini, and OpenAI-compatible backends such as vLLM, selectable per endpoint.
+- **Pluggable provider support** for Ollama, Ollama Cloud, OpenAI, Gemini, xAI (Grok), and OpenAI-compatible backends such as vLLM, selectable per endpoint. Ollama Cloud and xAI endpoints require an API key; Ollama Cloud always targets `https://ollama.com`.
 - **Multi-tenant architecture** with tenant, user, credential, and endpoint isolation.
 - **Four database backends** out of the box: SQLite (default, zero config), PostgreSQL, MySQL, and SQL Server.
 - **Request history and audit logging** with automatic cleanup, filesystem body persistence, configurable retention, and upstream embedding call capture (request/response headers, bodies, timing, and status for each provider call).
 - **Bearer token authentication** with global admin API keys and tenant-scoped credentials.
 - **Endpoint health checks** with configurable background monitoring, threshold-based state transitions, and automatic request gating (unhealthy endpoints return `502`).
 - **Endpoint metadata** — `Labels` and string key/value `Tags` on embedding and inference endpoints for operator-owned grouping and routing context.
-- **Model loading and warming** for configured endpoints, with native Ollama preload and warm-request semantics for OpenAI, Gemini, and vLLM.
+- **Model loading and warming** for configured endpoints, with native Ollama preload and warm-request semantics for Ollama Cloud, OpenAI, Gemini, vLLM, and xAI.
 - **Per-endpoint provider timeout caps** with a default 60-second ceiling, configurable in the API and dashboard and enforced independently from health checks.
 - **Batch processing** for submitting multiple semantic cells in a single request.
 - **Optional LLM summarization** before chunking and embedding, supporting top-down and bottom-up strategies.
-- **Completion (inference) endpoint management** for configuring LLM endpoints (Ollama, OpenAI, Gemini, vLLM) with health checks.
+- **Completion (inference) endpoint management** for configuring LLM endpoints (Ollama, Ollama Cloud, OpenAI, Gemini, vLLM, xAI) with health checks.
 - **API Explorer** in the dashboard for exercising a specific embedding or inference endpoint through the Partio backend path and inspecting upstream call details.
 - **PolyPrompt-backed provider runtime** centralizing provider-specific embeddings and inference wiring in a dedicated library.
-- **Transparent completion proxy** (`/v1.0/proxy/{endpointId}/...`) that relays a caller's **native** provider request (OpenAI, Ollama, Gemini, vLLM) to a managed endpoint's upstream and returns the response **verbatim** — point an off-the-shelf provider SDK's base URL at Partio, keep the upstream API key server-side, pass upstream status codes through, and get **streaming** for free. No request/response translation. The dashboard adds a **Chat** view — a live conversation through the proxy with **token streaming** (Ollama, OpenAI/vLLM, and Gemini), configurable generation parameters (temperature, top-p, max tokens), a **Stop** control to cancel a response, and a per-message metrics tooltip (time-to-first-token, total time, prompt/output/total/cached tokens, provider timings) — plus a **Proxy** mode in the API Explorer.
+- **Transparent completion proxy** (`/v1.0/proxy/{endpointId}/...`) that relays a caller's **native** provider request (OpenAI, Ollama, Ollama Cloud, Gemini, vLLM, xAI) to a managed endpoint's upstream and returns the response **verbatim** — point an off-the-shelf provider SDK's base URL at Partio, keep the upstream API key server-side, pass upstream status codes through, and get **streaming** for free. No request/response translation. The dashboard adds a **Chat** view — a live conversation through the proxy with **token streaming** (Ollama/Ollama Cloud, OpenAI/vLLM/xAI, and Gemini), configurable generation parameters (temperature, top-p, max tokens), a **Stop** control to cancel a response, and a per-message metrics tooltip (time-to-first-token, total time, prompt/output/total/cached tokens, provider timings) — plus a **Proxy** mode in the API Explorer.
 - **Admin dashboard** (React/Vite) for managing tenants, users, credentials, endpoints, and viewing request history.
 - **SDKs** for C#, Python, and JavaScript.
 - **Docker images** with multi-architecture support (amd64/arm64).
 - **Pagination and filtering** with cursor-based continuation tokens, sorting, and label/tag/name/active filters on all list endpoints.
 - **Built-in observability** — Watson 7.1 HTTP metrics and per-request traces plus `partio_*` application metrics and spans for the processing pipeline, provider integrations, and background workers, exposed on Prometheus scrape endpoints and OTLP, with a bundled Prometheus + Tempo + Loki + Grafana stack and provisioned per-domain dashboards.
-- **MCP server** — a standalone `partio-mcp` executable (Voltaic 2.2) that exposes endpoint management and inference as 15 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
+- **MCP server** — a standalone `partio-mcp` executable (Voltaic 2.4) that exposes endpoint management and inference as 15 JSON-RPC tools over MCP Streamable HTTP, with bearer auth, an enumerate→get paging contract, and one-command install into Claude Code, Codex, Gemini, Cursor, and Mux. See [MCP_API.md](MCP_API.md) and the paste-ready per-harness guides in [`docs/`](docs/).
 
 ## Observability
 
@@ -352,7 +352,7 @@ All endpoints use JSON and require an `Authorization: Bearer {token}` header unl
 | `POST` | `/v1.0/endpoints/embedding/{id}/load` | Load or warm one embedding endpoint model |
 | `POST` | `/v1.0/endpoints/completion/{id}/load` | Load or warm one inference endpoint model |
 
-Ollama endpoints can return `Loaded` because Partio uses Ollama's native keep-alive preload path. OpenAI, Gemini, and vLLM endpoints return `Warmed` when their minimal provider request succeeds; vLLM must already be serving the configured model.
+Ollama endpoints can return `Loaded` because Partio uses Ollama's native keep-alive preload path. Ollama Cloud, OpenAI, Gemini, vLLM, and xAI endpoints return `Warmed` when their minimal provider request succeeds; vLLM must already be serving the configured model.
 
 ### Endpoint health
 
@@ -486,6 +486,14 @@ Partio is configured via `partio.json`, created automatically on first run.
       "TokenizerKind": "Cl100kBase",
       "TokenizerModel": "cl100k_base",
       "MaxInputTokens": 2048,
+      "ReservedInputTokens": 0,
+      "BatchLimitMode": "PerInput",
+      "AutoDetect": true
+    },
+    "xAI": {
+      "TokenizerKind": "Cl100kBase",
+      "TokenizerModel": "cl100k_base",
+      "MaxInputTokens": 8192,
       "ReservedInputTokens": 0,
       "BatchLimitMode": "PerInput",
       "AutoDetect": true

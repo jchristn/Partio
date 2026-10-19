@@ -17,11 +17,18 @@ function nsToMs(ns) {
   return typeof ns === 'number' ? ns / 1e6 : undefined;
 }
 
+// Chat dialect for an ApiFormat. Ollama Cloud speaks the native Ollama API; xAI is served through its
+// OpenAI-compatible chat completions API, so it shares the openai/vllm path.
+function chatDialect(apiFormat) {
+  const fmt = (apiFormat || '').toLowerCase();
+  return fmt === 'ollamacloud' ? 'ollama' : fmt;
+}
+
 // Build the native provider request for a chat turn, based on the endpoint's dialect (ApiFormat) and the
 // configured generation parameters. The request is massaged so the provider returns token usage/timing:
 // OpenAI/vLLM streaming adds stream_options.include_usage; Ollama and Gemini return counts by default.
 function buildChatRequest(apiFormat, model, messages, systemPrompt, params) {
-  const fmt = (apiFormat || '').toLowerCase();
+  const fmt = chatDialect(apiFormat);
   const temperature = num(params.temperature);
   const topP = num(params.topP);
   const maxTokens = num(params.maxTokens);
@@ -58,7 +65,7 @@ function buildChatRequest(apiFormat, model, messages, systemPrompt, params) {
     return { subpath: `v1beta/models/${model}:${op}`, body, canStream: true };
   }
 
-  // openai, vllm
+  // openai, vllm, xai
   const body = { model, messages: withSystem(messages), stream };
   if (temperature !== undefined) body.temperature = temperature;
   if (topP !== undefined) body.top_p = topP;
@@ -69,7 +76,7 @@ function buildChatRequest(apiFormat, model, messages, systemPrompt, params) {
 
 // Assistant reply text from a buffered native provider response.
 function parseChatReply(apiFormat, json) {
-  const fmt = (apiFormat || '').toLowerCase();
+  const fmt = chatDialect(apiFormat);
   if (fmt === 'ollama') return json?.message?.content ?? '';
   if (fmt === 'gemini') {
     const parts = json?.candidates?.[0]?.content?.parts;
@@ -80,7 +87,7 @@ function parseChatReply(apiFormat, json) {
 
 // Token usage / timing from a buffered native provider response.
 function extractMetrics(apiFormat, json) {
-  const fmt = (apiFormat || '').toLowerCase();
+  const fmt = chatDialect(apiFormat);
   if (fmt === 'ollama') {
     return {
       promptTokens: json?.prompt_eval_count,
@@ -112,7 +119,7 @@ function extractMetrics(apiFormat, json) {
 // Stateful incremental parser for streamed responses. Accumulates the text delta and, from the final
 // chunk, token usage/timing into `metrics`.
 function createStreamParser(apiFormat) {
-  const fmt = (apiFormat || '').toLowerCase();
+  const fmt = chatDialect(apiFormat);
   let buffer = '';
   const metrics = {};
   function feed(chunk) {
@@ -389,13 +396,13 @@ export default function ChatView() {
         {showParams && (
           <div className="chat-params">
             <div className="form-group">
-              <FormFieldLabel text="System Prompt" tooltip="Optional instruction applied before the conversation. Sent as a system message (Ollama/OpenAI) or systemInstruction (Gemini)." />
+              <FormFieldLabel text="System Prompt" tooltip="Optional instruction applied before the conversation. Sent as a system message (Ollama/OpenAI/xAI) or systemInstruction (Gemini)." />
               <textarea rows={2} value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} placeholder="Optional system prompt..." />
             </div>
             <div className="chat-params-grid">
               <div className="checkbox-group">
                 <input id="chat-stream" type="checkbox" checked={params.stream} onChange={e => setParam('stream', e.target.checked)} />
-                <Tooltip content="Stream tokens as they are generated. Ollama (NDJSON), OpenAI/vLLM (SSE), and Gemini (SSE via :streamGenerateContent) are all supported through the proxy.">
+                <Tooltip content="Stream tokens as they are generated. Ollama and Ollama Cloud (NDJSON), OpenAI/vLLM/xAI (SSE), and Gemini (SSE via :streamGenerateContent) are all supported through the proxy.">
                   <label htmlFor="chat-stream">Stream</label>
                 </Tooltip>
               </div>

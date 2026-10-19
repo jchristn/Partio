@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "partio-api-collection",
 		"name": "Partio",
-		"description": "Complete API collection for Partio — a multi-tenant RESTful platform for semantic cell chunking, embedding, and summarization. Supports completion endpoints for LLM-powered summarization.\n\nVariables:\n- `baseUrl`: Server base URL (default: http://localhost:8400)\n- `bearerToken`: Admin API key or credential bearer token\n- `tenantId`: Target tenant ID\n- `userId`: Target user ID\n- `credentialId`: Target credential ID\n- `endpointId`: Target embedding endpoint ID\n- `completionEndpointId`: Completion endpoint ID\n- `completionEndpointUrl`: Base URL for completion API\n- `completionModel`: Model name for completion\n- `requestId`: Target request history entry ID\n- `embeddingModel`: Embedding model name (default: nomic-embed-text)\n- `chunkStrategy`: Chunking strategy (default: FixedTokenCount)\n- `fixedTokenCount`: Token count per chunk (default: 256)\n- `maxResults`: Enumeration page size (default: 100)\n- `continuationToken`: Pagination continuation token",
+		"description": "Complete API collection for Partio — a multi-tenant RESTful platform for semantic cell chunking, embedding, and summarization. Supports completion endpoints for LLM-powered summarization.\n\nVariables:\n- `baseUrl`: Server base URL (default: http://localhost:8400)\n- `bearerToken`: Admin API key or credential bearer token\n- `tenantId`: Target tenant ID\n- `userId`: Target user ID\n- `credentialId`: Target credential ID\n- `endpointId`: Target embedding endpoint ID\n- `completionEndpointId`: Completion endpoint ID\n- `completionEndpointUrl`: Base URL for completion API\n- `completionModel`: Model name for completion\n- `requestId`: Target request history entry ID\n- `embeddingModel`: Embedding model name (default: nomic-embed-text)\n- `chunkStrategy`: Chunking strategy (default: FixedTokenCount)\n- `fixedTokenCount`: Token count per chunk (default: 256)\n- `maxResults`: Enumeration page size (default: 100)\n- `continuationToken`: Pagination continuation token\n- `ollamaCloudApiKey`: Ollama Cloud API key (required for OllamaCloud endpoints)\n- `xaiApiKey`: xAI API key (required for xAI endpoints)\n- `xaiEmbeddingModel`: xAI embedding model available to your account",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"auth": {
@@ -155,6 +155,18 @@
 			"key": "keepAlive",
 			"value": "30m",
 			"type": "string"
+		},
+		{
+			"key": "ollamaCloudApiKey",
+			"value": ""
+		},
+		{
+			"key": "xaiApiKey",
+			"value": ""
+		},
+		{
+			"key": "xaiEmbeddingModel",
+			"value": ""
 		}
 	],
 	"item": [
@@ -458,7 +470,37 @@
 								"completions"
 							]
 						},
-						"description": "Transparent proxy: relay a native OpenAI chat-completions request to the endpoint's upstream and return the provider's response verbatim (status codes and streaming pass through). The sub-path must match the endpoint's ApiFormat: OpenAI/vLLM use v1/..., Ollama uses api/... (for example api/chat), Gemini uses v1beta/models/{model}:generateContent. A sub-path that does not match the endpoint's dialect returns 404."
+						"description": "Transparent proxy: relay a native OpenAI chat-completions request to the endpoint's upstream and return the provider's response verbatim (status codes and streaming pass through). The sub-path must match the endpoint's ApiFormat: OpenAI/vLLM use v1/..., Ollama and Ollama Cloud use api/... (for example api/chat), xAI uses v1/responses and v1/..., Gemini uses v1beta/models/{model}:generateContent. A sub-path that does not match the endpoint's dialect returns 404."
+					}
+				},
+				{
+					"name": "Proxy - xAI Responses",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"model\": \"grok-4\",\n    \"input\": \"Say hello in one word.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/proxy/{{completionEndpointId}}/v1/responses",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"proxy",
+								"{{completionEndpointId}}",
+								"v1",
+								"responses"
+							]
+						},
+						"description": "Transparent proxy for an xAI endpoint: relay a native xAI Responses API request (/v1/responses) and return the provider response verbatim. xAI endpoints also relay v1/chat/completions, v1/embeddings, v1/models, v1/language-models, and v1/embedding-models."
 					}
 				},
 				{
@@ -1727,6 +1769,96 @@
 					}
 				},
 				{
+					"name": "Create Embedding Endpoint - Ollama Cloud",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Ollama Cloud Embedding\",\n    \"Model\": \"embeddinggemma\",\n    \"Endpoint\": \"https://ollama.com\",\n    \"ApiFormat\": \"OllamaCloud\",\n    \"ApiKey\": \"{{ollamaCloudApiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0,\n    \"HealthCheckEnabled\": false,\n    \"HealthCheckUrl\": null,\n    \"HealthCheckMethod\": \"GET\",\n    \"HealthCheckIntervalMs\": 15000,\n    \"HealthCheckTimeoutMs\": 5000,\n    \"HealthCheckExpectedStatusCode\": 200,\n    \"HealthyThreshold\": 3,\n    \"UnhealthyThreshold\": 3,\n    \"HealthCheckUseAuth\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create an Ollama Cloud embedding endpoint. ApiKey is required; the endpoint is always stored as https://ollama.com. Embedding availability depends on the hosted model catalog."
+					}
+				},
+				{
+					"name": "Create Embedding Endpoint - xAI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('endpointId', jsonData.Id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"xAI Embedding\",\n    \"Model\": \"{{xaiEmbeddingModel}}\",\n    \"Endpoint\": \"https://api.x.ai\",\n    \"ApiFormat\": \"xAI\",\n    \"ApiKey\": \"{{xaiApiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0,\n    \"HealthCheckEnabled\": false,\n    \"HealthCheckUrl\": null,\n    \"HealthCheckMethod\": \"GET\",\n    \"HealthCheckIntervalMs\": 15000,\n    \"HealthCheckTimeoutMs\": 5000,\n    \"HealthCheckExpectedStatusCode\": 200,\n    \"HealthyThreshold\": 3,\n    \"UnhealthyThreshold\": 3,\n    \"HealthCheckUseAuth\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/embedding",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"embedding"
+							]
+						},
+						"description": "Create an xAI embedding endpoint. ApiKey is required. Pick an embedding model your account can access (GET /v1.0/proxy/{completionEndpointId}/v1/embedding-models lists them through an xAI completion endpoint)."
+					}
+				},
+				{
 					"name": "Read Embedding Endpoint",
 					"event": [
 						{
@@ -2083,6 +2215,100 @@
 							]
 						},
 						"description": "Create a new completion/inference endpoint."
+					}
+				},
+				{
+					"name": "Create Completion Endpoint - Ollama Cloud",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}",
+									"pm.expect(jsonData.Labels).to.be.an('array');",
+									"pm.expect(jsonData.Tags).to.be.an('object');"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"Ollama Cloud\",\n    \"Model\": \"gpt-oss:20b\",\n    \"Endpoint\": \"https://ollama.com\",\n    \"ApiFormat\": \"OllamaCloud\",\n    \"ApiKey\": \"{{ollamaCloudApiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0,\n    \"HealthCheckEnabled\": false,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"endpointType\": \"completion\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create an Ollama Cloud completion endpoint. ApiKey is required (400 without one). The endpoint is always stored as https://ollama.com regardless of the Endpoint value sent; health checks default to https://ollama.com/api/tags with bearer auth."
+					}
+				},
+				{
+					"name": "Create Completion Endpoint - xAI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.Id) {",
+									"    pm.collectionVariables.set('completionEndpointId', jsonData.Id);",
+									"}",
+									"pm.expect(jsonData.Labels).to.be.an('array');",
+									"pm.expect(jsonData.Tags).to.be.an('object');"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"TenantId\": \"{{tenantId}}\",\n    \"Name\": \"xAI Grok\",\n    \"Model\": \"grok-4\",\n    \"Endpoint\": \"https://api.x.ai\",\n    \"ApiFormat\": \"xAI\",\n    \"ApiKey\": \"{{xaiApiKey}}\",\n    \"Active\": true,\n    \"EnableRequestHistory\": true,\n    \"MaximumTimeoutMs\": 60000,\n    \"MaxConcurrentRequests\": 2,\n    \"MaxQueueDepth\": 0,\n    \"HealthCheckEnabled\": false,\n    \"Labels\": [\"postman-test\"],\n    \"Tags\": {\n        \"source\": \"postman\",\n        \"endpointType\": \"completion\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1.0/endpoints/completion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1.0",
+								"endpoints",
+								"completion"
+							]
+						},
+						"description": "Create an xAI (Grok) completion endpoint. ApiKey is required (400 without one). Endpoint defaults to https://api.x.ai; a trailing /v1 is accepted and dropped. Completions use the xAI native Responses API (/v1/responses)."
 					}
 				},
 				{

@@ -28,6 +28,7 @@ namespace Partio.Core.ThirdParty
         /// <param name="concurrencyKey">Endpoint-specific concurrency key.</param>
         /// <param name="maxConcurrentRequests">Maximum concurrent upstream provider requests.</param>
         /// <param name="maxQueueDepth">Maximum number of requests allowed to wait for a concurrency slot.</param>
+        /// <param name="transport">Optional HTTP message handler for upstream requests. The caller owns it.</param>
         public OllamaCompletionClient(
             string endpoint,
             string? apiKey,
@@ -35,8 +36,9 @@ namespace Partio.Core.ThirdParty
             int maximumTimeoutMs,
             string? concurrencyKey = null,
             int maxConcurrentRequests = 2,
-            int maxQueueDepth = 0)
-            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth)
+            int maxQueueDepth = 0,
+            HttpMessageHandler? transport = null)
+            : base(endpoint, apiKey, logging, maximumTimeoutMs, concurrencyKey, maxConcurrentRequests, maxQueueDepth, transport)
         {
             _Header = "[OllamaCompletion] ";
             if (!string.IsNullOrWhiteSpace(_ApiKey))
@@ -163,9 +165,18 @@ namespace Partio.Core.ThirdParty
             };
         }
 
+        /// <summary>
+        /// Create the PolyPrompt client used for a single completion operation.
+        /// </summary>
+        /// <returns>A new PolyPrompt Ollama completion client; the caller disposes it.</returns>
+        protected virtual PolyPromptOllamaCompletionClient CreateProviderClient()
+        {
+            return new PolyPromptOllamaCompletionClient(_Endpoint, _ApiKey, _Logging);
+        }
+
         private PolyPromptOllamaCompletionClient CreateConfiguredClient(string model, int timeoutMs)
         {
-            PolyPromptOllamaCompletionClient client = new PolyPromptOllamaCompletionClient(_Endpoint, _ApiKey, _Logging);
+            PolyPromptOllamaCompletionClient client = CreateProviderClient();
             client.Model = model;
             client.TimeoutMs = timeoutMs;
             return client;

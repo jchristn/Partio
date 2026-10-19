@@ -295,7 +295,10 @@ namespace Partio.Core.Tokenization
                     return _Settings.TokenizationDefaults.vLLM;
                 case ApiFormatEnum.Gemini:
                     return _Settings.TokenizationDefaults.Gemini;
+                case ApiFormatEnum.xAI:
+                    return _Settings.TokenizationDefaults.xAI;
                 case ApiFormatEnum.Ollama:
+                case ApiFormatEnum.OllamaCloud:
                     if (IsBertLikeModel(model, capabilities))
                     {
                         int maxTokens = capabilities?.MaxInputTokens ?? 512;

@@ -33,7 +33,7 @@ namespace Partio.Core.Observability
         public string Outcome { get; set; } = "error";
 
         /// <summary>Begin an integration scope.</summary>
-        /// <param name="service">Provider service (ollama, openai, gemini, vllm).</param>
+        /// <param name="service">Provider service (ollama, ollamacloud, openai, gemini, vllm, xai).</param>
         /// <param name="operation">Operation (embedding, completion, probe).</param>
         /// <param name="endpointId">Endpoint id for the span (high-cardinality — span only).</param>
         /// <returns>The scope.</returns>
