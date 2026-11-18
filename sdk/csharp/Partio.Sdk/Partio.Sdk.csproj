@@ -6,8 +6,8 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>CS1591</NoWarn>
-    <Version>0.5.2</Version>
-    <PackageVersion>0.5.2</PackageVersion>
+    <Version>0.5.3</Version>
+    <PackageVersion>0.5.3</PackageVersion>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PackageId>Partio.Sdk</PackageId>
@@ -18,11 +18,14 @@
     <Description>C# client SDK for Partio, a multi-tenant REST service for chunking, embedding, and summarizing semantic cells. Covers tenants, users, credentials, embedding and completion endpoints, health, model loading, semantic cell processing, the transparent completion proxy, and request history.</Description>
     <PackageProjectUrl>https://github.com/jchristn/Partio</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jchristn/Partio</RepositoryUrl>
-    <RepositoryType>Github</RepositoryType>
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageTags>partio;sdk;client;chunking;embedding;embeddings;summarization;completion;rag;semantic;llm;ai;ollama;openai;gemini;vllm;proxy</PackageTags>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>
